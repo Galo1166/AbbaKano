@@ -138,7 +138,7 @@ function validateSignup(body) {
         return { error: "A JSON object is required" };
     }
 
-    const { fullName, phone, email, password, referralCode } = body;
+    const { fullName, phone, email, password, referralCode, pin } = body;
     if (typeof fullName !== "string" || typeof phone !== "string" || typeof password !== "string") {
         return { error: "Full name, phone, and password are required" };
     }
@@ -158,6 +158,8 @@ function validateSignup(body) {
     if (password.length < 8 || password.length > 128) {
         return { error: "Password must be 8-128 characters" };
     }
+    const pinValidation = validateTransactionPin(pin);
+    if (pinValidation.error) return { error: pinValidation.error };
 
     const normalizedReferralCode = typeof referralCode === "string" && referralCode.trim()
         ? normalizePhone(referralCode.trim())
@@ -171,6 +173,7 @@ function validateSignup(body) {
         phone: normalizedPhone,
         email: normalizedEmail || null,
         password,
+        pin: pinValidation.pin,
         referralCode: normalizedReferralCode
     };
 }
@@ -681,10 +684,12 @@ app.get("/test-db", async (req, res) => {
 app.post("/signup", authLimiter, async (req, res) => {
     const credentials = validateSignup(req.body);
     if (credentials.error) return res.status(400).json({ message: credentials.error });
-    const { fullName, phone, email, password, referralCode } = credentials;
+    const { fullName, phone, email, password, pin, referralCode } = credentials;
     const username = `user_${phone}`;
     const salt = crypto.randomBytes(16).toString("hex");
     const passwordHash = crypto.scryptSync(password, salt, 64).toString("hex");
+    const pinSalt = crypto.randomBytes(16).toString("hex");
+    const pinHash = hashPin(pin, pinSalt);
 
     const client = await pool.connect();
     try {
@@ -702,10 +707,10 @@ app.post("/signup", authLimiter, async (req, res) => {
             referrerUserId = referrer.rows[0].id;
         }
         const result = await client.query(
-            `INSERT INTO users (username, full_name, phone, email, password_hash, referrer_user_id)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO users (username, full_name, phone, email, password_hash, transaction_pin_hash, transaction_pin_salt, referrer_user_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING id, username, full_name, phone, email, created_at`,
-            [username, fullName, phone, email, `${salt}:${passwordHash}`, referrerUserId]
+            [username, fullName, phone, email, `${salt}:${passwordHash}`, pinHash, pinSalt, referrerUserId]
         );
 
         const user = result.rows[0];

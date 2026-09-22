@@ -98,9 +98,9 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
           phone: phone.trim(),
           email: email.trim() || undefined,
           password,
+          pin,
           referralCode: referralCode.trim() || undefined,
         });
-        await apiPost('/me/transaction-pin', { pin });
         await saveTransactionPin(pin).catch(() => {});
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : 'Could not create your account.');
