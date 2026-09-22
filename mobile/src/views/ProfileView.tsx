@@ -8,6 +8,7 @@ import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { SignOutModal } from '@/components/common/SignOutModal';
 import { apiRequest } from '@/lib/api';
 import { disableBiometricDevice, registerBiometricDevice, supportsBiometrics } from '@/lib/biometricAuth';
+import { disablePasskey, registerPasskey, supportsPasskeys } from '@/lib/passkey';
 
 interface ProfileViewProps {
   onNavigateToReferEarn?: () => void;
@@ -69,17 +70,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const setting = id === 'biometrics' ? 'biometricsEnabled' : id === 'app_lock' ? 'appLockEnabled' : null;
     if (!setting) return;
     const nextValue = setting === 'biometricsEnabled' ? !biometrics : !appLock;
-    if (setting === 'biometricsEnabled' && nextValue && !supportsBiometrics()) {
-      Alert.alert('Biometrics unavailable', 'Biometric login is available on iOS and Android devices, not in the web app.');
+    if (setting === 'biometricsEnabled' && nextValue && !supportsBiometrics() && !supportsPasskeys()) {
+      Alert.alert('Biometrics unavailable', 'This device does not support biometric or passkey authentication.');
       return;
     }
     if (setting === 'biometricsEnabled') setBiometrics(nextValue);
     else setAppLock(nextValue);
 
     void (setting === 'biometricsEnabled' && nextValue
-      ? registerBiometricDevice()
+      ? supportsBiometrics() ? registerBiometricDevice() : registerPasskey()
       : setting === 'biometricsEnabled'
-        ? disableBiometricDevice()
+        ? supportsBiometrics() ? disableBiometricDevice() : disablePasskey()
         : Promise.resolve()
     ).then(() => apiRequest('/me/security-settings', {
       method: 'PATCH',

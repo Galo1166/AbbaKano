@@ -971,9 +971,19 @@ app.post("/auth/passkey/register/verify", requireSession, requireCsrf, async (re
     }
 });
 
+app.delete("/auth/passkey", requireSession, requireCsrf, async (req, res) => {
+    await pool.query("DELETE FROM passkey_credentials WHERE user_id = $1", [req.session.sub]);
+    res.sendStatus(204);
+});
+
 app.post("/auth/passkey/login/options", async (req, res) => {
-    const user = await findUserByIdentifier(req.body?.identifier);
+    const userResult = await pool.query(
+        "SELECT id, username, full_name, phone, email, role, status, biometrics_enabled FROM users WHERE phone = $1 OR email = $2",
+        [normalizePhone(req.body?.identifier), String(req.body?.identifier || "").trim().toLowerCase()]
+    );
+    const user = userResult.rows[0];
     if (!user || user.status !== "active") return res.status(401).json({ message: "Account not found" });
+    if (user.biometrics_enabled === false) return res.status(403).json({ message: "Biometric login is disabled" });
     const credentials = await pool.query("SELECT id, transports FROM passkey_credentials WHERE user_id = $1", [user.id]);
     if (credentials.rows.length === 0) return res.status(404).json({ message: "No passkey is registered for this account" });
     const options = await generateAuthenticationOptions({
@@ -994,8 +1004,13 @@ app.post("/auth/passkey/login/options", async (req, res) => {
 });
 
 app.post("/auth/passkey/login/verify", async (req, res) => {
-    const user = await findUserByIdentifier(req.body?.identifier);
+    const userResult = await pool.query(
+        "SELECT id, username, full_name, phone, email, role, status, biometrics_enabled FROM users WHERE phone = $1 OR email = $2",
+        [normalizePhone(req.body?.identifier), String(req.body?.identifier || "").trim().toLowerCase()]
+    );
+    const user = userResult.rows[0];
     if (!user || user.status !== "active") return res.status(401).json({ message: "Account not found" });
+    if (user.biometrics_enabled === false) return res.status(403).json({ message: "Biometric login is disabled" });
     const challengeResult = await pool.query(
         `SELECT challenge FROM passkey_challenges
          WHERE user_id = $1 AND purpose = 'authentication' AND expires_at > NOW()`,
