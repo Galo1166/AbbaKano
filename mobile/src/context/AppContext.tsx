@@ -180,16 +180,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const reference = params.get('reference') || params.get('trxref');
     if (!reference) return;
 
-    void apiGet(`/payments/paystack/verify/${encodeURIComponent(reference)}`)
-      .then(() => refreshServerState())
-      .catch((error) => {
-        if (error instanceof ApiError && error.status !== 202) {
-          console.warn('Could not verify Paystack payment:', error.message);
+    const verifyPayment = async () => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        try {
+          await apiGet(`/payments/paystack/verify/${encodeURIComponent(reference)}`);
+          await refreshServerState();
+          window.localStorage.removeItem('abbakano_pending_payment');
+          break;
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 202 || attempt === 4) {
+            if (error instanceof ApiError && error.status !== 202) {
+              console.warn('Could not verify Paystack payment:', error.message);
+            }
+            break;
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 2000));
         }
-      })
-      .finally(() => {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      });
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    };
+
+    void verifyPayment();
   }, []);
 
   // ── Theme State ──────────────────────────────────────────────────────────────

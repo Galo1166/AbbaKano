@@ -48,6 +48,14 @@ export default function App() {
     if (sessionStatus === 'unauthenticated' && authState === 'authenticated') setAuthState('welcome');
   }, [sessionStatus, authState]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('reference') && !params.get('trxref')) return;
+    setActiveTab('home');
+    setShowFundWallet(false);
+  }, []);
+
   if (sessionStatus === 'loading') {
     return (
       <SafeAreaView style={[styles.fill, bg]}>

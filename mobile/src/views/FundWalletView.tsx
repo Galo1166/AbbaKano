@@ -38,10 +38,13 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
 
     setPaymentLoading(true);
     try {
-      const response = await apiPost<{ authorizationUrl: string }>(
+      const response = await apiPost<{ authorizationUrl: string; reference: string }>(
         "/payments/paystack/initialize",
         { amount: parsedAmount },
       );
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("abbakano_pending_payment", response.reference || "");
+      }
       await Linking.openURL(response.authorizationUrl);
     } catch (error) {
       Alert.alert(
