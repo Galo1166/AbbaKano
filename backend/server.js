@@ -25,6 +25,8 @@ const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || "http://local
 const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || "localhost";
 const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || "http://localhost:5173";
 const SESSION_COOKIE = "session";
+const SECURE_COOKIES = process.env.SECURE_COOKIES === "true";
+const COOKIE_SAME_SITE = SECURE_COOKIES ? "None" : "Lax";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\d{10,15}$/;
 const PIN_PATTERN = /^\d{4}$/;
@@ -245,11 +247,13 @@ async function requireAdmin(req, res, next) {
 }
 
 function setSessionCookie(res, user) {
-    res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${createSession(user)}; HttpOnly; Path=/; Max-Age=7200; SameSite=Lax`);
+    const secure = SECURE_COOKIES ? "; Secure" : "";
+    res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${createSession(user)}; HttpOnly; Path=/; Max-Age=7200; SameSite=${COOKIE_SAME_SITE}${secure}`);
 }
 
 function setCsrfCookie(res) {
-    res.append("Set-Cookie", `csrf=${crypto.randomBytes(32).toString("hex")}; Path=/; Max-Age=7200; SameSite=Lax`);
+    const secure = SECURE_COOKIES ? "; Secure" : "";
+    res.append("Set-Cookie", `csrf=${crypto.randomBytes(32).toString("hex")}; Path=/; Max-Age=7200; SameSite=${COOKIE_SAME_SITE}${secure}`);
 }
 
 function requireCsrf(req, res, next) {
