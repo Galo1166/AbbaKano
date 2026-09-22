@@ -168,6 +168,9 @@ function validateSignup(body) {
     if (normalizedReferralCode && !PHONE_PATTERN.test(normalizedReferralCode)) {
         return { error: "Referral code must be a valid Nigerian phone number" };
     }
+    if (normalizedReferralCode === normalizedPhone) {
+        return { error: "You cannot use your own phone number as a referral code" };
+    }
 
     return {
         fullName: normalizedFullName,
