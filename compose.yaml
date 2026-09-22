@@ -14,7 +14,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8081,http://localhost:8082}
       PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
-      PAYSTACK_CALLBACK_URL: http://localhost:5173/
+      PAYSTACK_CALLBACK_URL: ${PAYSTACK_CALLBACK_URL:-http://localhost:5173/}
       VTU_PROVIDER_URL: ${VTU_PROVIDER_URL:-}
       VTU_PROVIDER_API_KEY: ${VTU_PROVIDER_API_KEY:-}
       VTU_PRIMARY_PROVIDER: ${VTU_PRIMARY_PROVIDER:-smeplug}
