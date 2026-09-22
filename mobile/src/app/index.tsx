@@ -44,7 +44,7 @@ export default function App() {
   const bg = { backgroundColor: T.canvas };
 
   useEffect(() => {
-    if (sessionStatus === 'authenticated') setAuthState('authenticated');
+    if (sessionStatus === 'authenticated' && authState !== 'pin_setup') setAuthState('authenticated');
     if (sessionStatus === 'unauthenticated' && authState === 'authenticated') setAuthState('welcome');
   }, [sessionStatus, authState]);
 
