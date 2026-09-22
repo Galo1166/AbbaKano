@@ -292,6 +292,7 @@ async function getPlans({ network, planType } = {}) {
         price: plan.price,
         code: plan.providerCode,
         category: plan.planType,
+        provider: plan.provider,
         selectionToken: encodePlanToken(plan)
     }));
 }
