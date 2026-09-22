@@ -16,6 +16,7 @@ import { useApp } from '@/context/AppContext';
 import { SCREEN_ASSETS } from '../../assets/screenAssets';
 import { apiPost } from '@/lib/api';
 import { biometricLogin, registerBiometricDevice } from '@/lib/biometricAuth';
+import { loginWithPasskey, supportsPasskeys } from '@/lib/passkey';
 
 interface AuthLoginViewProps {
   onLoginSuccess: () => void;
@@ -57,8 +58,13 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
     setErrorMessage(null);
     setLoading(true);
     try {
-      const authenticated = await biometricLogin();
-      if (!authenticated) throw new Error('Biometric authentication is not available on this device.');
+      if (supportsPasskeys()) {
+        if (!identifier.trim()) throw new Error('Enter your phone number or email first.');
+        await loginWithPasskey(identifier.trim());
+      } else {
+        const authenticated = await biometricLogin();
+        if (!authenticated) throw new Error('Biometric authentication is not available on this device.');
+      }
       onLoginSuccess();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Could not sign in with biometrics.');
