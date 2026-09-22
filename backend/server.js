@@ -610,7 +610,15 @@ async function executeVtuPurchase(req, res, type) {
             await finalizeVtuSuccess(inserted.rows[0].id, userId, providerResult, response);
             return res.status(201).json({ status: "success", reference, message: providerResult.message });
         } catch (providerError) {
-            await pool.query("UPDATE vtu_transactions SET attempt_count = attempt_count + 1, next_attempt_at = NOW() + INTERVAL '2 minutes' WHERE id = $1 AND status = 'pending'", [inserted.rows[0].id]);
+            await pool.query(
+                `UPDATE vtu_transactions
+                 SET provider = COALESCE($1, provider),
+                     provider_request_id = COALESCE($2, provider_request_id),
+                     attempt_count = attempt_count + 1,
+                     next_attempt_at = NOW() + INTERVAL '2 minutes'
+                 WHERE id = $3 AND status = 'pending'`,
+                [providerError.provider || input.provider, providerError.requestId || null, inserted.rows[0].id]
+            );
             await pool.query("UPDATE idempotency_keys SET status = 'pending', updated_at = NOW() WHERE user_id = $1 AND operation = $2 AND idempotency_key = $3", [userId, `vtu.${type}`, idempotencyKey]);
             console.error(providerError);
             return res.status(202).json({ status: "pending", reference, message: "Purchase is being processed" });
@@ -1730,6 +1738,56 @@ app.post("/payments/paystack/webhook", async (req, res) => {
         await client.query("ROLLBACK");
         console.error(error);
         res.sendStatus(500);
+    } finally {
+        client.release();
+    }
+});
+
+app.post("/vtu/vtpass/webhook", async (req, res) => {
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    const data = payload.data && typeof payload.data === "object" ? payload.data : payload;
+    const providerRequestId = String(
+        data.request_id || data.requestId || data.provider_request_id || data.providerRequestId || ""
+    );
+    const providerReference = String(
+        data.reference || data.transaction_id || data.transactionId || data.provider_reference || ""
+    );
+    const status = String(
+        data.status || data.current_status || data.response_description || payload.status || ""
+    ).toLowerCase();
+    const successful = ["success", "successful", "delivered", "completed", "000"].includes(status)
+        || data.code === "000"
+        || payload.code === "000";
+
+    if (!successful || (!providerRequestId && !providerReference)) return res.sendStatus(200);
+
+    const client = await pool.connect();
+    try {
+        const result = await client.query(
+            `SELECT id, user_id, reference, status
+             FROM vtu_transactions
+             WHERE status = 'pending'
+               AND provider = 'vtpass'
+                             AND (provider_request_id = NULLIF($1, '') OR provider_reference = NULLIF($2, '') OR reference = NULLIF($1, ''))`,
+            [providerRequestId, providerReference]
+        );
+        const transaction = result.rows[0];
+        if (transaction) {
+            await finalizeVtuSuccess(transaction.id, transaction.user_id, {
+                provider: "vtpass",
+                providerRequestId: providerRequestId || transaction.reference,
+                providerReference: providerReference || providerRequestId || transaction.reference,
+                message: data.message || payload.message || "Transaction successful"
+            }, {
+                status: "success",
+                reference: transaction.reference,
+                message: data.message || payload.message || "Transaction successful"
+            });
+        }
+        return res.sendStatus(200);
+    } catch (error) {
+        console.error("VTPass webhook reconciliation failed", error);
+        return res.sendStatus(500);
     } finally {
         client.release();
     }

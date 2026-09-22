@@ -1,7 +1,7 @@
 const pool = require("./db");
 const { purchase } = require("./vtu-provider");
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 
 async function audit(client, userId, transactionId, action, details = {}) {
     await client.query(
