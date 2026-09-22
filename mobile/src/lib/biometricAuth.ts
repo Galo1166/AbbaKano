@@ -33,6 +33,13 @@ export async function registerBiometricDevice(): Promise<void> {
   });
 }
 
+export async function disableBiometricDevice(): Promise<void> {
+  if (supportsBiometrics()) {
+    await apiRequest('/auth/device', { method: 'DELETE' });
+    await SecureStore.deleteItemAsync(DEVICE_TOKEN_KEY);
+  }
+}
+
 export async function biometricLogin(): Promise<boolean> {
   if (!await authenticateBiometric('Sign in to AbbaKano')) return false;
   const deviceToken = await SecureStore.getItemAsync(DEVICE_TOKEN_KEY, {

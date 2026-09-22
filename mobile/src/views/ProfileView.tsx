@@ -7,6 +7,7 @@ import { ThemeSwitchModal } from '@/components/common/ThemeSwitchModal';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { SignOutModal } from '@/components/common/SignOutModal';
 import { apiRequest } from '@/lib/api';
+import { disableBiometricDevice, registerBiometricDevice, supportsBiometrics } from '@/lib/biometricAuth';
 
 interface ProfileViewProps {
   onNavigateToReferEarn?: () => void;
@@ -68,13 +69,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const setting = id === 'biometrics' ? 'biometricsEnabled' : id === 'app_lock' ? 'appLockEnabled' : null;
     if (!setting) return;
     const nextValue = setting === 'biometricsEnabled' ? !biometrics : !appLock;
+    if (setting === 'biometricsEnabled' && nextValue && !supportsBiometrics()) {
+      Alert.alert('Biometrics unavailable', 'Biometric login is available on iOS and Android devices, not in the web app.');
+      return;
+    }
     if (setting === 'biometricsEnabled') setBiometrics(nextValue);
     else setAppLock(nextValue);
 
-    void apiRequest('/me/security-settings', {
+    void (setting === 'biometricsEnabled' && nextValue
+      ? registerBiometricDevice()
+      : setting === 'biometricsEnabled'
+        ? disableBiometricDevice()
+        : Promise.resolve()
+    ).then(() => apiRequest('/me/security-settings', {
       method: 'PATCH',
       body: JSON.stringify({ [setting]: nextValue }),
-    }).then(() => refreshServerState()).catch(() => {
+    })).then(() => refreshServerState()).catch(() => {
       if (setting === 'biometricsEnabled') setBiometrics(!nextValue);
       else setAppLock(!nextValue);
       Alert.alert('Update failed', 'Could not save this security setting.');

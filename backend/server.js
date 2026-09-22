@@ -92,7 +92,7 @@ app.use((req, res, next) => {
         res.header("Vary", "Origin");
     }
     res.header("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Idempotency-Key, Authorization");
-    res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
     res.header("Access-Control-Allow-Credentials", "true");
 
     if (req.method === "OPTIONS") {
@@ -874,6 +874,11 @@ app.post("/auth/device/register", requireSession, requireCsrf, async (req, res) 
         [req.session.sub, hashDeviceToken(token), platform]
     );
     res.status(201).json({ deviceToken: token });
+});
+
+app.delete("/auth/device", requireSession, requireCsrf, async (req, res) => {
+    await pool.query("DELETE FROM device_credentials WHERE user_id = $1", [req.session.sub]);
+    res.sendStatus(204);
 });
 
 app.post("/auth/device/login", requireDeviceCredential, async (req, res) => {
