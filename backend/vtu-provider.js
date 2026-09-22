@@ -231,15 +231,15 @@ function normalizePlansPayload(payload, { network, networkMap, provider } = {}) 
         const code = raw.plan_code || raw.planCode || raw.variation_code || raw.code || raw.slug || raw.id || raw.name || `${index}`;
         const label = raw.name || raw.label || raw.title || raw.plan_name || raw.plan || raw.description || raw.code || code;
         const price = Number(
-            raw.amount
-            || raw.price
-            || raw.amount_naira
-            || raw.price_naira
-            || raw.cost
-            || raw.value
-            || raw.plan_price
-            || raw.variation_amount
-            || 0
+            raw.variation_amount
+            ?? raw.amount
+            ?? raw.price
+            ?? raw.amount_naira
+            ?? raw.price_naira
+            ?? raw.cost
+            ?? raw.value
+            ?? raw.plan_price
+            ?? 0
         );
 
         return {
@@ -313,13 +313,15 @@ async function getVtpassServicePlans({ service, provider, meterType } = {}) {
     const response = await fetch(`${VTPASS_BASE_URL.replace(/\/$/, "")}/service-variations?serviceID=${encodeURIComponent(serviceId)}`, providerRequestOptions({ method: "GET", headers: vtpassHeaders("GET") }));
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload?.response_description !== "000") throw new Error("Could not load cable plans");
-    return normalizePlansPayload(payload?.content?.variations || payload?.content?.varations || [], { network: provider, provider: "vtpass" }).map((plan) => ({
+    return normalizePlansPayload(payload?.content?.variations || payload?.content?.varations || [], { network: provider, provider: "vtpass" })
+        .filter((plan) => plan.price > 0 && !/box office/i.test(plan.label))
+        .map((plan) => ({
         label: plan.label,
         price: plan.price,
         code: plan.providerCode,
         category: plan.planType,
         selectionToken: encodePlanToken(plan)
-    }));
+        }));
 }
 
 async function verifyVtpassCableCustomer({ provider, smartcardNumber }) {
