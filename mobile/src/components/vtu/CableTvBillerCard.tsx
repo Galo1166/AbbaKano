@@ -6,7 +6,7 @@ import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { apiGet, ApiError } from '@/lib/api';
+import { apiGet, apiPost, ApiError } from '@/lib/api';
 import { SCREEN_ASSETS } from '../../../assets/screenAssets';
 
 type CableProvider = {
@@ -40,6 +40,8 @@ export const CableTvBillerCard: React.FC = () => {
   const [plans, setPlans] = useState<CablePlan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
+  const [verifiedCustomer, setVerifiedCustomer] = useState<string | null>(null);
+  const [verifyingCustomer, setVerifyingCustomer] = useState(false);
 
   const { startCheckout, paymentSuccessCount } = useCheckout();
 
@@ -82,6 +84,28 @@ export const CableTvBillerCard: React.FC = () => {
   useEffect(() => {
     void loadPlans(selectedProvider);
   }, [selectedProvider]);
+
+  useEffect(() => {
+    setVerifiedCustomer(null);
+    if (!/^\d{10}$/.test(smartcardNumber)) return;
+
+    let cancelled = false;
+    setVerifyingCustomer(true);
+    void apiPost<{ customerName: string }>('/vtu/verify-cable', {
+      provider: selectedProvider.id,
+      smartcardNumber,
+    }).then((response) => {
+      if (!cancelled) setVerifiedCustomer(response.customerName);
+    }).catch(() => {
+      if (!cancelled) setVerifiedCustomer(null);
+    }).finally(() => {
+      if (!cancelled) setVerifyingCustomer(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [smartcardNumber, selectedProvider.id]);
 
   const activePackage = plans.find((plan) => plan.code === selectedPackageCode) || plans[0];
 
@@ -177,6 +201,17 @@ export const CableTvBillerCard: React.FC = () => {
         maxLength={10}
         leftIcon={<Ionicons name="card-outline" size={18} color={Palette.onSurfaceMuted} />}
       />
+
+      {verifyingCustomer && <Text style={styles.statusText}>Verifying customer...</Text>}
+      {verifiedCustomer && (
+        <View style={styles.verifiedBox}>
+          <Ionicons name="checkmark-circle" size={18} color={Palette.tertiary} />
+          <View>
+            <Text style={styles.verifiedLabel}>Customer Verified</Text>
+            <Text style={styles.verifiedName}>{verifiedCustomer}</Text>
+          </View>
+        </View>
+      )}
 
       {/* Bouquets Package Selector */}
       <Text style={styles.sectionTitle}>SELECT PACKAGE / BOUQUET</Text>

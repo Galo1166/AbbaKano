@@ -322,6 +322,31 @@ async function getVtpassServicePlans({ service, provider, meterType } = {}) {
     }));
 }
 
+async function verifyVtpassCableCustomer({ provider, smartcardNumber }) {
+    if (!isVtpassConfigured()) throw new Error("VTPass is not configured");
+    const serviceId = vtpassBillServiceId("cable", provider);
+    if (!serviceId) throw new Error("Choose a supported cable provider");
+
+    const response = await fetch(`${VTPASS_BASE_URL.replace(/\/$/, "")}/merchant-verify`, providerRequestOptions({
+        method: "POST",
+        headers: vtpassHeaders("POST"),
+        body: JSON.stringify({
+            billersCode: smartcardNumber,
+            serviceID: serviceId,
+            type: "smartcard"
+        })
+    }));
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.code !== "000") {
+        throw new Error(payload?.response_description || payload?.message || "Could not verify cable customer");
+    }
+
+    const content = payload.content || payload.data || {};
+    return {
+        customerName: String(content.Customer_Name || content.customer_name || content.name || "")
+    };
+}
+
 async function getVtpassPlans(network) {
     if (!network) return [];
     const serviceId = vtpassServiceId(network, "data");
@@ -524,4 +549,4 @@ function createReference(userId, type) {
     return `vtu_${type}_${userId}_${crypto.randomUUID()}`;
 }
 
-module.exports = { ProviderError, purchase, createReference, getPlans, getVtpassServicePlans, resolvePlanToken, isVtpassFallbackEligible: (code) => VTPASS_FALLBACK_CODES.has(String(code)) };
+module.exports = { ProviderError, purchase, createReference, getPlans, getVtpassServicePlans, verifyVtpassCableCustomer, resolvePlanToken, isVtpassFallbackEligible: (code) => VTPASS_FALLBACK_CODES.has(String(code)) };

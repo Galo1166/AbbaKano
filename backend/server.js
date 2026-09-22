@@ -6,7 +6,7 @@ const { RedisStore } = require("rate-limit-redis");
 const { createClient } = require("redis");
 const jwt = require("jsonwebtoken");
 const pool = require("./db");
-const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, resolvePlanToken } = require("./vtu-provider");
+const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, resolvePlanToken } = require("./vtu-provider");
 const { calculateCreditAmount, isVerifiedPaystackDeposit } = require("./transaction-state");
 const { buildFallbackDedicatedAccount } = require("./dedicated-account");
 const { awardReferralCommission } = require("./referral");
@@ -1818,6 +1818,23 @@ app.get("/vtu/service-plans", requireSession, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(502).json({ message: error.message || "Could not load service plans" });
+    }
+});
+
+app.post("/vtu/verify-cable", requireSession, requireCsrf, async (req, res) => {
+    const provider = typeof req.body?.provider === "string" ? req.body.provider.trim().toLowerCase() : "";
+    const smartcardNumber = typeof req.body?.smartcardNumber === "string" ? req.body.smartcardNumber.replace(/\D/g, "") : "";
+    if (!["dstv", "gotv", "startimes"].includes(provider) || !/^\d{10}$/.test(smartcardNumber)) {
+        return res.status(400).json({ message: "Enter a valid 10-digit cable number" });
+    }
+
+    try {
+        const result = await verifyVtpassCableCustomer({ provider, smartcardNumber });
+        if (!result.customerName) return res.status(502).json({ message: "VTPass did not return a customer name" });
+        res.json(result);
+    } catch (error) {
+        console.error(error);
+        res.status(502).json({ message: error.message || "Could not verify cable customer" });
     }
 });
 
