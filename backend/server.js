@@ -90,7 +90,7 @@ app.use((req, res, next) => {
         res.header("Access-Control-Allow-Origin", origin);
         res.header("Vary", "Origin");
     }
-    res.header("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Idempotency-Key");
+    res.header("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Idempotency-Key, Authorization");
     res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.header("Access-Control-Allow-Credentials", "true");
 
@@ -199,7 +199,11 @@ function validateTransactionPin(pin) {
 }
 
 function requireSession(req, res, next) {
-    const token = req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
+    const authorization = req.headers.authorization;
+    const bearerToken = typeof authorization === "string" && authorization.startsWith("Bearer ")
+        ? authorization.slice(7).trim()
+        : "";
+    const token = bearerToken || req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
     if (!token) return res.status(401).json({ message: "Authentication required" });
 
     try {
@@ -251,7 +255,9 @@ async function requireAdmin(req, res, next) {
 
 function setSessionCookie(res, user) {
     const secure = SECURE_COOKIES ? "; Secure" : "";
-    res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${createSession(user)}; HttpOnly; Path=/; Max-Age=7200; SameSite=${COOKIE_SAME_SITE}${secure}`);
+    const token = createSession(user);
+    res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=7200; SameSite=${COOKIE_SAME_SITE}${secure}`);
+    return token;
 }
 
 function setCsrfCookie(res) {
@@ -742,11 +748,12 @@ app.post("/signup", authLimiter, async (req, res) => {
 
         await client.query("COMMIT");
 
-        setSessionCookie(res, user);
+        const authToken = setSessionCookie(res, user);
         const csrfToken = setCsrfCookie(res);
 
         res.status(201).json({
             message: "Account created successfully",
+            authToken,
             csrfToken,
             user: { ...user, dedicatedAccountNumber: dedicatedAccount.dedicatedAccountNumber }
         });
@@ -821,11 +828,12 @@ app.post("/login", authLimiter, async (req, res) => {
             return res.status(401).json({ message: "Invalid phone number or email and password" });
         }
 
-        setSessionCookie(res, user);
+        const authToken = setSessionCookie(res, user);
         const csrfToken = setCsrfCookie(res);
 
         res.json({
             message: "Login successful",
+            authToken,
             csrfToken,
             user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role }
         });
@@ -853,9 +861,9 @@ app.post("/auth/device/login", requireDeviceCredential, async (req, res) => {
     );
     const user = userResult.rows[0];
     if (!user) return res.status(401).json({ message: "User account not found" });
-    setSessionCookie(res, user);
+    const authToken = setSessionCookie(res, user);
     const csrfToken = setCsrfCookie(res);
-    res.json({ message: "Biometric login successful", csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
+    res.json({ message: "Biometric login successful", authToken, csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
 });
 
 async function findUserByIdentifier(identifier) {
@@ -991,9 +999,9 @@ app.post("/auth/passkey/login/verify", async (req, res) => {
         if (!verification.verified) return res.status(401).json({ message: "Passkey authentication failed" });
         await pool.query("UPDATE passkey_credentials SET counter = $1 WHERE id = $2", [verification.authenticationInfo.newCounter, credential.id]);
         await pool.query("DELETE FROM passkey_challenges WHERE user_id = $1", [user.id]);
-        setSessionCookie(res, user);
+        const authToken = setSessionCookie(res, user);
         const csrfToken = setCsrfCookie(res);
-        res.json({ message: "Passkey login successful", csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
+        res.json({ message: "Passkey login successful", authToken, csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
     } catch (error) {
         console.error(error);
         res.status(401).json({ message: "Could not verify passkey" });

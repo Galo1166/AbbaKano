@@ -12,7 +12,7 @@ import {
   MOCK_KYC_TIERS,
 } from '@/constants/mockData';
 import { getPalette, DarkPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
-import { apiGet, apiPost, ApiError } from '@/lib/api';
+import { apiGet, apiPost, ApiError, clearAuthToken } from '@/lib/api';
 import { TelcoNetworkId, TELCO_LIST } from '@/constants/telco';
 
 export type ThemePreference = 'system' | 'dark' | 'light';
@@ -159,6 +159,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await apiPost('/logout', {});
     } catch (error) {
       console.warn('Logout request failed, continuing local sign-out:', error);
+    } finally {
+      clearAuthToken();
     }
   };
 

@@ -3,6 +3,17 @@ const DEFAULT_API_URL = 'http://localhost:3000';
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
 let csrfTokenValue: string | undefined;
+let authTokenValue: string | undefined;
+
+function storedAuthToken(): string | undefined {
+  if (typeof localStorage === 'undefined') return undefined;
+  return localStorage.getItem('abbakano_auth_token') || undefined;
+}
+
+function saveAuthToken(token: string): void {
+  authTokenValue = token;
+  if (typeof localStorage !== 'undefined') localStorage.setItem('abbakano_auth_token', token);
+}
 
 export class ApiError extends Error {
   status: number;
@@ -27,6 +38,11 @@ function getCookie(name: string): string | undefined {
 
 export function csrfToken(): string | undefined {
   return csrfTokenValue || getCookie('csrf');
+}
+
+export function clearAuthToken(): void {
+  authTokenValue = undefined;
+  if (typeof localStorage !== 'undefined') localStorage.removeItem('abbakano_auth_token');
 }
 
 async function refreshCsrfToken(): Promise<string | undefined> {
@@ -54,6 +70,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
   const method = (init.method || 'GET').toUpperCase();
+  const authToken = authTokenValue || storedAuthToken();
+  if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
   let token = csrfToken();
   if (!token && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     token = await refreshCsrfToken();
@@ -69,9 +87,13 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   });
   const data = await parseResponse(response);
 
-  if (typeof data === 'object' && data !== null && 'csrfToken' in data
-    && typeof data.csrfToken === 'string') {
-    csrfTokenValue = data.csrfToken;
+  if (typeof data === 'object' && data !== null) {
+    if ('csrfToken' in data && typeof data.csrfToken === 'string') {
+      csrfTokenValue = data.csrfToken;
+    }
+    if ('authToken' in data && typeof data.authToken === 'string') {
+      saveAuthToken(data.authToken);
+    }
   }
 
   if (!response.ok) {
