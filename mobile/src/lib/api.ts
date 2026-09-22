@@ -2,6 +2,8 @@ const DEFAULT_API_URL = 'http://localhost:3000';
 
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
+let csrfTokenValue: string | undefined;
+
 export class ApiError extends Error {
   status: number;
   details: unknown;
@@ -24,7 +26,16 @@ function getCookie(name: string): string | undefined {
 }
 
 export function csrfToken(): string | undefined {
-  return getCookie('csrf');
+  return csrfTokenValue || getCookie('csrf');
+}
+
+async function refreshCsrfToken(): Promise<string | undefined> {
+  const response = await fetch(`${API_URL}/csrf`, { credentials: 'include' });
+  if (!response.ok) return undefined;
+
+  const data = await response.json() as { csrfToken?: unknown };
+  csrfTokenValue = typeof data.csrfToken === 'string' ? data.csrfToken : undefined;
+  return csrfTokenValue;
 }
 
 export function createIdempotencyKey(): string {
@@ -43,7 +54,10 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
   const method = (init.method || 'GET').toUpperCase();
-  const token = csrfToken();
+  let token = csrfToken();
+  if (!token && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    token = await refreshCsrfToken();
+  }
   if (token && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
     headers.set('X-CSRF-Token', token);
   }
@@ -54,6 +68,11 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     headers,
   });
   const data = await parseResponse(response);
+
+  if (typeof data === 'object' && data !== null && 'csrfToken' in data
+    && typeof data.csrfToken === 'string') {
+    csrfTokenValue = data.csrfToken;
+  }
 
   if (!response.ok) {
     const message = typeof data === 'object' && data !== null && 'message' in data

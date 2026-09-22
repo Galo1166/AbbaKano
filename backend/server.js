@@ -25,7 +25,7 @@ const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || "http://local
 const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || "localhost";
 const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || "http://localhost:5173";
 const SESSION_COOKIE = "session";
-const SECURE_COOKIES = process.env.SECURE_COOKIES === "true";
+const SECURE_COOKIES = process.env.SECURE_COOKIES === "true" || process.env.NODE_ENV === "production";
 const COOKIE_SAME_SITE = SECURE_COOKIES ? "None" : "Lax";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\d{10,15}$/;
@@ -253,8 +253,19 @@ function setSessionCookie(res, user) {
 
 function setCsrfCookie(res) {
     const secure = SECURE_COOKIES ? "; Secure" : "";
-    res.append("Set-Cookie", `csrf=${crypto.randomBytes(32).toString("hex")}; Path=/; Max-Age=7200; SameSite=${COOKIE_SAME_SITE}${secure}`);
+    const token = crypto.randomBytes(32).toString("hex");
+    res.append("Set-Cookie", `csrf=${token}; Path=/; Max-Age=7200; SameSite=${COOKIE_SAME_SITE}${secure}`);
+    return token;
 }
+
+function getCsrfCookie(req) {
+    return req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("csrf="))?.slice(5);
+}
+
+app.get("/csrf", (req, res) => {
+    const token = getCsrfCookie(req) || setCsrfCookie(res);
+    res.json({ csrfToken: token });
+});
 
 function requireCsrf(req, res, next) {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
@@ -727,10 +738,11 @@ app.post("/signup", authLimiter, async (req, res) => {
         await client.query("COMMIT");
 
         setSessionCookie(res, user);
-        setCsrfCookie(res);
+        const csrfToken = setCsrfCookie(res);
 
         res.status(201).json({
             message: "Account created successfully",
+            csrfToken,
             user: { ...user, dedicatedAccountNumber: dedicatedAccount.dedicatedAccountNumber }
         });
     } catch (error) {
@@ -805,10 +817,11 @@ app.post("/login", authLimiter, async (req, res) => {
         }
 
         setSessionCookie(res, user);
-        setCsrfCookie(res);
+        const csrfToken = setCsrfCookie(res);
 
         res.json({
             message: "Login successful",
+            csrfToken,
             user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role }
         });
     } catch (error) {
@@ -836,8 +849,8 @@ app.post("/auth/device/login", requireDeviceCredential, async (req, res) => {
     const user = userResult.rows[0];
     if (!user) return res.status(401).json({ message: "User account not found" });
     setSessionCookie(res, user);
-    setCsrfCookie(res);
-    res.json({ message: "Biometric login successful", user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
+    const csrfToken = setCsrfCookie(res);
+    res.json({ message: "Biometric login successful", csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
 });
 
 async function findUserByIdentifier(identifier) {
@@ -974,8 +987,8 @@ app.post("/auth/passkey/login/verify", async (req, res) => {
         await pool.query("UPDATE passkey_credentials SET counter = $1 WHERE id = $2", [verification.authenticationInfo.newCounter, credential.id]);
         await pool.query("DELETE FROM passkey_challenges WHERE user_id = $1", [user.id]);
         setSessionCookie(res, user);
-        setCsrfCookie(res);
-        res.json({ message: "Passkey login successful", user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
+        const csrfToken = setCsrfCookie(res);
+        res.json({ message: "Passkey login successful", csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
     } catch (error) {
         console.error(error);
         res.status(401).json({ message: "Could not verify passkey" });
