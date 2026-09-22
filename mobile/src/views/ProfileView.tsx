@@ -136,9 +136,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </Text>
             </View>
 
-            <Pressable style={styles.editBtn} hitSlop={8}>
-              <MaterialIcons name="edit" size={18} color={T.onSurfaceVariant} />
-            </Pressable>
           </View>
 
           {/* Balance Row */}
@@ -240,7 +237,6 @@ const styles = StyleSheet.create({
   tierBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(238,152,0,0.12)', borderRadius: Rounded.full, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
   tierBadgeText: { fontSize: 11, fontWeight: '700', fontFamily: Typography.family },
   profileContact: { fontSize: 12, fontFamily: Typography.family, lineHeight: 16 },
-  editBtn: { padding: 4 },
 
   profileBalanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: Rounded.xl, padding: Spacing.three },
   profileBalance: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
