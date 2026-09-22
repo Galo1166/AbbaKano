@@ -1,0 +1,9 @@
+node_modules
+dist
+.expo
+.git
+.vscode
+.claude
+stitch_abbakano_data_sub
+scripts
+*.log

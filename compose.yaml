@@ -1,0 +1,120 @@
+services:
+
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: myapp
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET must be set}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8081,http://localhost:8082}
+      PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
+      PAYSTACK_CALLBACK_URL: http://localhost:5173/
+      VTU_PROVIDER_URL: ${VTU_PROVIDER_URL:-}
+      VTU_PROVIDER_API_KEY: ${VTU_PROVIDER_API_KEY:-}
+      VTU_PRIMARY_PROVIDER: ${VTU_PRIMARY_PROVIDER:-vtpass}
+      VTU_FALLBACK_PROVIDER: ${VTU_FALLBACK_PROVIDER:-smeplug}
+      VTPASS_FALLBACK_CODES: ${VTPASS_FALLBACK_CODES:-028}
+      VTPASS_BASE_URL: ${VTPASS_BASE_URL:-}
+      VTPASS_API_KEY: ${VTPASS_API_KEY:-}
+      VTPASS_PUBLIC_KEY: ${VTPASS_PUBLIC_KEY:-}
+      VTPASS_SECRET_KEY: ${VTPASS_SECRET_KEY:-}
+      VTU_PROVIDER_TIMEOUT_MS: ${VTU_PROVIDER_TIMEOUT_MS:-15000}
+      VTU_RATE_LIMIT: ${VTU_RATE_LIMIT:-10}
+      VERIFIED_AGENT_RATE_LIMIT: ${VERIFIED_AGENT_RATE_LIMIT:-120}
+      VTU_RATE_WINDOW_SECONDS: ${VTU_RATE_WINDOW_SECONDS:-60}
+      VTU_DAILY_LIMIT_NAIRA: ${VTU_DAILY_LIMIT_NAIRA:-100000}
+      VTU_PHONE_DAILY_LIMIT: ${VTU_PHONE_DAILY_LIMIT:-3}
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(() => process.exit(0)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./mobile
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:3000}
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    command: ["node", "worker.js"]
+    environment:
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: myapp
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      VTU_PROVIDER_URL: ${VTU_PROVIDER_URL:-}
+      VTU_PROVIDER_API_KEY: ${VTU_PROVIDER_API_KEY:-}
+      VTPASS_BASE_URL: ${VTPASS_BASE_URL:-}
+      VTPASS_API_KEY: ${VTPASS_API_KEY:-}
+      VTPASS_PUBLIC_KEY: ${VTPASS_PUBLIC_KEY:-}
+      VTPASS_SECRET_KEY: ${VTPASS_SECRET_KEY:-}
+      VTU_PROVIDER_TIMEOUT_MS: ${VTU_PROVIDER_TIMEOUT_MS:-15000}
+    depends_on:
+      database:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  migrations:
+    image: postgres:17-alpine
+    environment:
+      PGHOST: database
+      PGPORT: 5432
+      PGDATABASE: myapp
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    volumes:
+      - ./database/migrations:/migrations:ro
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/migrations/001_transaction_integrity.sql"]
+    depends_on:
+      database:
+        condition: service_healthy
+
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d myapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

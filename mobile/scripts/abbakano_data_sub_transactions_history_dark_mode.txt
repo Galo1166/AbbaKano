@@ -1,0 +1,154 @@
+<main class="flex-1 flex flex-col relative w-full pt-16 pb-28 px-margin bg-background"><div class="flex flex-col w-full gap-space-lg">
+<section class="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#162033] via-surface-container to-[#0e1626] p-space-md shadow-xl">
+<div class="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-primary/10 blur-2xl pointer-events-none"></div>
+<div class="absolute -left-6 -bottom-6 w-32 h-32 rounded-full bg-secondary/10 blur-2xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="text-primary material-symbols-outlined text-[18px]">calendar_month</span>
+<span class="font-label-md text-label-md text-on-surface-variant">February 2025 Ledger</span>
+</div>
+<div class="flex items-center gap-1 bg-surface-container-high/90 px-space-xs py-1 rounded-full text-tertiary">
+<span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Verified Ledger</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-space-sm pt-space-xs">
+<div class="bg-surface-container-low/70 rounded-lg p-space-sm flex flex-col justify-between">
+<div class="flex items-center gap-space-2xs text-on-surface-variant mb-1">
+<span class="material-symbols-outlined text-[16px] text-error">arrow_outward</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Total Outflow</span>
+</div>
+<span class="font-headline-md text-headline-md text-on-surface tracking-tight font-bold">₦18,450.00</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant/80 mt-1">28 debits recorded</span>
+</div>
+<div class="bg-surface-container-low/70 rounded-lg p-space-sm flex flex-col justify-between">
+<div class="flex items-center gap-space-2xs text-secondary mb-1">
+<span class="material-symbols-outlined text-[16px] text-tertiary">arrow_downward</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Total Inflow</span>
+</div>
+<span class="font-headline-md text-headline-md text-tertiary tracking-tight font-bold">+₦25,000.00</span>
+<span class="font-body-sm text-body-sm text-secondary/90 mt-1">5 wallet deposits</span>
+</div>
+</div>
+</div>
+</section>
+<div class="flex items-center gap-space-xs overflow-x-auto no-scrollbar py-1">
+<button class="filter-pill flex-shrink-0 px-space-md py-space-xs rounded-full bg-primary text-on-primary font-label-md text-label-md shadow-[0_4px_16px_rgba(77,142,255,0.35)] transition-all">All</button>
+<button class="filter-pill flex-shrink-0 px-space-md py-space-xs rounded-full bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-all">Data</button>
+<button class="filter-pill flex-shrink-0 px-space-md py-space-xs rounded-full bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-all">Airtime</button>
+<button class="filter-pill flex-shrink-0 px-space-md py-space-xs rounded-full bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-all">Wallet Deposits</button>
+<button class="filter-pill flex-shrink-0 px-space-md py-space-xs rounded-full bg-surface-container text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-all">Electricity</button>
+</div>
+<section class="flex flex-col gap-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<h2 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-bold">TODAY, 25 FEB</h2>
+<span class="font-body-sm text-body-sm text-outline">2 Transactions</span>
+</div>
+<div class="flex flex-col gap-space-sm">
+<div class="bg-surface-container-low hover:bg-surface-container rounded-xl p-space-md flex items-center justify-between gap-space-sm transition-colors shadow-sm">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-12 h-12 min-w-[48px] rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]">signal_cellular_alt</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">MTN 5.0GB Data Bundle</span>
+<div class="flex items-center gap-space-2xs mt-0.5">
+<span class="font-body-sm text-body-sm text-on-surface-variant">0803 459 2811</span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">14:22</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">-₦1,300.00</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-tertiary mt-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Completed </span>
+</div>
+</div>
+<div class="bg-surface-container-low hover:bg-surface-container rounded-xl p-space-md flex items-center justify-between gap-space-sm transition-colors shadow-sm">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-12 h-12 min-w-[48px] rounded-full bg-primary-container/20 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Wallet Top-Up</span>
+<div class="flex items-center gap-space-2xs mt-0.5">
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Via Moniepoint Transfer</span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">10:04</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0">
+<span class="font-headline-sm text-headline-sm text-tertiary font-bold">+₦5,000.00</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-tertiary mt-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Completed </span>
+</div>
+</div>
+</div>
+</section>
+<section class="flex flex-col gap-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<h2 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider font-bold">YESTERDAY, 24 FEB</h2>
+<span class="font-body-sm text-body-sm text-outline">2 Transactions</span>
+</div>
+<div class="flex flex-col gap-space-sm">
+<div class="bg-surface-container-low hover:bg-surface-container rounded-xl p-space-md flex items-center justify-between gap-space-sm transition-colors shadow-sm">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-12 h-12 min-w-[48px] rounded-full bg-error-container/40 text-error flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]">cell_tower</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Airtel 2.0GB Data</span>
+<div class="flex items-center gap-space-2xs mt-0.5">
+<span class="font-body-sm text-body-sm text-on-surface-variant">0902 118 7644</span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">19:45</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">-₦550.00</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-tertiary mt-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Completed </span>
+</div>
+</div>
+<div class="bg-surface-container-low hover:bg-surface-container rounded-xl p-space-md flex items-center justify-between gap-space-sm transition-colors shadow-sm">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-12 h-12 min-w-[48px] rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">lightbulb</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Ikeja Electric Prepaid</span>
+<div class="flex items-center gap-space-2xs mt-0.5">
+<span class="font-body-sm text-body-sm text-secondary font-medium truncate">Token: 4491-0923-8821</span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">12:18</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">-₦3,000.00</span>
+<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-tertiary mt-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Completed </span>
+</div>
+</div>
+</div>
+</section>
+<div class="relative overflow-hidden rounded-xl bg-surface-container-low p-space-md shadow-md">
+<div class="flex items-start gap-space-sm">
+<div class="w-10 h-10 min-w-[40px] rounded-lg bg-secondary/15 text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[22px]">tips_and_updates</span>
+</div>
+<div class="flex flex-col gap-1 min-w-0">
+<div class="flex items-center justify-between">
+<h3 class="font-label-lg text-label-lg text-secondary font-bold">Reseller Tip</h3>
+<span class="font-label-sm text-label-sm text-primary flex items-center gap-0.5">PDF Ready <span class="material-symbols-outlined text-[14px]">download</span></span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed"> Generate automated PDF transaction statements anytime from Web Portal for your business accounting and retail customers. </p>
+</div>
+</div>
+</div>
+</div>
+</main>

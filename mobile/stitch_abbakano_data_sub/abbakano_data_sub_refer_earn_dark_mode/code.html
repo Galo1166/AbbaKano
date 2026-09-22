@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#0f131c;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-container-lowest": "#0a0e17", "primary-fixed": "#d8e2ff", "on-primary-fixed": "#001a42", "on-secondary-fixed": "#2a1700", "secondary": "#ffb95f", "surface-dim": "#0f131c", "outline-variant": "#424754", "surface-tint": "#adc6ff", "secondary-container": "#ee9800", "on-primary-fixed-variant": "#004395", "tertiary-fixed-dim": "#4edea3", "error-container": "#93000a", "on-secondary": "#472a00", "secondary-fixed-dim": "#ffb95f", "on-error-container": "#ffdad6", "on-tertiary-container": "#00311f", "primary-fixed-dim": "#adc6ff", "surface-container-highest": "#31353f", "surface-bright": "#353943", "on-tertiary-fixed-variant": "#005236", "on-secondary-container": "#5b3800", "on-background": "#dfe2ef", "primary-container": "#4d8eff", "tertiary-container": "#00a572", "error": "#ffb4ab", "surface-container-low": "#181b25", "surface": "#0f131c", "on-tertiary": "#003824", "surface-container": "#1c1f29", "on-surface-variant": "#c2c6d6", "outline": "#8c909f", "inverse-primary": "#005ac2", "surface-container-high": "#262a34", "on-tertiary-fixed": "#002113", "secondary-fixed": "#ffddb8", "tertiary-fixed": "#6ffbbe", "tertiary": "#4edea3", "on-primary-container": "#00285d", "on-secondary-fixed-variant": "#653e00", "on-surface": "#dfe2ef", "background": "#0f131c", "primary": "#adc6ff", "on-primary": "#002e6a", "on-error": "#690005", "surface-variant": "#31353f", "inverse-on-surface": "#2c303a", "inverse-surface": "#dfe2ef" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "margin": "1rem", "space-md": "1rem", "margin-tablet": "1.5rem", "gutter-sm": "0.75rem", "space-sm": "0.75rem", "space-xl": "2rem", "gutter": "1rem", "space-lg": "1.5rem", "margin-desktop": "2rem", "space-2xl": "3rem", "space-2xs": "0.25rem", "space-xs": "0.5rem" }, "fontFamily": { "label-sm": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "currency-display": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"] }, "fontSize": { "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }], "headline-lg": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.015em", "fontWeight": "700" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "currency-display": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "800" }], "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.005em", "fontWeight": "600" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }] } } } };</script></head><body class="bg-surface text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 inset-x-0 z-50 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.2)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-xs"><div class="p-space-2xs bg-surface-container-high rounded-full"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1U-L8H3B--tTCl8jbe_oZEnFk35OyRHx-qZdxo7hhAxg0YLC1ePpKDeX1jzH1V8HEuHsq9XrBdApsq-cVkdxbHvONIK_Mv2dbs4YEkBVWFXRkRqUkpuuY7F1uQuBWnwq-nKkd_3bZYlotd9dO-Phrip6u1cEgV3i7J0sB3Ub9SBtWc0p8LDfpNC3yylVMTnT44stnRpxRl-9FhduYKhni0_DuU2or3ZJG__mhdm4ZOWJnt7Ys3MaPt8QM6p7EmK2GUj0sfHYwiQ8w"/></div><div class="flex flex-col"><span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">AbbaKano</span><h1 class="font-headline-sm text-headline-sm text-on-surface leading-none">Home</h1></div></div><div class="flex items-center gap-space-2xs"><button aria-label="Notifications" class="w-11 h-11 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors relative"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-secondary-container"></span></button></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface"><div class="flex flex-col w-full px-margin pb-space-xl space-y-space-lg">
+<!-- Top In-Screen Navigation Strip -->
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center gap-space-sm">
+<button aria-label="Go Back" class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface hover:text-primary transition-colors active:scale-95">
+<span class="material-symbols-outlined text-[20px]">arrow_back</span>
+</button>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Partnership Hub</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Referral &amp; Rewards</h2>
+</div>
+</div>
+<div class="w-10 h-10 rounded-full p-space-2xs bg-surface-container-high flex items-center justify-center shadow-md">
+<img alt="AbbaKano Official Brand Badge" class="w-full h-full object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrFD-XahLWywNTghQ_YeyAQP3u7JwPyUCZwkCwTEzeRTQ0eISSjdFNObLmwLV30Ci-PPcvAYO5FQZXUUICG_WHGYE2TLjM1IKN1Z4laBjcUvroq3xFz9kKnzpmlCZ4ORS2zDTEGSF6zye51jZ-01Bkik5sKTXdVh2c4CBpg3GuVQ0fXQdjeTj_kWGQamrLKwwpJdtwO1ICcErCWFcvjbizZVeTgHr1vNvtYgqVub_nO-979CPkPrDImz4EAoT97Kw2HK8"/>
+</div>
+</div>
+<!-- Hero Incentive Banner -->
+<div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-surface-container-high via-surface-container to-surface-container-lowest p-space-lg shadow-xl">
+<div class="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-secondary/15 blur-3xl pointer-events-none"></div>
+<div class="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-primary-container/20 blur-2xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col space-y-space-sm">
+<!-- Tag / Pill -->
+<div class="inline-flex items-center gap-space-xs self-start px-space-sm py-1 rounded-full bg-secondary-container/20 text-secondary">
+<span class="material-symbols-outlined text-[16px]">redeem</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Unlimited Reseller Rewards</span>
+</div>
+<!-- Headline & Subtitle -->
+<h3 class="font-headline-md text-headline-md text-on-surface">
+        Earn <span class="text-secondary">₦200</span> For Every Friend You Invite
+      </h3>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+        Share your exclusive referral link. When they fund their wallet and purchase their first bundle, you both unlock cash rewards!
+      </p>
+<!-- Social Proof Stack -->
+<div class="flex items-center gap-space-sm pt-space-xs">
+<div class="flex -space-x-2.5">
+<div class="w-7 h-7 rounded-full bg-surface-bright flex items-center justify-center text-primary font-label-sm text-label-sm shadow">
+            MA
+          </div>
+<div class="w-7 h-7 rounded-full bg-surface-container-highest flex items-center justify-center text-secondary font-label-sm text-label-sm shadow">
+            FK
+          </div>
+<div class="w-7 h-7 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-label-sm text-label-sm shadow">
+            IB
+          </div>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="font-label-md text-label-md text-on-surface-variant">+420 resellers earning daily</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Metric Cards: 3-column grid -->
+<div class="grid grid-cols-3 gap-gutter-sm">
+<div class="flex flex-col p-space-sm bg-surface-container rounded-xl">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-space-2xs">Referred</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">18</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Agents</span>
+</div>
+<div class="flex flex-col p-space-sm bg-surface-container rounded-xl">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-space-2xs">Total Bonus</span>
+<span class="font-headline-sm text-headline-sm text-secondary font-bold">₦3,600</span>
+<span class="font-body-sm text-body-sm text-tertiary flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[13px]">trending_up</span> All-time
+      </span>
+</div>
+<div class="flex flex-col p-space-sm bg-surface-container rounded-xl">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-space-2xs">Ready to Claim</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">₦1,200</span>
+<span class="font-body-sm text-body-sm text-primary-fixed-dim">Instant pay</span>
+</div>
+</div>
+<!-- Unclaimed Bonus Action Card -->
+<div class="relative overflow-hidden p-space-md bg-surface-container-high rounded-xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center shadow-inner">
+<span class="material-symbols-outlined text-[26px]">account_balance_wallet</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Unclaimed Balance</span>
+<div class="flex items-baseline gap-1.5">
+<span class="font-currency-display text-currency-display text-on-surface leading-none">₦1,200</span>
+<span class="font-label-sm text-label-sm text-tertiary">available</span>
+</div>
+</div>
+</div>
+<button class="w-full sm:w-auto h-12 px-space-lg rounded-xl bg-primary-container hover:bg-primary-container/90 active:scale-[0.98] text-on-primary-container font-label-lg text-label-lg flex items-center justify-center gap-space-xs transition-all shadow-[0_8px_20px_-4px_rgba(77,142,255,0.4)]" id="claimBtn">
+<span>Transfer to Wallet</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+<!-- Unique Referral Code Card -->
+<div class="flex flex-col p-space-md bg-surface-container rounded-xl space-y-space-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Your Unique Referral Code</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-secondary-container/20 text-secondary font-bold">
+        Reseller Tier 1
+      </span>
+</div>
+<div class="flex items-center justify-between p-space-sm rounded-lg bg-surface-container-lowest">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[22px]">tag</span>
+<span class="font-headline-sm text-headline-sm text-on-surface tracking-wider font-mono" id="referralCode">ABBA - USMAN - 99</span>
+</div>
+<button class="h-10 px-space-md rounded-lg bg-surface-bright hover:bg-surface-container-highest active:scale-95 text-primary font-label-lg text-label-lg flex items-center gap-1 transition-all" id="copyBtn">
+<span class="material-symbols-outlined text-[18px]" id="copyIcon">content_copy</span>
+<span id="copyText">Copy</span>
+</button>
+</div>
+<!-- Quick Share Buttons -->
+<div class="grid grid-cols-2 gap-space-sm pt-space-2xs">
+<button class="h-12 rounded-xl bg-tertiary-container hover:bg-tertiary-container/90 active:scale-[0.98] text-on-tertiary-container font-label-lg text-label-lg flex items-center justify-center gap-space-xs transition-all shadow-md" id="whatsappShareBtn">
+<span class="material-symbols-outlined text-[20px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="h-12 rounded-xl bg-surface-bright hover:bg-surface-container-highest active:scale-[0.98] text-on-surface font-label-lg text-label-lg flex items-center justify-center gap-space-xs transition-all" id="nativeShareBtn">
+<span class="material-symbols-outlined text-[20px]">share</span>
+<span>Share Link</span>
+</button>
+</div>
+</div>
+<!-- How It Works (3 Clean Steps) -->
+<div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">How It Works</h3>
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">3 Easy Steps</span>
+</div>
+<div class="flex flex-col space-y-space-xs">
+<!-- Step 1 -->
+<div class="flex items-start gap-space-md p-space-md rounded-xl bg-surface-container">
+<div class="w-9 h-9 shrink-0 rounded-full bg-primary-container text-on-primary-container font-headline-sm text-headline-sm flex items-center justify-center font-bold">
+          1
+        </div>
+<div class="flex flex-col min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface">Share Your Link</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-space-2xs">
+            Send your custom referral code or direct invite link to fellow VTU vendors and friends.
+          </p>
+</div>
+</div>
+<!-- Step 2 -->
+<div class="flex items-start gap-space-md p-space-md rounded-xl bg-surface-container">
+<div class="w-9 h-9 shrink-0 rounded-full bg-secondary-container text-on-secondary-container font-headline-sm text-headline-sm flex items-center justify-center font-bold">
+          2
+        </div>
+<div class="flex flex-col min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface">They Fund &amp; Purchase</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-space-2xs">
+            Your invitee signs up and completes their first data subscription or airtime top-up.
+          </p>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="flex items-start gap-space-md p-space-md rounded-xl bg-surface-container">
+<div class="w-9 h-9 shrink-0 rounded-full bg-tertiary-container text-on-tertiary-container font-headline-sm text-headline-sm flex items-center justify-center font-bold">
+          3
+        </div>
+<div class="flex flex-col min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface">Instant Wallet Credit</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-space-2xs">
+            Get credited with ₦200 immediately, straight into your claimable cash ledger.
+          </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Recent Referrals Section -->
+<div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Recent Referrals</h3>
+<span class="font-label-sm text-label-sm text-primary hover:underline cursor-pointer">View All</span>
+</div>
+<div class="flex flex-col space-y-space-xs">
+<!-- Item 1 -->
+<div class="flex items-center justify-between p-space-md rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-label-lg text-label-lg">
+            MA
+          </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface truncate">Musa Abubakar</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Today • MTN 10GB Purchase</span>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-space-xs">
+<span class="font-label-lg text-label-lg text-tertiary font-bold">+₦200.00</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-tertiary-container/20 text-tertiary">Credited</span>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center justify-between p-space-md rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center text-secondary font-label-lg text-label-lg">
+            FK
+          </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface truncate">Fatima Kabir</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Yesterday • Airtel 5GB Plan</span>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-space-xs">
+<span class="font-label-lg text-label-lg text-tertiary font-bold">+₦200.00</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-tertiary-container/20 text-tertiary">Credited</span>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="flex items-center justify-between p-space-md rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center text-primary-fixed-dim font-label-lg text-label-lg">
+            IB
+          </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface truncate">Ibrahim Bello</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">3 Oct • Glo Corporate Data</span>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-space-xs">
+<span class="font-label-lg text-label-lg text-tertiary font-bold">+₦200.00</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-tertiary-container/20 text-tertiary">Credited</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Toast Container -->
+<div class="fixed bottom-20 inset-x-margin z-50 flex items-center justify-between p-space-md rounded-xl bg-surface-bright text-on-surface shadow-2xl transition-all duration-300 opacity-0 pointer-events-none translate-y-4" id="toastNotification">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span>
+<span class="font-label-md text-label-md" id="toastMessage">Referral code copied to clipboard!</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface" id="closeToast">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+<script>
+  (function() {
+    const code = "ABBA-USMAN-99";
+    const copyBtn = document.getElementById("copyBtn");
+    const copyIcon = document.getElementById("copyIcon");
+    const copyText = document.getElementById("copyText");
+    const toast = document.getElementById("toastNotification");
+    const toastMsg = document.getElementById("toastMessage");
+    const closeToast = document.getElementById("closeToast");
+    const claimBtn = document.getElementById("claimBtn");
+    const whatsappBtn = document.getElementById("whatsappShareBtn");
+    const shareBtn = document.getElementById("nativeShareBtn");
+
+    let toastTimer = null;
+
+    function showToast(message) {
+      if (!toast) return;
+      toastMsg.textContent = message;
+      toast.classList.remove("opacity-0", "pointer-events-none", "translate-y-4");
+      toast.classList.add("opacity-100", "pointer-events-auto", "translate-y-0");
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        hideToast();
+      }, 3000);
+    }
+
+    function hideToast() {
+      if (!toast) return;
+      toast.classList.add("opacity-0", "pointer-events-none", "translate-y-4");
+      toast.classList.remove("opacity-100", "pointer-events-auto", "translate-y-0");
+    }
+
+    if (closeToast) {
+      closeToast.addEventListener("click", hideToast);
+    }
+
+    if (copyBtn) {
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard?.writeText(code).then(() => {
+          copyIcon.textContent = "check";
+          copyText.textContent = "Copied!";
+          showToast("Referral code copied to clipboard!");
+          setTimeout(() => {
+            copyIcon.textContent = "content_copy";
+            copyText.textContent = "Copy";
+          }, 2500);
+        }).catch(() => {
+          showToast("Code: " + code);
+        });
+      });
+    }
+
+    if (claimBtn) {
+      claimBtn.addEventListener("click", () => {
+        claimBtn.classList.add("scale-95");
+        setTimeout(() => claimBtn.classList.remove("scale-95"), 150);
+        showToast("₦1,200 transferred to your main wallet balance!");
+      });
+    }
+
+    if (whatsappBtn) {
+      whatsappBtn.addEventListener("click", () => {
+        const text = encodeURIComponent("Buy ultra-cheap data bundles and airtime on AbbaKano Data Sub! Sign up with my code: " + code + " and get instant bonus bonuses!");
+        window.open("https://wa.me/?text=" + text, "_blank");
+      });
+    }
+
+    if (shareBtn) {
+      shareBtn.addEventListener("click", () => {
+        if (navigator.share) {
+          navigator.share({
+            title: "Join AbbaKano Data Sub",
+            text: "Sign up with my referral code " + code + " to unlock cheap data and earn bonus cash rewards!",
+            url: window.location.href
+          }).catch(() => {});
+        } else {
+          navigator.clipboard?.writeText("https://abbakano.app/join?ref=" + code);
+          showToast("Direct invite link copied to clipboard!");
+        }
+      });
+    }
+  })();
+</script></main><nav class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.35)]" data-active-classes="text-primary [&amp;_.tab-indicator]:opacity-100"><div class="flex justify-around items-center h-16 px-space-xs relative"><a aria-current="page" class="flex flex-col items-center justify-center min-w-[56px] h-12 transition-all text-primary [&amp;_.tab-indicator]:opacity-100" data-path="home" href="#"><span class="material-symbols-outlined text-[24px]">grid_view</span><span class="font-label-sm text-label-sm mt-space-2xs">Home</span><span class="tab-indicator opacity-0 w-1 h-1 rounded-full bg-primary mt-space-2xs transition-opacity"></span></a><a class="relative -top-5 flex flex-col items-center justify-center" data-path="buy-data" href="#"><div class="w-14 h-14 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_10px_25px_-5px_rgba(77,142,255,0.45)] active:scale-95 transition-transform"><span class="material-symbols-outlined text-[28px]">bolt</span></div><span class="font-label-sm text-label-sm text-primary font-bold mt-1">Buy Data</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-12 text-on-surface-variant hover:text-on-surface transition-all" data-path="history" href="#"><span class="material-symbols-outlined text-[24px]">receipt_long</span><span class="font-label-sm text-label-sm mt-space-2xs">History</span><span class="tab-indicator opacity-0 w-1 h-1 rounded-full bg-primary mt-space-2xs transition-opacity"></span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-12 text-on-surface-variant hover:text-on-surface transition-all" data-path="user-profile" href="#"><span class="material-symbols-outlined text-[24px]">account_circle</span><span class="font-label-sm text-label-sm mt-space-2xs">Profile</span><span class="tab-indicator opacity-0 w-1 h-1 rounded-full bg-primary mt-space-2xs transition-opacity"></span></a></div></nav></body></html>

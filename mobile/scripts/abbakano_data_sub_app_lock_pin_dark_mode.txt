@@ -1,0 +1,79 @@
+<main class="flex-1 flex flex-col relative w-full bg-surface"><div class="flex flex-col w-full px-margin pb-space-lg select-none"> <div class="flex items-center justify-between py-space-sm">
+<button aria-label="Go back" class="flex items-center justify-center w-10 h-10 rounded-full bg-surface-container hover:bg-surface-container-high active:scale-95 transition-transform text-on-surface" type="button">
+<span class="material-symbols-outlined text-[20px]">arrow_back_ios_new</span>
+</button>
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm text-on-surface">Security PIN</span>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center p-1.5 shadow-sm">
+<img alt="AbbaKano Data Sub Logo" class="w-full h-full object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBK0P3vlCYArHbygv4j6hvSJk_22xqrJBHRM1qr3Q7ee--D__jhM9A-b-OVQwv2vIxzqrOkVtQ__LkKkU-_OncfITmsTVlwFuOwo02VeiCIJUrTBRXZzfw9Ou3ND6IdKyhd9zxhls5qgDCzZRqn_R_6RkOcQzr0_E8shy_e1dXSfZdGW7B_O5MrTCkfRcVN1uQFNvj3EbfuapRaffOYCfIaAOf8Haw_2GPVb8ULIl1bz5jmF9dG0uaqeUaF7m1zEU7wAMY"/>
+</div>
+</div> <div class="flex justify-center mt-space-xs mb-space-sm">
+<div class="inline-flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container-high shadow-inner">
+<span class="material-symbols-outlined text-primary text-[16px]" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">Security Verification</span>
+</div>
+</div> <div class="flex flex-col items-center text-center mt-space-xs mb-space-md">
+<div class="relative mb-space-xs"> <img class="w-20 h-20 rounded-full object-cover shadow-xl bg-surface-container-high" data-alt="A distinguished West African young man in professional modern attire, smiling warmly against a subtle dark slate ambient background, cinematic studio lighting with soft electric blue rim glow and rich golden highlights, high-resolution portrait photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQGzGuMlukEu7Y1WXBP9MeUgeFjuWx1xNaT6IuGbjFV4Sv3vJSZ4NsJaDU4J3Mh20ULxuZ3MhJQjs8odVBnUs9Zch7nvsHNYT3rmsGLaMObMpqru1cRHQsqh_wnLvBPy55wlvA8_fm9Y1c62guuBWqv1ejjq-FM0vgEWBwN7KGQCbNKvXVD1VXTWH2TAfz-YxhsdkvujbwtkcS209czQc8CMPfQ6RTxYiKIalDkwYp3LdtQKNqEwnURw"/> <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-secondary-container flex items-center justify-center shadow-lg">
+<span class="material-symbols-outlined text-on-secondary-container text-[15px]" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface font-bold">Usman Bello</h1> <div class="flex items-center justify-center gap-1.5 mt-1">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-label-md text-label-md text-secondary">App Locked</span>
+<span class="text-outline text-xs">•</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Enter 4-Digit Security PIN</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline max-w-xs mt-1"> Enter your quick PIN to unlock your AbbaKano Data Sub wallet. </p>
+</div> <div class="flex justify-center items-center gap-space-md my-space-xs" id="pin-indicator-container"> <div class="w-4 h-4 rounded-full bg-primary shadow-[0_0_12px_rgba(59,130,246,0.6)]"></div> <div class="w-4 h-4 rounded-full bg-primary shadow-[0_0_12px_rgba(59,130,246,0.6)]"></div> <div class="w-4 h-4 rounded-full bg-primary shadow-[0_0_12px_rgba(59,130,246,0.6)]"></div> <div class="w-4 h-4 rounded-full bg-surface-container-highest"></div>
+</div> <div class="grid grid-cols-3 gap-y-3 gap-x-6 max-w-xs mx-auto w-full mt-space-md mb-space-sm" id="keypad"> <button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="1" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">1</span>
+<span class="h-3.5"></span>
+</button>
+<button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="2" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">2</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">ABC</span>
+</button>
+<button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="3" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">3</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">DEF</span>
+</button> <button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="4" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">4</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">GHI</span>
+</button>
+<button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="5" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">5</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">JKL</span>
+</button>
+<button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="6" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">6</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">MNO</span>
+</button> <button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="7" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">7</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">PQRS</span>
+</button>
+<button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="8" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">8</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">TUV</span>
+</button>
+<button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="9" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">9</span>
+<span class="font-label-sm text-[10px] text-outline tracking-wider leading-none mt-1 uppercase">WXYZ</span>
+</button> <button aria-label="Authenticate with biometrics" class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container-high active:scale-90 active:bg-surface-bright transition-all duration-150 shadow-md" type="button">
+<span class="material-symbols-outlined text-primary text-[28px]">fingerprint</span>
+</button> <button class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-95 active:bg-surface-container-highest transition-all duration-150 shadow-md" data-key="0" type="button">
+<span class="font-headline-md text-headline-md text-on-surface leading-none font-bold">0</span>
+<span class="h-3.5"></span>
+</button> <button aria-label="Delete character" class="flex flex-col items-center justify-center h-16 w-16 mx-auto rounded-full bg-surface-container active:scale-90 active:bg-surface-container-highest transition-all duration-150 shadow-md text-on-surface-variant hover:text-on-surface" data-action="backspace" type="button">
+<span class="material-symbols-outlined text-[24px]">backspace</span>
+</button>
+</div> <div class="flex items-center justify-center gap-space-md mt-space-sm text-center">
+<button class="font-label-md text-label-md text-primary hover:underline active:opacity-75 transition-opacity" type="button"> Forgot PIN? </button>
+<span class="text-outline-variant font-label-md">|</span>
+<button class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface active:opacity-75 transition-colors" type="button"> Sign out &amp; switch account </button>
+</div> <div class="flex items-center justify-center gap-1.5 mt-space-md py-space-xs text-center text-outline">
+<span class="material-symbols-outlined text-[15px] text-tertiary">verified</span>
+<span class="font-body-sm text-body-sm text-outline">Protected by device-level biometric encryption</span>
+</div>
+</div>
+</main>

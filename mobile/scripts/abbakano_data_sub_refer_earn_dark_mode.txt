@@ -1,0 +1,169 @@
+<main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface"><div class="flex flex-col w-full px-margin pb-space-xl space-y-space-lg"> <div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center gap-space-sm">
+<button aria-label="Go Back" class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface hover:text-primary transition-colors active:scale-95">
+<span class="material-symbols-outlined text-[20px]">arrow_back</span>
+</button>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Partnership Hub</span>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Referral &amp; Rewards</h2>
+</div>
+</div>
+<div class="w-10 h-10 rounded-full p-space-2xs bg-surface-container-high flex items-center justify-center shadow-md">
+<img alt="AbbaKano Official Brand Badge" class="w-full h-full object-contain rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrFD-XahLWywNTghQ_YeyAQP3u7JwPyUCZwkCwTEzeRTQ0eISSjdFNObLmwLV30Ci-PPcvAYO5FQZXUUICG_WHGYE2TLjM1IKN1Z4laBjcUvroq3xFz9kKnzpmlCZ4ORS2zDTEGSF6zye51jZ-01Bkik5sKTXdVh2c4CBpg3GuVQ0fXQdjeTj_kWGQamrLKwwpJdtwO1ICcErCWFcvjbizZVeTgHr1vNvtYgqVub_nO-979CPkPrDImz4EAoT97Kw2HK8"/>
+</div>
+</div> <div class="relative overflow-hidden rounded-xl bg-gradient-to-br from-surface-container-high via-surface-container to-surface-container-lowest p-space-lg shadow-xl">
+<div class="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-secondary/15 blur-3xl pointer-events-none"></div>
+<div class="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-primary-container/20 blur-2xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col space-y-space-sm"> <div class="inline-flex items-center gap-space-xs self-start px-space-sm py-1 rounded-full bg-secondary-container/20 text-secondary">
+<span class="material-symbols-outlined text-[16px]">redeem</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Unlimited Reseller Rewards</span>
+</div> <h3 class="font-headline-md text-headline-md text-on-surface"> Earn <span class="text-secondary">₦200</span> For Every Friend You Invite </h3>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed"> Share your exclusive referral link. When they fund their wallet and purchase their first bundle, you both unlock cash rewards! </p> <div class="flex items-center gap-space-sm pt-space-xs">
+<div class="flex -space-x-2.5">
+<div class="w-7 h-7 rounded-full bg-surface-bright flex items-center justify-center text-primary font-label-sm text-label-sm shadow"> MA </div>
+<div class="w-7 h-7 rounded-full bg-surface-container-highest flex items-center justify-center text-secondary font-label-sm text-label-sm shadow"> FK </div>
+<div class="w-7 h-7 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-label-sm text-label-sm shadow"> IB </div>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="font-label-md text-label-md text-on-surface-variant">+420 resellers earning daily</span>
+</div>
+</div>
+</div>
+</div> <div class="grid grid-cols-3 gap-gutter-sm">
+<div class="flex flex-col p-space-sm bg-surface-container rounded-xl">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-space-2xs">Referred</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">18</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Agents</span>
+</div>
+<div class="flex flex-col p-space-sm bg-surface-container rounded-xl">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-space-2xs">Total Bonus</span>
+<span class="font-headline-sm text-headline-sm text-secondary font-bold">₦3,600</span>
+<span class="font-body-sm text-body-sm text-tertiary flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[13px]">trending_up</span> All-time </span>
+</div>
+<div class="flex flex-col p-space-sm bg-surface-container rounded-xl">
+<span class="font-label-sm text-label-sm text-on-surface-variant mb-space-2xs">Ready to Claim</span>
+<span class="font-headline-sm text-headline-sm text-primary font-bold">₦1,200</span>
+<span class="font-body-sm text-body-sm text-primary-fixed-dim">Instant pay</span>
+</div>
+</div> <div class="relative overflow-hidden p-space-md bg-surface-container-high rounded-xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-12 h-12 rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center shadow-inner">
+<span class="material-symbols-outlined text-[26px]">account_balance_wallet</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Unclaimed Balance</span>
+<div class="flex items-baseline gap-1.5">
+<span class="font-currency-display text-currency-display text-on-surface leading-none">₦1,200</span>
+<span class="font-label-sm text-label-sm text-tertiary">available</span>
+</div>
+</div>
+</div>
+<button class="w-full sm:w-auto h-12 px-space-lg rounded-xl bg-primary-container hover:bg-primary-container/90 active:scale-[0.98] text-on-primary-container font-label-lg text-label-lg flex items-center justify-center gap-space-xs transition-all shadow-[0_8px_20px_-4px_rgba(77,142,255,0.4)]" id="claimBtn">
+<span>Transfer to Wallet</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div> <div class="flex flex-col p-space-md bg-surface-container rounded-xl space-y-space-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Your Unique Referral Code</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-secondary-container/20 text-secondary font-bold"> Reseller Tier 1 </span>
+</div>
+<div class="flex items-center justify-between p-space-sm rounded-lg bg-surface-container-lowest">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[22px]">tag</span>
+<span class="font-headline-sm text-headline-sm text-on-surface tracking-wider font-mono" id="referralCode">ABBA - USMAN - 99</span>
+</div>
+<button class="h-10 px-space-md rounded-lg bg-surface-bright hover:bg-surface-container-highest active:scale-95 text-primary font-label-lg text-label-lg flex items-center gap-1 transition-all" id="copyBtn">
+<span class="material-symbols-outlined text-[18px]" id="copyIcon">content_copy</span>
+<span id="copyText">Copy</span>
+</button>
+</div> <div class="grid grid-cols-2 gap-space-sm pt-space-2xs">
+<button class="h-12 rounded-xl bg-tertiary-container hover:bg-tertiary-container/90 active:scale-[0.98] text-on-tertiary-container font-label-lg text-label-lg flex items-center justify-center gap-space-xs transition-all shadow-md" id="whatsappShareBtn">
+<span class="material-symbols-outlined text-[20px]">chat</span>
+<span>WhatsApp</span>
+</button>
+<button class="h-12 rounded-xl bg-surface-bright hover:bg-surface-container-highest active:scale-[0.98] text-on-surface font-label-lg text-label-lg flex items-center justify-center gap-space-xs transition-all" id="nativeShareBtn">
+<span class="material-symbols-outlined text-[20px]">share</span>
+<span>Share Link</span>
+</button>
+</div>
+</div> <div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">How It Works</h3>
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">3 Easy Steps</span>
+</div>
+<div class="flex flex-col space-y-space-xs"> <div class="flex items-start gap-space-md p-space-md rounded-xl bg-surface-container">
+<div class="w-9 h-9 shrink-0 rounded-full bg-primary-container text-on-primary-container font-headline-sm text-headline-sm flex items-center justify-center font-bold"> 1 </div>
+<div class="flex flex-col min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface">Share Your Link</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-space-2xs"> Send your custom referral code or direct invite link to fellow VTU vendors and friends. </p>
+</div>
+</div> <div class="flex items-start gap-space-md p-space-md rounded-xl bg-surface-container">
+<div class="w-9 h-9 shrink-0 rounded-full bg-secondary-container text-on-secondary-container font-headline-sm text-headline-sm flex items-center justify-center font-bold"> 2 </div>
+<div class="flex flex-col min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface">They Fund &amp; Purchase</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-space-2xs"> Your invitee signs up and completes their first data subscription or airtime top-up. </p>
+</div>
+</div> <div class="flex items-start gap-space-md p-space-md rounded-xl bg-surface-container">
+<div class="w-9 h-9 shrink-0 rounded-full bg-tertiary-container text-on-tertiary-container font-headline-sm text-headline-sm flex items-center justify-center font-bold"> 3 </div>
+<div class="flex flex-col min-w-0">
+<h4 class="font-label-lg text-label-lg text-on-surface">Instant Wallet Credit</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-space-2xs"> Get credited with ₦200 immediately, straight into your claimable cash ledger. </p>
+</div>
+</div>
+</div>
+</div> <div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Recent Referrals</h3>
+<span class="font-label-sm text-label-sm text-primary hover:underline cursor-pointer">View All</span>
+</div>
+<div class="flex flex-col space-y-space-xs"> <div class="flex items-center justify-between p-space-md rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-label-lg text-label-lg"> MA </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface truncate">Musa Abubakar</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Today • MTN 10GB Purchase</span>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-space-xs">
+<span class="font-label-lg text-label-lg text-tertiary font-bold">+₦200.00</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-tertiary-container/20 text-tertiary">Credited</span>
+</div>
+</div> <div class="flex items-center justify-between p-space-md rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center text-secondary font-label-lg text-label-lg"> FK </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface truncate">Fatima Kabir</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Yesterday • Airtel 5GB Plan</span>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-space-xs">
+<span class="font-label-lg text-label-lg text-tertiary font-bold">+₦200.00</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-tertiary-container/20 text-tertiary">Credited</span>
+</div>
+</div> <div class="flex items-center justify-between p-space-md rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-11 h-11 shrink-0 rounded-full bg-surface-container-high flex items-center justify-center text-primary-fixed-dim font-label-lg text-label-lg"> IB </div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface truncate">Ibrahim Bello</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">3 Oct • Glo Corporate Data</span>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0 pl-space-xs">
+<span class="font-label-lg text-label-lg text-tertiary font-bold">+₦200.00</span>
+<span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-tertiary-container/20 text-tertiary">Credited</span>
+</div>
+</div>
+</div>
+</div> <div class="fixed bottom-20 inset-x-margin z-50 flex items-center justify-between p-space-md rounded-xl bg-surface-bright text-on-surface shadow-2xl transition-all duration-300 opacity-0 pointer-events-none translate-y-4" id="toastNotification">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-tertiary text-[20px]">check_circle</span>
+<span class="font-label-md text-label-md" id="toastMessage">Referral code copied to clipboard!</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface" id="closeToast">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+</main>
