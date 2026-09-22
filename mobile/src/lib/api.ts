@@ -45,6 +45,10 @@ export function clearAuthToken(): void {
   if (typeof localStorage !== 'undefined') localStorage.removeItem('abbakano_auth_token');
 }
 
+export function hasAuthToken(): boolean {
+  return Boolean(authTokenValue || storedAuthToken());
+}
+
 async function refreshCsrfToken(): Promise<string | undefined> {
   const response = await fetch(`${API_URL}/csrf`, { credentials: 'include' });
   if (!response.ok) return undefined;

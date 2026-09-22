@@ -12,7 +12,7 @@ import {
   MOCK_KYC_TIERS,
 } from '@/constants/mockData';
 import { getPalette, DarkPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
-import { apiGet, apiPost, ApiError, clearAuthToken } from '@/lib/api';
+import { apiGet, apiPost, ApiError, clearAuthToken, hasAuthToken } from '@/lib/api';
 import { TelcoNetworkId, TELCO_LIST } from '@/constants/telco';
 
 export type ThemePreference = 'system' | 'dark' | 'light';
@@ -91,6 +91,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const refreshServerState = async (): Promise<boolean> => {
+    if (!hasAuthToken()) {
+      setSessionStatus('unauthenticated');
+      return false;
+    }
+
     try {
       const [meResponse, walletResponse, transactionsResponse] = await Promise.all([
         apiGet<{ user: Record<string, unknown> }>('/me'),
