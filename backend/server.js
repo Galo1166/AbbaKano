@@ -1182,6 +1182,20 @@ app.post("/me/transaction-pin", requireSession, async (req, res) => {
     res.json({ message: "Transaction PIN saved successfully" });
 });
 
+app.post("/me/app-lock/verify", requireSession, async (req, res) => {
+    const pinValidation = validateTransactionPin(req.body?.pin);
+    if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });
+    const result = await pool.query(
+        "SELECT transaction_pin_hash, transaction_pin_salt FROM users WHERE id = $1",
+        [req.session.sub]
+    );
+    const user = result.rows[0];
+    if (!user?.transaction_pin_hash || hashPin(pinValidation.pin, user.transaction_pin_salt) !== user.transaction_pin_hash) {
+        return res.status(401).json({ message: "Incorrect app lock PIN" });
+    }
+    res.json({ unlocked: true });
+});
+
 app.post("/me/transaction-pin/reset", requireSession, async (req, res) => {
     const pinValidation = validateTransactionPin(req.body?.pin);
     if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });

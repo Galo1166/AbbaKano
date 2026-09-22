@@ -26,6 +26,7 @@ import { CheckoutSheet } from '@/components/modals/CheckoutSheet';
 import { PinAuthModal } from '@/components/modals/PinAuthModal';
 import { ReceiptModal } from '@/components/modals/ReceiptModal';
 import { apiPost } from '@/lib/api';
+import { AppLockScreen } from '@/components/AppLockScreen';
 
 type AuthState = 'authenticated' | 'welcome' | 'login' | 'register' | 'pin_setup' | 'forgot_password';
 type DedicatedService = 'airtime' | 'electricity' | 'cable' | null;
@@ -37,8 +38,9 @@ export default function App() {
   const [showFundWallet, setShowFundWallet] = useState(false);
   const [showReferEarn, setShowReferEarn] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const [isAppLocked, setIsAppLocked] = useState(false);
 
-  const { effectiveTheme, sessionStatus, refreshServerState, logout } = useApp();
+  const { effectiveTheme, sessionStatus, refreshServerState, logout, user } = useApp();
   const T = useTheme();
 
   const bg = { backgroundColor: T.canvas };
@@ -47,6 +49,17 @@ export default function App() {
     if (sessionStatus === 'authenticated' && authState !== 'pin_setup') setAuthState('authenticated');
     if (sessionStatus === 'unauthenticated' && authState === 'authenticated') setAuthState('welcome');
   }, [sessionStatus, authState]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden' && sessionStatus === 'authenticated' && user.appLockEnabled !== false) {
+        setIsAppLocked(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [sessionStatus, user.appLockEnabled]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -62,6 +75,10 @@ export default function App() {
         <ActivityIndicator color={T.primary} size="large" />
       </SafeAreaView>
     );
+  }
+
+  if (isAppLocked && sessionStatus === 'authenticated') {
+    return <AppLockScreen theme={T} onUnlock={() => setIsAppLocked(false)} />;
   }
 
   const handleSelectService = (serviceKey: string) => {
