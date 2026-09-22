@@ -25,6 +25,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 }) => {
   const { user, mainBalance, themePreference, effectiveTheme, refreshServerState } = useApp();
   const T = useTheme();
+  const displayPhone = user.phone.replace(/^(?:\+?234|0)/, (prefix) => prefix.includes('234') ? '+234 ' : '0');
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [biometrics, setBiometrics] = useState(user.biometricsEnabled !== false);
@@ -131,7 +132,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <Text style={[styles.profileName, { color: T.onSurface }]}>{user.name}</Text>
               </View>
               <Text style={[styles.profileContact, { color: T.onSurfaceVariant, marginTop: 4 }]}>
-                +234 803 459 2811 • {user.email}
+                {displayPhone || 'Phone not available'} • {user.email || 'Email not available'}
               </Text>
             </View>
 
