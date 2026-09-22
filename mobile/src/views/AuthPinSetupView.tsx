@@ -9,6 +9,8 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { apiPost, ApiError } from '@/lib/api';
+import { saveTransactionPin } from '@/lib/biometricAuth';
 
 interface AuthPinSetupViewProps {
   onPinCompleted: (pin: string) => void;
@@ -36,6 +38,24 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [stage, setStage] = useState<'setup' | 'confirm'>('setup');
+  const [saving, setSaving] = useState(false);
+
+  const savePin = async (newPin: string) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await apiPost('/me/transaction-pin', { pin: newPin });
+      await saveTransactionPin(newPin).catch(() => {});
+      onPinCompleted(newPin);
+    } catch (error) {
+      Alert.alert('PIN Update Failed', error instanceof ApiError ? error.message : 'Could not save your transaction PIN.');
+      setPin('');
+      setConfirmPin('');
+      setStage('setup');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleKeyPress = (key: string) => {
     if (key === 'fingerprint') return;
@@ -60,7 +80,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
         if (newConfirmPin.length === 4) {
           setTimeout(() => {
             if (newConfirmPin === pin) {
-              onPinCompleted(pin);
+              void savePin(pin);
             } else {
               Alert.alert('PIN Mismatch', 'PINs do not match. Please try again.');
               setPin('');
@@ -119,6 +139,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
                   pressed && styles.numpadKeyPressed,
                 ]}
                 onPress={() => handleKeyPress(key)}
+                disabled={saving}
               >
                 {key === 'fingerprint' ? (
                   <MaterialIcons name="fingerprint" size={28} color={Palette.onSurface} />
