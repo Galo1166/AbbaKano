@@ -66,7 +66,7 @@ export interface TransactionRecord {
   status: TransactionStatus;
   date: string;
   timestamp: number;
-  network?: TelcoNetworkId;
+  network?: TelcoNetworkId | string;
   recipient: string;
   billerName?: string;
   token?: string; // e.g. for electricity or exam pin

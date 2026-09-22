@@ -426,7 +426,10 @@ function validateVtuRequest(body, type) {
     const normalizedPhone = typeof phone === "string" ? phone.replace(/[\s-]/g, "") : "";
     const pinValidation = validateTransactionPin(pin);
     if (pinValidation.error) return { error: pinValidation.error };
-    if (typeof network !== "string" || !VTU_NETWORKS.has(network)) return { error: "Choose a supported network" };
+    const validNetwork = type === "cable_tv"
+        ? ["dstv", "gotv", "startimes"].includes(String(network).toLowerCase())
+        : VTU_NETWORKS.has(network);
+    if (typeof network !== "string" || !validNetwork) return { error: "Choose a supported network" };
     if (!PHONE_PATTERN.test(normalizedPhone)) return { error: "Enter a valid phone number" };
     if (["airtime", "electricity"].includes(type) && (!Number.isInteger(amount) || amount < 50 || amount > 100000)) return { error: "Amount must be between 50 and 100,000 naira" };
     if (["data", "cable_tv", "electricity"].includes(type) && typeof planToken !== "string") return { error: "Choose a valid plan" };

@@ -9,7 +9,7 @@ export interface CheckoutDraft {
   type: TransactionType;
   title: string;
   serviceName: string;
-  network?: TelcoNetworkId;
+  network?: TelcoNetworkId | string;
   recipient: string;
   planName?: string;
   planCode?: string;

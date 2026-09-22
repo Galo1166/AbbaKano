@@ -2,27 +2,49 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
-import { MOCK_CABLE_PROVIDERS, UtilityBiller } from '@/constants/mockData';
 import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
+import { apiGet, ApiError } from '@/lib/api';
+import { SCREEN_ASSETS } from '../../../assets/screenAssets';
+
+type CableProvider = {
+  id: string;
+  name: string;
+  code: string;
+  logo?: any;
+  brandColor: string;
+};
+
+type CablePlan = {
+  label: string;
+  price: number;
+  code: string;
+  category?: string | null;
+  selectionToken?: string;
+};
+
+const CABLE_PROVIDERS: CableProvider[] = [
+  { id: 'dstv', name: 'DStv Subscription', code: 'DSTV', logo: SCREEN_ASSETS.dstvLogo, brandColor: '#00A3E0' },
+  { id: 'gotv', name: 'GOtv Subscription', code: 'GOTV', logo: SCREEN_ASSETS.gotvLogo, brandColor: '#00833E' },
+  { id: 'startimes', name: 'StarTimes Subscription', code: 'STARTIMES', logo: SCREEN_ASSETS.startimesLogo, brandColor: '#FF6F00' },
+];
 
 export const CableTvBillerCard: React.FC = () => {
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
-  const [selectedProvider, setSelectedProvider] = useState<UtilityBiller>(MOCK_CABLE_PROVIDERS[0]);
+  const [selectedProvider, setSelectedProvider] = useState<CableProvider>(CABLE_PROVIDERS[0]);
   const [smartcardNumber, setSmartcardNumber] = useState('');
-  const [selectedPackageId, setSelectedPackageId] = useState<string>(
-    MOCK_CABLE_PROVIDERS[0].packages?.[0]?.id || ''
-  );
-  const [verifiedCustomer, setVerifiedCustomer] = useState<string | null>(null);
+  const [selectedPackageCode, setSelectedPackageCode] = useState('');
+  const [plans, setPlans] = useState<CablePlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [plansError, setPlansError] = useState<string | null>(null);
 
   const { startCheckout, paymentSuccessCount } = useCheckout();
 
   const clearInputs = () => {
     setSmartcardNumber('');
-    setVerifiedCustomer(null);
   };
 
   const prevCountRef = React.useRef(paymentSuccessCount);
@@ -33,26 +55,48 @@ export const CableTvBillerCard: React.FC = () => {
     }
   }, [paymentSuccessCount]);
 
-  useEffect(() => {
-    if (smartcardNumber.length === 10) {
-      setVerifiedCustomer('AISHA BELLO • SMARTCARD ACTIVE');
-    } else {
-      setVerifiedCustomer(null);
+  const loadPlans = async (provider: CableProvider) => {
+    setLoadingPlans(true);
+    setPlansError(null);
+    try {
+      const response = await apiGet<{ plans: CablePlan[] }>(
+        `/vtu/service-plans?service=cable&provider=${encodeURIComponent(provider.id)}`,
+      );
+      const nextPlans = (response.plans || []).map((plan) => ({
+        ...plan,
+        label: String(plan.label || 'Cable package'),
+        price: Number(plan.price || 0),
+        code: String(plan.code || ''),
+      }));
+      setPlans(nextPlans);
+      setSelectedPackageCode(nextPlans[0]?.code || '');
+    } catch (error) {
+      setPlans([]);
+      setSelectedPackageCode('');
+      setPlansError(error instanceof ApiError ? error.message : 'Could not load cable packages.');
+    } finally {
+      setLoadingPlans(false);
     }
-  }, [smartcardNumber]);
+  };
 
-  const packages = selectedProvider.packages || [];
-  const activePackage = packages.find((p) => p.id === selectedPackageId) || packages[0];
+  useEffect(() => {
+    void loadPlans(selectedProvider);
+  }, [selectedProvider]);
+
+  const activePackage = plans.find((plan) => plan.code === selectedPackageCode) || plans[0];
 
   const handleSubscribe = () => {
     if (!activePackage || smartcardNumber.length < 10) return;
 
     startCheckout({
       type: 'CABLE_TV',
-      title: `${selectedProvider.code} ${activePackage.name}`,
+      title: `${selectedProvider.code} ${activePackage.label}`,
       serviceName: `${selectedProvider.name}`,
       recipient: smartcardNumber,
-      planName: activePackage.name,
+      planName: activePackage.label,
+      planCode: activePackage.code,
+      planToken: activePackage.selectionToken,
+      network: selectedProvider.id as 'DSTV' | 'GOTV' | 'STARTIMES',
       amount: activePackage.price,
       fee: 100,
       billerName: selectedProvider.name,
@@ -65,7 +109,7 @@ export const CableTvBillerCard: React.FC = () => {
       {/* Provider Selector Chips */}
       <Text style={styles.sectionTitle}>SELECT CABLE TV PROVIDER</Text>
       <View style={styles.providerRow}>
-        {MOCK_CABLE_PROVIDERS.map((prov) => {
+        {CABLE_PROVIDERS.map((prov) => {
           const isSelected = prov.id === selectedProvider.id;
           return (
             <Pressable
@@ -79,9 +123,7 @@ export const CableTvBillerCard: React.FC = () => {
               ]}
               onPress={() => {
                 setSelectedProvider(prov);
-                if (prov.packages && prov.packages.length > 0) {
-                  setSelectedPackageId(prov.packages[0].id);
-                }
+                setPlans([]);
               }}
             >
               <View
@@ -136,30 +178,21 @@ export const CableTvBillerCard: React.FC = () => {
         leftIcon={<Ionicons name="card-outline" size={18} color={Palette.onSurfaceMuted} />}
       />
 
-      {/* Verified Customer preview */}
-      {verifiedCustomer && (
-        <View style={styles.verifiedBox}>
-          <Ionicons name="checkmark-circle" size={18} color={Palette.tertiary} />
-          <View>
-            <Text style={styles.verifiedLabel}>Customer Verified</Text>
-            <Text style={styles.verifiedName}>{verifiedCustomer}</Text>
-          </View>
-        </View>
-      )}
-
       {/* Bouquets Package Selector */}
       <Text style={styles.sectionTitle}>SELECT PACKAGE / BOUQUET</Text>
       <View style={styles.packageList}>
-        {packages.map((pkg) => {
-          const isSelected = pkg.id === activePackage?.id;
+        {loadingPlans && <Text style={styles.statusText}>Loading live packages...</Text>}
+        {!loadingPlans && plansError && <Text style={styles.errorText}>{plansError}</Text>}
+        {!loadingPlans && !plansError && plans.map((pkg) => {
+          const isSelected = pkg.code === activePackage?.code;
           return (
             <Pressable
-              key={pkg.id}
+              key={pkg.code}
               style={[styles.pkgCard, isSelected && styles.pkgCardSelected]}
-              onPress={() => setSelectedPackageId(pkg.id)}
+              onPress={() => setSelectedPackageCode(pkg.code)}
             >
               <Text style={[styles.pkgName, isSelected && styles.pkgNameSelected]}>
-                {pkg.name}
+                {pkg.label}
               </Text>
               <Text style={[styles.pkgPrice, isSelected && styles.pkgPriceSelected]}>
                 ₦{pkg.price.toLocaleString()}
@@ -173,10 +206,10 @@ export const CableTvBillerCard: React.FC = () => {
         title={
           activePackage
             ? `Pay ₦${activePackage.price.toLocaleString()} Subscription`
-            : 'Select Bouquet'
+            : loadingPlans ? 'Loading Packages...' : 'Select Bouquet'
         }
         onPress={handleSubscribe}
-        disabled={smartcardNumber.length < 10 || !activePackage}
+        disabled={smartcardNumber.length < 10 || !activePackage || loadingPlans || Boolean(plansError)}
         variant="primary"
         style={{ marginTop: Spacing.four }}
       />
@@ -270,6 +303,16 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   },
   packageList: {
     gap: Spacing.two,
+  },
+  statusText: {
+    color: Palette.onSurfaceMuted,
+    fontSize: 13,
+    paddingVertical: Spacing.three,
+  },
+  errorText: {
+    color: Palette.error,
+    fontSize: 13,
+    paddingVertical: Spacing.three,
   },
   pkgCard: {
     backgroundColor: Palette.surface,
