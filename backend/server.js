@@ -22,6 +22,7 @@ const PORT = Number(process.env.PORT || 3000);
 const AUTH_SECRET = process.env.AUTH_SECRET;
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || "http://localhost:5173/";
+const PAYSTACK_FRONTEND_URL = process.env.PAYSTACK_FRONTEND_URL || "http://localhost:5173/";
 const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || "localhost";
 const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || "http://localhost:5173";
 const SESSION_COOKIE = "session";
@@ -1612,6 +1613,43 @@ app.post("/payments/paystack/initialize", requireSession, requireCsrf, async (re
         }
         console.error(error);
         res.status(502).json({ message: "Could not start Paystack payment" });
+    }
+});
+
+app.get("/payments/paystack/callback", async (req, res) => {
+    const reference = typeof req.query.reference === "string" ? req.query.reference : "";
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(reference)) {
+        return res.redirect(`${PAYSTACK_FRONTEND_URL}?payment=invalid`);
+    }
+
+    const client = await pool.connect();
+    try {
+        const depositResult = await client.query(
+            "SELECT id, user_id, reference, amount_kobo, status FROM deposits WHERE reference = $1",
+            [reference]
+        );
+        const deposit = depositResult.rows[0];
+        if (!deposit) return res.redirect(`${PAYSTACK_FRONTEND_URL}?payment=missing`);
+        if (deposit.status === "pending") {
+            const payment = await paystackRequest(`/transaction/verify/${encodeURIComponent(reference)}`);
+            const verified = isVerifiedPaystackDeposit(payment, { ...deposit, reference });
+            if (verified) {
+                await client.query("BEGIN");
+                const locked = await client.query(
+                    "SELECT id, user_id, reference, amount_kobo, status FROM deposits WHERE id = $1 FOR UPDATE",
+                    [deposit.id]
+                );
+                if (locked.rows[0]?.status === "pending") await settleDeposit(client, locked.rows[0]);
+                await client.query("COMMIT");
+            }
+        }
+        return res.redirect(`${PAYSTACK_FRONTEND_URL}?reference=${encodeURIComponent(reference)}`);
+    } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        console.error(error);
+        return res.redirect(`${PAYSTACK_FRONTEND_URL}?reference=${encodeURIComponent(reference)}&payment=pending`);
+    } finally {
+        client.release();
     }
 });
 
