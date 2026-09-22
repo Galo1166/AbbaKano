@@ -339,13 +339,24 @@ async function verifyVtpassCableCustomer({ provider, smartcardNumber }) {
         })
     }));
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.code !== "000") {
-        throw new Error(payload?.response_description || payload?.message || "Could not verify cable customer");
+    const responseCode = String(payload?.code ?? payload?.status ?? payload?.data?.code ?? "");
+    const isSuccessful = response.ok && (responseCode === "000" || responseCode.toLowerCase() === "success");
+    if (!isSuccessful) {
+        const error = new Error(payload?.response_description || payload?.message || payload?.data?.message || "Could not verify cable customer");
+        error.code = responseCode || String(response.status);
+        throw error;
     }
 
-    const content = payload.content || payload.data || {};
+    const content = payload.content || payload.data?.content || payload.data || {};
     return {
-        customerName: String(content.Customer_Name || content.customer_name || content.name || "")
+        customerName: String(
+            content.Customer_Name
+            || content.customer_name
+            || content.customerName
+            || content.name
+            || content.CustomerName
+            || ""
+        )
     };
 }
 
