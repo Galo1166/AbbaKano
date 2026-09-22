@@ -721,8 +721,12 @@ app.post("/signup", authLimiter, async (req, res) => {
         let referrerUserId = null;
         if (referralCode) {
             const referrer = await client.query(
-                "SELECT id FROM users WHERE phone = $1",
-                [referralCode]
+                `SELECT id
+                 FROM users
+                 WHERE phone = $1
+                    OR regexp_replace(phone, '[^0-9]', '', 'g') = $1
+                    OR regexp_replace(phone, '[^0-9]', '', 'g') = $2`,
+                [referralCode, referralCode.startsWith("0") ? `234${referralCode.slice(1)}` : referralCode]
             );
             if (!referrer.rows[0]) {
                 await client.query("ROLLBACK");
@@ -1224,6 +1228,12 @@ app.get("/transactions", requireSession, async (req, res) => {
                 amount_kobo, status, created_at
          FROM vtu_transactions
          WHERE user_id = $1
+          UNION ALL
+          SELECT id::text AS id, 'commission' AS type,
+              'Referral commission transferred to wallet' AS label,
+              amount_kobo, 'success' AS status, created_at
+          FROM wallet_ledger
+          WHERE user_id = $1 AND entry_type = 'commission'
          ORDER BY created_at DESC
          LIMIT 100`,
         [req.session.sub]
