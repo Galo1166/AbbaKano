@@ -111,6 +111,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email: String(serverUser.email || ''),
         phone,
         referralCode: phone.replace(/[^0-9]/g, ''),
+        referralCount: Number(serverUser.referralCount || 0),
+        referralEarnings: Number(serverUser.referralEarnings || 0),
         tierLabel: serverUser.agent_status === 'verified' ? 'VERIFIED AGENT' : previous.tierLabel,
         biometricsEnabled: serverUser.biometrics_enabled !== false,
         appLockEnabled: serverUser.app_lock_enabled !== false,

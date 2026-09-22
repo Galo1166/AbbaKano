@@ -1035,6 +1035,9 @@ app.get("/me", requireSession, async (req, res) => {
         `SELECT u.id, u.username, u.full_name, u.phone, u.email, u.role, u.status,
             w.balance_kobo AS wallet_balance_kobo,
             COALESCE(rcb.balance_kobo, 0) AS referral_commission_balance_kobo,
+            (SELECT COUNT(*)::int FROM users referred WHERE referred.referrer_user_id = u.id) AS referral_count,
+            COALESCE((SELECT SUM(amount_kobo) FROM referral_commission_ledger
+                      WHERE user_id = u.id AND entry_type = 'earned'), 0) AS referral_earnings_kobo,
             u.biometrics_enabled, u.app_lock_enabled,
             u.dedicated_account_number, u.dedicated_account_reference,
             u.transaction_pin_hash IS NOT NULL AS has_transaction_pin,
@@ -1051,7 +1054,9 @@ app.get("/me", requireSession, async (req, res) => {
     res.json({ user: {
         ...user,
         walletBalance: Number(user.wallet_balance_kobo) / 100,
-        referralCommissionBalance: Number(user.referral_commission_balance_kobo) / 100
+        referralCommissionBalance: Number(user.referral_commission_balance_kobo) / 100,
+        referralCount: Number(user.referral_count || 0),
+        referralEarnings: Number(user.referral_earnings_kobo || 0) / 100
     } });
 });
 
