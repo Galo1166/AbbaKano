@@ -39,6 +39,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
   const [confirmPin, setConfirmPin] = useState('');
   const [stage, setStage] = useState<'setup' | 'confirm'>('setup');
   const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const savePin = async (newPin: string) => {
     if (saving) return;
@@ -46,9 +47,10 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
     try {
       await apiPost('/me/transaction-pin', { pin: newPin });
       await saveTransactionPin(newPin).catch(() => {});
-      onPinCompleted(newPin);
+      setFeedback({ type: 'success', message: 'Transaction PIN changed successfully.' });
+      setTimeout(() => onPinCompleted(newPin), 1200);
     } catch (error) {
-      Alert.alert('PIN Update Failed', error instanceof ApiError ? error.message : 'Could not save your transaction PIN.');
+      setFeedback({ type: 'error', message: error instanceof ApiError ? error.message : 'Could not save your transaction PIN.' });
       setPin('');
       setConfirmPin('');
       setStage('setup');
@@ -82,7 +84,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
             if (newConfirmPin === pin) {
               void savePin(pin);
             } else {
-              Alert.alert('PIN Mismatch', 'PINs do not match. Please try again.');
+              setFeedback({ type: 'error', message: 'PINs do not match. Please try again.' });
               setPin('');
               setConfirmPin('');
               setStage('setup');
@@ -124,6 +126,12 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
           />
         ))}
       </View>
+
+      {feedback && (
+        <Text style={[styles.feedback, feedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
+          {feedback.message}
+        </Text>
+      )}
 
       {/* === NUMPAD === */}
       <View style={styles.numpad}>
@@ -271,6 +279,19 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     color: Palette.onSurfaceMuted,
     fontFamily: Typography.family,
     letterSpacing: 1,
+  },
+
+  feedback: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: Typography.family,
+    textAlign: 'center',
+  },
+  feedbackSuccess: {
+    color: Palette.tertiary,
+  },
+  feedbackError: {
+    color: Palette.error,
   },
 
   // Security Note
