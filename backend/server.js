@@ -278,6 +278,9 @@ app.get("/csrf", (req, res) => {
 
 function requireCsrf(req, res, next) {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    if (typeof req.headers.authorization === "string" && req.headers.authorization.startsWith("Bearer ")) {
+        return next();
+    }
     const cookie = req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("csrf="))?.slice(5);
     const header = req.headers["x-csrf-token"];
     if (!cookie || typeof header !== "string" || cookie.length !== header.length || !crypto.timingSafeEqual(Buffer.from(cookie), Buffer.from(header))) {
