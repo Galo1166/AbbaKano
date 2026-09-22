@@ -7,6 +7,12 @@ import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
+import { apiGet, ApiError } from '@/lib/api';
+
+type ElectricityPlan = {
+  code: string;
+  selectionToken?: string;
+};
 
 export const ElectricityBillerCard: React.FC = () => {
   const { theme: Palette } = useApp();
@@ -16,8 +22,24 @@ export const ElectricityBillerCard: React.FC = () => {
   const [meterNumber, setMeterNumber] = useState('');
   const [amount, setAmount] = useState('5000');
   const [verifiedCustomer, setVerifiedCustomer] = useState<string | null>(null);
+  const [planToken, setPlanToken] = useState<string | undefined>();
+  const [planError, setPlanError] = useState<string | null>(null);
 
   const { startCheckout, paymentSuccessCount } = useCheckout();
+
+  useEffect(() => {
+    let cancelled = false;
+    setPlanToken(undefined);
+    setPlanError(null);
+    void apiGet<{ plans: ElectricityPlan[] }>(
+      `/vtu/service-plans?service=electricity&provider=${encodeURIComponent(selectedDisCo.id)}&meterType=${meterType.toLowerCase()}`,
+    ).then((response) => {
+      if (!cancelled) setPlanToken(response.plans?.[0]?.selectionToken);
+    }).catch((error) => {
+      if (!cancelled) setPlanError(error instanceof ApiError ? error.message : 'Could not load electricity plans.');
+    });
+    return () => { cancelled = true; };
+  }, [meterType, selectedDisCo.id]);
 
   const clearInputs = () => {
     setMeterNumber('');
@@ -47,12 +69,14 @@ export const ElectricityBillerCard: React.FC = () => {
   const handlePay = () => {
     const numAmount = parseInt(amount, 10);
     if (isNaN(numAmount) || numAmount < 500) return;
-    if (meterNumber.length < 11) return;
+    if (meterNumber.length < 11 || !planToken) return;
 
     startCheckout({
       type: 'ELECTRICITY',
       title: `${selectedDisCo.name} ${meterType}`,
       serviceName: `${selectedDisCo.name} Electricity Token`,
+      network: selectedDisCo.code,
+      planToken,
       recipient: meterNumber,
       amount: numAmount,
       fee: 100,
@@ -66,6 +90,7 @@ export const ElectricityBillerCard: React.FC = () => {
     <View style={styles.container}>
       {/* DisCo Selector */}
       <Text style={styles.sectionTitle}>SELECT ELECTRICITY DISTRIBUTION COMPANY (DISCO)</Text>
+      {planError && <Text style={{ color: Palette.error, marginBottom: Spacing.two }}>{planError}</Text>}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

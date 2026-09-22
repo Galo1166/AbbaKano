@@ -63,7 +63,11 @@ export async function saveTransactionPin(pin: string): Promise<void> {
 
 export async function getBiometricTransactionPin(): Promise<string | null> {
   if (!await authenticateBiometric('Authorize purchase')) return null;
-  return SecureStore.getItemAsync(TRANSACTION_PIN_KEY, {
-    requireAuthentication: true,
-  });
+  try {
+    return await SecureStore.getItemAsync(TRANSACTION_PIN_KEY, {
+      requireAuthentication: true,
+    });
+  } catch {
+    return null;
+  }
 }

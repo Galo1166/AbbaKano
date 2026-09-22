@@ -25,6 +25,7 @@ export interface CheckoutDraft {
 interface CheckoutContextType {
   isSheetOpen: boolean;
   isPinModalOpen: boolean;
+  pinError: string | null;
   isReceiptOpen: boolean;
   paymentSuccessCount: number;
   draft: CheckoutDraft | null;
@@ -46,6 +47,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [paymentSuccessCount, setPaymentSuccessCount] = useState(0);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [activeReceipt, setActiveReceipt] = useState<TransactionRecord | null>(null);
 
@@ -53,6 +55,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setDraft(newDraft);
     setIsSheetOpen(true);
     setIsPinModalOpen(false);
+    setPinError(null);
     setIsReceiptOpen(false);
   };
 
@@ -62,17 +65,22 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const proceedToPin = () => {
     setIsSheetOpen(false);
+    setPinError(null);
     setIsPinModalOpen(true);
   };
 
   const cancelPin = () => {
     setIsPinModalOpen(false);
+    setPinError(null);
   };
 
   const verifyPinAndExecute = async (pin: string): Promise<boolean> => {
     if (!draft) return false;
-    // Validate 4-digit PIN (allows any 4-digit entry in presentation mock)
-    if (pin.length !== 4) return false;
+    setPinError(null);
+    if (!/^\d{4}$/.test(pin)) {
+      setPinError('Enter your 4-digit transaction PIN.');
+      return false;
+    }
 
     const endpoint = draft.type === 'DATA' ? '/vtu/data' :
       draft.type === 'AIRTIME' ? '/vtu/airtime' :
@@ -118,7 +126,9 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return true;
     } catch (error) {
       console.warn('VTU purchase failed:', error);
+      const message = error instanceof ApiError ? error.message : 'Could not authorize this purchase.';
       if (error instanceof ApiError) console.warn(error.message);
+      setPinError(message);
       return false;
     }
   };
@@ -149,6 +159,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         isSheetOpen,
         isPinModalOpen,
+        pinError,
         isReceiptOpen,
         paymentSuccessCount,
         draft,

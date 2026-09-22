@@ -15,7 +15,7 @@ import { Numpad } from '@/components/common/Numpad';
 import { getBiometricTransactionPin } from '@/lib/biometricAuth';
 
 export const PinAuthModal: React.FC = () => {
-  const { isPinModalOpen, cancelPin, verifyPinAndExecute, draft } = useCheckout();
+  const { isPinModalOpen, cancelPin, verifyPinAndExecute, pinError, draft } = useCheckout();
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [pin, setPin] = useState('');
@@ -30,6 +30,8 @@ export const PinAuthModal: React.FC = () => {
 
   if (!draft) return null;
 
+  const displayedError = pinError || errorMsg;
+
   const handleKeyPress = (val: string) => {
     if (pin.length < 4) {
       const nextPin = pin + val;
@@ -41,7 +43,6 @@ export const PinAuthModal: React.FC = () => {
         setTimeout(async () => {
           const success = await verifyPinAndExecute(nextPin);
           if (!success) {
-            setErrorMsg('Invalid PIN. Please enter your 4-digit transaction PIN.');
             setPin('');
           }
         }, 150);
@@ -60,13 +61,12 @@ export const PinAuthModal: React.FC = () => {
       void getBiometricTransactionPin().then(async (transactionPin) => {
         if (!transactionPin) {
           setPin('');
-          setErrorMsg('Biometric authorization failed. Enter your transaction PIN.');
+          setErrorMsg('Biometrics are not enrolled for this device. Enter your transaction PIN or enable biometrics in Profile.');
           return;
         }
         const success = await verifyPinAndExecute(transactionPin);
         if (!success) {
           setPin('');
-          setErrorMsg('Could not authorize this purchase.');
         }
       });
     }, 300);
@@ -92,10 +92,10 @@ export const PinAuthModal: React.FC = () => {
             </Text>
           </View>
 
-          {errorMsg && (
+          {displayedError && (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle-outline" size={16} color={Palette.error} />
-              <Text style={styles.errorText}>{errorMsg}</Text>
+              <Text style={styles.errorText}>{displayedError}</Text>
             </View>
           )}
 
