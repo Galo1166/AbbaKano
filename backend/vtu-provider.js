@@ -429,6 +429,7 @@ function resolveNetworkId(network, networkMap) {
 async function purchase({ type, network, phone, amount, planCode, provider, reference }) {
     assertConfigured();
 
+    if (type === "airtime") return purchaseWithSmeplug({ type, network, phone, amount, planCode, reference });
     if (provider === "vtpass") return purchaseWithVtpass({ type, network, phone, amount, planCode, reference });
     if (provider === "smeplug") return purchaseWithSmeplug({ type, network, phone, amount, planCode, reference });
 
