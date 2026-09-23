@@ -14,6 +14,7 @@ interface ProfileViewProps {
   onNavigateToReferEarn?: () => void;
   onNavigateToFundWallet?: () => void;
   onNavigateToSupport?: () => void;
+  onNavigateToAbout?: () => void;
   onNavigateToPinSetup?: () => void;
   onSignOut?: () => void;
 }
@@ -22,6 +23,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onNavigateToReferEarn,
   onNavigateToFundWallet,
   onNavigateToSupport,
+  onNavigateToAbout,
   onNavigateToPinSetup,
   onSignOut,
 }) => {
@@ -39,7 +41,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   }, [user.biometricsEnabled, user.appLockEnabled]);
 
   const menuItems = useMemo(() => [
-    { id: 'beneficiaries', icon: 'contacts', title: 'Saved Beneficiaries', subtitle: 'Manage frequent numbers for MTN, Airtel, Glo, 9mobile', section: 'Account' },
     { id: 'refer', icon: 'card-giftcard', title: 'Refer & Earn', subtitle: "Earn ₦200 for each friend's first data top-up", badge: '₦200 BONUS', section: 'Referral & Rewards' },
     { id: 'change_pin', icon: 'pin', title: 'Change Transaction PIN', subtitle: '4-digit wallet security PIN', section: 'Security & Preferences' },
     { id: 'biometrics', icon: 'fingerprint', title: 'Biometrics Login', subtitle: 'Face ID / Fingerprint unlock', section: 'Security & Preferences', hasToggle: true },
@@ -98,6 +99,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     else if (id === 'change_pin') onNavigateToPinSetup?.();
     else if (id === 'support') {
       if (onNavigateToSupport) onNavigateToSupport();
+    }
+    else if (id === 'about') {
+      if (onNavigateToAbout) onNavigateToAbout();
     }
     else if (id === 'logout') {
       setShowSignOutModal(true);

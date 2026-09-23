@@ -13,6 +13,7 @@ import { LedgerView } from '@/views/LedgerView';
 import { ProfileView } from '@/views/ProfileView';
 import { ReferEarnView } from '@/views/ReferEarnView';
 import { SupportView } from '@/views/SupportView';
+import { AboutView } from '@/views/AboutView';
 
 // Auth & Onboarding Views
 import { AuthWelcomeView } from '@/views/AuthWelcomeView';
@@ -38,6 +39,7 @@ export default function App() {
   const [showFundWallet, setShowFundWallet] = useState(false);
   const [showReferEarn, setShowReferEarn] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [isAppLocked, setIsAppLocked] = useState(false);
 
   const { effectiveTheme, sessionStatus, refreshServerState, logout, user } = useApp();
@@ -85,6 +87,7 @@ export default function App() {
     setShowFundWallet(false);
     setShowReferEarn(false);
     setShowSupport(false);
+    setShowAbout(false);
 
     if (serviceKey === 'airtime') {
       setActiveDedicatedService('airtime');
@@ -103,6 +106,7 @@ export default function App() {
     setShowFundWallet(false);
     setShowReferEarn(false);
     setShowSupport(false);
+    setShowAbout(false);
     setActiveDedicatedService(null);
     setActiveTab(tab);
   };
@@ -123,17 +127,19 @@ export default function App() {
     return (
       <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
         <AuthLoginView
-          onLoginSuccess={() => {
-            void refreshServerState().then((authenticated) => {
-              if (authenticated) {
-                setActiveTab('home');
-                setShowFundWallet(false);
-                setShowReferEarn(false);
-                setShowSupport(false);
-                setActiveDedicatedService(null);
-                setAuthState('authenticated');
-              }
-            });
+          onLoginSuccess={async () => {
+            const authenticated = await refreshServerState();
+            if (!authenticated) {
+              throw new Error('Sign in succeeded, but your account could not be loaded. Please try again.');
+            }
+
+            setActiveTab('home');
+            setShowFundWallet(false);
+            setShowReferEarn(false);
+            setShowSupport(false);
+            setShowAbout(false);
+            setActiveDedicatedService(null);
+            setAuthState('authenticated');
           }}
           onRegisterPress={() => setAuthState('register')}
           onForgotPasswordPress={() => setAuthState('forgot_password')}
@@ -188,6 +194,8 @@ export default function App() {
           <ReferEarnView onBackPress={() => setShowReferEarn(false)} />
         ) : showSupport ? (
           <SupportView onBackPress={() => setShowSupport(false)} />
+        ) : showAbout ? (
+          <AboutView onBackPress={() => setShowAbout(false)} />
         ) : activeDedicatedService === 'airtime' ? (
           <AirtimeView onBackPress={() => setActiveDedicatedService(null)} />
         ) : activeDedicatedService === 'electricity' ? (
@@ -215,6 +223,7 @@ export default function App() {
                 onNavigateToReferEarn={() => setShowReferEarn(true)}
                 onNavigateToFundWallet={() => setShowFundWallet(true)}
                 onNavigateToSupport={() => setShowSupport(true)}
+                onNavigateToAbout={() => setShowAbout(true)}
                 onNavigateToPinSetup={() => setAuthState('pin_setup')}
                 onSignOut={() => {
                   void logout();
@@ -222,6 +231,7 @@ export default function App() {
                   setShowFundWallet(false);
                   setShowReferEarn(false);
                   setShowSupport(false);
+                  setShowAbout(false);
                   setActiveDedicatedService(null);
                   setAuthState('welcome');
                 }}

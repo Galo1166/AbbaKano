@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
@@ -19,7 +20,7 @@ import { biometricLogin, registerBiometricDevice } from '@/lib/biometricAuth';
 import { loginWithPasskey, supportsPasskeys } from '@/lib/passkey';
 
 interface AuthLoginViewProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: () => Promise<void>;
   onRegisterPress: () => void;
   onForgotPasswordPress: () => void;
 }
@@ -44,13 +45,13 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
     try {
       await apiPost('/login', { identifier, password });
       await registerBiometricDevice().catch(() => {});
-      setLoading(false);
       setIdentifier('');
       setPassword('');
-      onLoginSuccess();
+      await onLoginSuccess();
     } catch (error) {
-      setLoading(false);
       setErrorMessage(error instanceof Error ? error.message : 'Could not sign in.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -65,7 +66,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
         const authenticated = await biometricLogin();
         if (!authenticated) throw new Error('Biometric authentication is not available on this device.');
       }
-      onLoginSuccess();
+      await onLoginSuccess();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Could not sign in with biometrics.');
     } finally {
@@ -191,8 +192,12 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
             disabled={loading}
           >
             <View style={styles.securedRow}>
-              <MaterialIcons name="verified-user" size={16} color="#FFFFFF" />
-              <Text style={styles.securedText}>Secured Sign In to Wallet</Text>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <MaterialIcons name="verified-user" size={16} color="#FFFFFF" />
+              )}
+              <Text style={styles.securedText}>{loading ? 'Signing in...' : 'Secured Sign In to Wallet'}</Text>
             </View>
             {!loading && <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />}
           </Pressable>
