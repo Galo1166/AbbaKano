@@ -112,7 +112,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
               ]}
               onPress={onRegisterPress}
             >
-              <Text style={styles.primaryBtnText}>Fund your wallet</Text>
+              <Text style={styles.primaryBtnText}>Create account</Text>
             </Pressable>
 
             <Pressable
@@ -123,7 +123,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
               ]}
               onPress={onLoginPress}
             >
-              <Text style={[styles.secondaryBtnText, { color: T.onSurface }]}>See all services</Text>
+              <Text style={[styles.secondaryBtnText, { color: T.onSurface }]}>Log in</Text>
             </Pressable>
           </View>
 
@@ -243,7 +243,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
               ]}
               onPress={onRegisterPress}
             >
-              <Text style={styles.primaryBtnText}>Get started free</Text>
+              <Text style={styles.primaryBtnText}>Create account</Text>
             </Pressable>
 
             <Pressable
@@ -254,7 +254,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
               ]}
               onPress={onLoginPress}
             >
-              <Text style={[styles.secondaryBtnText, { color: T.onSurface }]}>Talk to support</Text>
+              <Text style={[styles.secondaryBtnText, { color: T.onSurface }]}>Log in</Text>
             </Pressable>
           </View>
         </View>
