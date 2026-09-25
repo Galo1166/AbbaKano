@@ -40,7 +40,8 @@ export default function App() {
   const [showReferEarn, setShowReferEarn] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [isAppLocked, setIsAppLocked] = useState(() => (
+  const [isAppLocked, setIsAppLocked] = useState(false);
+  const [lockOnRestore, setLockOnRestore] = useState(() => (
     typeof window !== 'undefined' && hasAuthToken()
   ));
   const [pinSetupRequiresCurrent, setPinSetupRequiresCurrent] = useState(false);
@@ -56,9 +57,16 @@ export default function App() {
   }, [sessionStatus, authState]);
 
   useEffect(() => {
+    if (sessionStatus === 'authenticated' && lockOnRestore) {
+      setIsAppLocked(user.appLockEnabled === true);
+      setLockOnRestore(false);
+    }
+  }, [sessionStatus, lockOnRestore, user.appLockEnabled]);
+
+  useEffect(() => {
     if (typeof document === 'undefined') return;
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden' && sessionStatus === 'authenticated' && user.appLockEnabled !== false) {
+      if (document.visibilityState === 'hidden' && sessionStatus === 'authenticated' && user.appLockEnabled === true) {
         setIsAppLocked(true);
       }
     };
@@ -154,6 +162,7 @@ export default function App() {
       <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
         <AuthLoginView
           onLoginSuccess={async () => {
+            setLockOnRestore(false);
             const authenticated = await refreshServerState();
             if (!authenticated) {
               throw new Error('Sign in succeeded, but your account could not be loaded. Please try again.');
@@ -179,6 +188,7 @@ export default function App() {
       <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
         <AuthRegisterView
           onRegisterSuccess={() => {
+            setLockOnRestore(false);
             void refreshServerState().then((authenticated) => {
               if (authenticated) setAuthState('authenticated');
             });
