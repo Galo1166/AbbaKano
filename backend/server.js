@@ -306,6 +306,18 @@ async function audit(client, userId, transactionId, action, details = {}, req) {
     );
 }
 
+async function auditAdminAction(req, action, details = {}, client = pool) {
+    await client.query(
+        `INSERT INTO audit_logs (user_id, transaction_id, action, details, ip_address)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [req.session.sub, details.transactionId || null, action, {
+            ...details,
+            actorId: String(req.session.sub),
+            actorRole: req.session.role || "admin"
+        }, req.ip || null]
+    );
+}
+
 async function recordFraudEvent(userId, operation, riskScore, reasons, req) {
     await pool.query(
         `INSERT INTO fraud_events (user_id, operation, risk_score, reason_codes, ip_address)
@@ -840,6 +852,14 @@ app.post("/login", authLimiter, async (req, res) => {
 
         const authToken = setSessionCookie(res, user);
         const csrfToken = setCsrfCookie(res);
+
+        if (user.role === "admin") {
+            await pool.query(
+                `INSERT INTO audit_logs (user_id, action, details, ip_address)
+                 VALUES ($1, 'admin.login', $2, $3)`,
+                [user.id, { actorId: String(user.id), actorRole: user.role, identifier }, req.ip || null]
+            );
+        }
 
         res.json({
             message: "Login successful",
@@ -1394,7 +1414,8 @@ app.get("/admin/auth/me", requireSession, requireAdmin, async (req, res) => {
     res.json({ admin: result.rows[0], permissions: ["dashboard.read", "users.manage", "transactions.read", "ledger.manage", "audit.read"] });
 });
 
-app.post("/admin/auth/logout", requireSession, requireAdmin, (req, res) => {
+app.post("/admin/auth/logout", requireSession, requireAdmin, async (req, res) => {
+    await auditAdminAction(req, "admin.logout");
     res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=${COOKIE_SAME_SITE}`);
     res.sendStatus(204);
 });
@@ -1484,9 +1505,10 @@ app.get("/admin/users/:userId/history", requireSession, requireAdmin, async (req
 app.patch("/admin/users/:userId/status", requireSession, requireAdmin, requireCsrf, async (req, res) => {
     const status = req.body?.status;
     if (!["active", "blocked"].includes(status)) return res.status(400).json({ message: "Invalid account status" });
+    const beforeResult = await pool.query("SELECT id, username, status FROM users WHERE id = $1 AND role = 'user'", [Number(req.params.userId)]);
     const result = await pool.query("UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND role = 'user' RETURNING id, username, status", [status, Number(req.params.userId)]);
     if (!result.rows[0]) return res.status(404).json({ message: "User not found" });
-    await pool.query("INSERT INTO audit_logs (user_id, action, details) VALUES ($1, 'admin.user_status_changed', $2)", [req.session.sub, { targetUserId: Number(req.params.userId), status }]);
+    await auditAdminAction(req, "admin.user_status_changed", { targetUserId: Number(req.params.userId), target: result.rows[0].username, before: beforeResult.rows[0]?.status, after: status });
     res.json({ user: result.rows[0] });
 });
 
@@ -1507,15 +1529,26 @@ app.post("/admin/users/:userId/ledger", requireSession, requireAdmin, requireCsr
         const wallet = await client.query("UPDATE wallets SET balance_kobo = balance_kobo + $1, updated_at = NOW() WHERE user_id = $2 AND balance_kobo + $1 >= 0 RETURNING balance_kobo", [direction === "credit" ? amount * 100 : -amount * 100, Number(req.params.userId)]);
         if (!wallet.rows[0]) { await client.query("ROLLBACK"); return res.status(400).json({ message: "User not found or insufficient balance" }); }
         await client.query(`INSERT INTO wallet_ledger (user_id, entry_type, amount_kobo, balance_after_kobo, idempotency_key) VALUES ($1, 'commission', $2, $3, $4) ON CONFLICT DO NOTHING`, [Number(req.params.userId), direction === "credit" ? amount * 100 : -amount * 100, wallet.rows[0].balance_kobo, idempotencyKey]);
-        await client.query("INSERT INTO audit_logs (user_id, action, details) VALUES ($1, 'admin.ledger_adjusted', $2)", [req.session.sub, { targetUserId: Number(req.params.userId), direction, amount, reason, idempotencyKey }]);
+        await auditAdminAction(req, "admin.ledger_adjusted", { targetUserId: Number(req.params.userId), direction, amount, reason, idempotencyKey, before: Number(wallet.rows[0].balance_kobo) - (direction === "credit" ? amount * 100 : -amount * 100), after: Number(wallet.rows[0].balance_kobo) }, client);
         await client.query("COMMIT");
         res.json({ balance: Number(wallet.rows[0].balance_kobo) / 100 });
     } catch (error) { await client.query("ROLLBACK"); console.error(error); res.status(500).json({ message: "Could not post ledger adjustment" }); } finally { client.release(); }
 });
 
 app.get("/admin/transactions", requireSession, requireAdmin, async (req, res) => {
-    const result = await pool.query(`SELECT vt.reference AS id, vt.type, vt.network, vt.phone, vt.amount_kobo, vt.status, vt.provider, vt.provider_reference, vt.created_at, u.username
-        FROM vtu_transactions vt JOIN users u ON u.id = vt.user_id ORDER BY vt.created_at DESC LIMIT 200`);
+    const values = [];
+    const filters = [];
+    const add = (value, clause) => { values.push(value); filters.push(clause.replace("$VALUE", `$${values.length}`)); };
+    if (typeof req.query.q === "string" && req.query.q.trim()) add(`%${req.query.q.trim()}%`, "(vt.reference ILIKE $VALUE OR u.username ILIKE $VALUE OR COALESCE(u.email, '') ILIKE $VALUE OR vt.network ILIKE $VALUE OR vt.phone ILIKE $VALUE)");
+    if (typeof req.query.type === "string" && ["airtime", "data", "electricity", "cable_tv"].includes(req.query.type)) add(req.query.type, "vt.type = $VALUE");
+    if (typeof req.query.status === "string" && ["success", "pending", "failed"].includes(req.query.status)) add(req.query.status, "vt.status = $VALUE");
+    if (typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)) add(req.query.from, "vt.created_at >= $VALUE::date");
+    if (typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)) add(req.query.to, "vt.created_at < ($VALUE::date + INTERVAL '1 day')");
+    if (Number.isFinite(Number(req.query.min)) && Number(req.query.min) >= 0) add(Math.round(Number(req.query.min) * 100), "vt.amount_kobo >= $VALUE");
+    if (Number.isFinite(Number(req.query.max)) && Number(req.query.max) >= 0) add(Math.round(Number(req.query.max) * 100), "vt.amount_kobo <= $VALUE");
+    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const result = await pool.query(`SELECT vt.reference AS id, vt.user_id, vt.type, vt.network, vt.phone, vt.amount_kobo, vt.status, vt.provider, vt.provider_reference, vt.created_at, u.username
+        FROM vtu_transactions vt JOIN users u ON u.id = vt.user_id ${where} ORDER BY vt.created_at DESC LIMIT 200`, values);
     res.json({ transactions: result.rows.map((row) => ({ ...row, amount: Number(row.amount_kobo || 0) / 100 })) });
 });
 
@@ -1706,6 +1739,13 @@ app.get("/admin/users/:userId/history", requireSession, requireAdmin, async (req
                 amount_kobo, status, created_at, user_id
          FROM vtu_transactions
          WHERE user_id = $1
+          UNION ALL
+          SELECT CONCAT('ledger-', wl.id) AS id,
+              'ledger' AS type,
+              CONCAT('Manual ledger · ', wl.entry_type) AS label,
+              wl.amount_kobo, 'ledger' AS status, wl.created_at, wl.user_id
+          FROM wallet_ledger wl
+          WHERE wl.user_id = $1
          ORDER BY created_at DESC
          LIMIT 200`,
         [userId]
@@ -1763,15 +1803,18 @@ app.post("/admin/users/:userId/fund", requireSession, requireAdmin, requireCsrf,
             return res.status(500).json({ message: "Could not fund user wallet" });
         }
 
-        await client.query(
-            "INSERT INTO audit_logs (user_id, action, details) VALUES ($1, 'admin.funds_added', $2)",
-            [req.session.sub, { targetUserId: userId, amount: amount, reference }]
-        );
-
         const walletResult = await client.query(
             "SELECT balance_kobo FROM wallets WHERE user_id = $1",
             [userId]
         );
+        await auditAdminAction(req, "admin.funds_added", {
+            targetUserId: userId,
+            target: userResult.rows[0].username,
+            amount,
+            reference,
+            before: Number(walletResult.rows[0]?.balance_kobo || 0) - amount * 100,
+            after: Number(walletResult.rows[0]?.balance_kobo || 0)
+        }, client);
 
         await client.query("COMMIT");
         res.json({
@@ -1799,6 +1842,7 @@ app.post("/admin/users/:userId/block", requireSession, requireAdmin, requireCsrf
         return res.status(400).json({ message: "Invalid account status" });
     }
 
+    const beforeResult = await pool.query("SELECT id, username, status FROM users WHERE id = $1 AND role = 'user'", [userId]);
     const result = await pool.query(
         `UPDATE users
          SET status = $1, updated_at = NOW()
@@ -1811,10 +1855,12 @@ app.post("/admin/users/:userId/block", requireSession, requireAdmin, requireCsrf
         return res.status(404).json({ message: "User not found or cannot be updated" });
     }
 
-    await pool.query(
-        "INSERT INTO audit_logs (user_id, action, details) VALUES ($1, 'admin.user_status_changed', $2)",
-        [req.session.sub, { targetUserId: userId, status: nextStatus }]
-    );
+    await auditAdminAction(req, "admin.user_status_changed", {
+        targetUserId: userId,
+        target: result.rows[0].username,
+        before: beforeResult.rows[0]?.status,
+        after: nextStatus
+    });
 
     res.json({
         message: nextStatus === "blocked" ? "User account blocked successfully" : "User account restored successfully",
@@ -1823,6 +1869,7 @@ app.post("/admin/users/:userId/block", requireSession, requireAdmin, requireCsrf
 });
 
 app.get("/admin/agents", requireSession, requireAdmin, async (req, res) => {
+    const beforeResult = await pool.query("SELECT status FROM agent_profiles WHERE user_id = $1", [userId]);
     const result = await pool.query(
         `SELECT u.id, u.username, u.email, ap.status, ap.daily_limit_kobo,
                 ap.verified_at, ap.updated_at
@@ -1848,10 +1895,11 @@ app.post("/admin/agents/:userId/verify", requireSession, requireAdmin, requireCs
         [status, req.session.sub, userId]
     );
     if (!result.rows[0]) return res.status(404).json({ message: "Agent request not found" });
-    await pool.query(
-        "INSERT INTO audit_logs (user_id, action, details) VALUES ($1, 'agent.status_changed', $2)",
-        [userId, { status, changedBy: req.session.sub }]
-    );
+    await auditAdminAction(req, "agent.status_changed", {
+        targetUserId: userId,
+        before: beforeResult.rows[0]?.status,
+        after: status
+    });
     res.json({ agent: result.rows[0] });
 });
 
