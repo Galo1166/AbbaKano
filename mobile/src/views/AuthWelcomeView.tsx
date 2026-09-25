@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, ScrollView } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Image, ScrollView, useWindowDimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
 import { SCREEN_ASSETS } from '../../assets/screenAssets';
@@ -56,7 +56,11 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
 }) => {
   const { themePreference, effectiveTheme } = useApp();
   const T = useTheme();
+  const scrollRef = useRef<ScrollView | null>(null);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const { width } = useWindowDimensions();
+  const isNarrow = width <= 380;
   const isDark = effectiveTheme === 'dark';
 
   const themeIcon =
@@ -71,10 +75,13 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
   return (
     <View style={[styles.container, { backgroundColor: T.canvas }]}>
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        onScroll={({ nativeEvent }) => setShowScrollTop(nativeEvent.contentOffset.y > 220)}
+        scrollEventThrottle={16}
       >
-        <View style={styles.topBar}>
+        <View style={[styles.topBar, isNarrow && styles.topBarNarrow]}>
           <View style={styles.brandWrap}>
             <View style={[styles.brandMark, { backgroundColor: T.primary }]}>
               <Image source={SCREEN_ASSETS.logoEmblem} style={styles.brandEmblem} resizeMode="cover" />
@@ -103,10 +110,11 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
           <Text style={[styles.heroTitle, { color: T.onSurface }]}>One wallet for airtime, data, and every bill you owe</Text>
           <Text style={[styles.heroBody, { color: T.onSurfaceVariant }]}>AbbaKano DataSub tops up any network, pays your electricity and cable TV, and settles exam pins — instantly, at rates that don't eat your margin.</Text>
 
-          <View style={styles.heroCtas}>
+          <View style={[styles.heroCtas, isNarrow && styles.heroCtasNarrow]}>
             <Pressable
               style={({ pressed }) => [
                 styles.primaryBtn,
+                isNarrow && styles.primaryBtnNarrow,
                 { backgroundColor: T.primaryContainer, shadowColor: T.primary },
                 pressed && { opacity: 0.9 },
               ]}
@@ -118,6 +126,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
             <Pressable
               style={({ pressed }) => [
                 styles.secondaryBtn,
+                isNarrow && styles.secondaryBtnNarrow,
                 { borderColor: T.border, backgroundColor: 'transparent' },
                 pressed && { opacity: 0.8 },
               ]}
@@ -181,7 +190,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
           <Text style={[styles.sectionSubtitle, { color: T.onSurfaceVariant }]}>No app-switching, no queues. Pick a service, confirm, done.</Text>
           <View style={styles.serviceGrid}>
             {SERVICES.map((service) => (
-              <View key={service.label} style={[styles.serviceCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+              <View key={service.label} style={[styles.serviceCard, isNarrow && styles.serviceCardNarrow, { backgroundColor: T.surface, borderColor: T.border }]}> 
                 <View style={[styles.serviceIcon, { backgroundColor: T.primary, shadowColor: T.primary }]}>
                   <MaterialIcons name={service.icon as any} size={18} color="#FFFFFF" />
                 </View>
@@ -206,7 +215,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
           </View>
         </View>
 
-        <View style={[styles.statsBand, { backgroundColor: T.primaryContainer }]}>
+          <View style={[styles.statsBand, isNarrow && styles.statsBandNarrow, { backgroundColor: T.primaryContainer }]}> 
           {STATS.map((stat) => (
             <View key={stat.value} style={styles.statItem}>
               <Text style={[styles.statValue, { color: T.secondary }]}>{stat.value}</Text>
@@ -220,7 +229,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
           <Text style={[styles.sectionSubtitle, { color: T.onSurfaceVariant }]}>Built for the way Nigerians actually pay bills — fast, reliable, and fair on price.</Text>
           <View style={styles.serviceGrid}>
             {BENEFITS.map((item) => (
-              <View key={item.label} style={[styles.serviceCard, { backgroundColor: T.surface, borderColor: T.border }]}>
+              <View key={item.label} style={[styles.serviceCard, isNarrow && styles.serviceCardNarrow, { backgroundColor: T.surface, borderColor: T.border }]}> 
                 <View style={[styles.serviceIcon, { backgroundColor: T.secondaryContainer, shadowColor: T.secondary }]}>
                   <MaterialIcons name={item.icon as any} size={18} color={T.secondary} />
                 </View>
@@ -234,10 +243,11 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
         <View style={styles.ctaBand}>
           <Text style={[styles.ctaTitle, { color: T.onSurface }]}>Stop juggling apps for every bill</Text>
           <Text style={[styles.ctaBody, { color: T.onSurfaceVariant }]}>Create your AbbaKano DataSub account and fund your first wallet in minutes.</Text>
-          <View style={styles.heroCtas}>
+          <View style={[styles.heroCtas, isNarrow && styles.heroCtasNarrow]}>
             <Pressable
               style={({ pressed }) => [
                 styles.primaryBtn,
+                isNarrow && styles.primaryBtnNarrow,
                 { backgroundColor: T.primaryContainer, shadowColor: T.primary },
                 pressed && { opacity: 0.9 },
               ]}
@@ -249,6 +259,7 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
             <Pressable
               style={({ pressed }) => [
                 styles.secondaryBtn,
+                isNarrow && styles.secondaryBtnNarrow,
                 { borderColor: T.border },
                 pressed && { opacity: 0.8 },
               ]}
@@ -258,7 +269,46 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
             </Pressable>
           </View>
         </View>
+
+        <View style={[styles.footer, isNarrow && styles.footerNarrow, { borderTopColor: T.border }]}> 
+          <View style={[styles.footerTop, isNarrow && styles.footerTopNarrow]}>
+            <View style={styles.footerBrandBlock}>
+              <Text style={[styles.footerBrand, { color: T.onSurface }]}>AbbaKano DataSub</Text>
+              <Text style={[styles.footerText, { color: T.onSurfaceVariant }]}>Bill payments made simple, from Kano to every state.</Text>
+            </View>
+
+            <View style={styles.footerLinksWrap}>
+              <View style={styles.footerLinksCol}>
+                <Text style={[styles.footerLink, { color: T.onSurfaceVariant }]}>Airtime</Text>
+                <Text style={[styles.footerLink, { color: T.onSurfaceVariant }]}>Data</Text>
+                <Text style={[styles.footerLink, { color: T.onSurfaceVariant }]}>Electricity</Text>
+                <Text style={[styles.footerLink, { color: T.onSurfaceVariant }]}>Cable TV</Text>
+              </View>
+              <View style={styles.footerLinksCol}>
+                <Text style={[styles.footerLink, { color: T.onSurfaceVariant }]}>Contact support</Text>
+                <Text style={[styles.footerLink, { color: T.onSurfaceVariant }]}>Terms</Text>
+                <Text style={[styles.footerLink, { color: T.onSurfaceVariant }]}>Privacy</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={[styles.footerBottom, { color: T.onSurfaceMuted }]}>© 2026 AbbaKano DataSub. All rights reserved.</Text>
+        </View>
       </ScrollView>
+
+      {showScrollTop && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.scrollTopBtn,
+            { backgroundColor: T.primaryContainer, shadowColor: T.primary },
+            pressed && { opacity: 0.85 },
+          ]}
+          onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          accessibilityLabel="Scroll to top"
+        >
+          <MaterialIcons name="keyboard-arrow-up" size={22} color={T.onSurface} />
+        </Pressable>
+      )}
 
       <ThemeSwitchModal visible={showThemeModal} onClose={() => setShowThemeModal(false)} />
     </View>
@@ -279,6 +329,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.six,
+  },
+  topBarNarrow: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
+    gap: Spacing.three,
   },
   brandWrap: {
     flexDirection: 'row',
@@ -345,6 +400,9 @@ const styles = StyleSheet.create({
     gap: 12,
     flexWrap: 'wrap',
   },
+  heroCtasNarrow: {
+    flexDirection: 'column',
+  },
   primaryBtn: {
     minHeight: 52,
     paddingHorizontal: 18,
@@ -355,6 +413,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 4,
+  },
+  primaryBtnNarrow: {
+    width: '100%',
+  },
+  serviceCardNarrow: {
+    width: '100%',
+    minHeight: 0,
+    padding: 14,
   },
   primaryBtnText: {
     fontSize: 15,
@@ -369,6 +435,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  secondaryBtnNarrow: {
+    width: '100%',
   },
   secondaryBtnText: {
     fontSize: 15,
@@ -565,6 +634,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+  statsBandNarrow: {
+    flexDirection: 'column',
+  },
   statItem: {
     width: '48%',
     gap: 4,
@@ -598,5 +670,74 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: Typography.family,
     marginBottom: 18,
+  },
+  scrollTopBtn: {
+    position: 'absolute',
+    right: 18,
+    bottom: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  footer: {
+    borderTopWidth: 1,
+    paddingTop: 20,
+    marginTop: Spacing.four,
+  },
+  footerNarrow: {
+    paddingBottom: Spacing.four,
+  },
+  footerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 20,
+  },
+  footerTopNarrow: {
+    flexDirection: 'column',
+    gap: Spacing.four,
+  },
+  footerBrandBlock: {
+    flex: 1,
+    minWidth: 180,
+  },
+  footerBrand: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: Typography.family,
+    marginBottom: 6,
+  },
+  footerText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: Typography.family,
+  },
+  footerLinksWrap: {
+    flexDirection: 'row',
+    gap: 28,
+    flexWrap: 'wrap',
+  },
+  footerLinksCol: {
+    gap: 8,
+  },
+  footerLink: {
+    fontSize: 12,
+    fontFamily: Typography.family,
+  },
+  footerBottom: {
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    fontSize: 11,
+    fontFamily: Typography.family,
+    borderTopColor: 'rgba(148, 163, 184, 0.35)',
   },
 });
