@@ -4,7 +4,7 @@ ALTER TABLE users
     ADD COLUMN IF NOT EXISTS phone VARCHAR(20),
     ADD COLUMN IF NOT EXISTS referrer_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS biometrics_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    ADD COLUMN IF NOT EXISTS app_lock_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS app_lock_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active',
     ADD COLUMN IF NOT EXISTS dedicated_account_number VARCHAR(50),
     ADD COLUMN IF NOT EXISTS dedicated_account_reference VARCHAR(100),
@@ -20,6 +20,7 @@ ALTER TABLE users
     ADD COLUMN IF NOT EXISTS transaction_pin_salt TEXT;
 
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN app_lock_enabled SET DEFAULT FALSE;
 CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique_idx ON users(phone) WHERE phone IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_virtual_account_number_idx ON users(virtual_account_number) WHERE virtual_account_number IS NOT NULL;
 CREATE INDEX IF NOT EXISTS users_referrer_user_id_idx ON users(referrer_user_id);

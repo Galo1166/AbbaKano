@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
 	full_name VARCHAR(120),
 	phone VARCHAR(20),
 	biometrics_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-	app_lock_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+	app_lock_enabled BOOLEAN NOT NULL DEFAULT FALSE,
 	email VARCHAR(255) UNIQUE,
 	password_hash TEXT NOT NULL,
 	role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
@@ -42,6 +42,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_error TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_created_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS transaction_pin_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS transaction_pin_salt TEXT;
+ALTER TABLE users ALTER COLUMN app_lock_enabled SET DEFAULT FALSE;
 UPDATE users SET role = 'admin' WHERE username = 'Admin';
 CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique_idx ON users(phone) WHERE phone IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_virtual_account_number_idx ON users(virtual_account_number) WHERE virtual_account_number IS NOT NULL;

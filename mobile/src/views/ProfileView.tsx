@@ -33,11 +33,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [biometrics, setBiometrics] = useState(user.biometricsEnabled !== false);
-  const [appLock, setAppLock] = useState(user.appLockEnabled !== false);
+  const [appLock, setAppLock] = useState(user.appLockEnabled === true);
 
   useEffect(() => {
     setBiometrics(user.biometricsEnabled !== false);
-    setAppLock(user.appLockEnabled !== false);
+    setAppLock(user.appLockEnabled === true);
   }, [user.biometricsEnabled, user.appLockEnabled]);
 
   const menuItems = useMemo(() => [
