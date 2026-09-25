@@ -195,6 +195,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const verifyPayment = async (reference: string) => {
+      const verificationKey = `abbakano_paystack_verification_${reference}`;
+      if (typeof window !== 'undefined') {
+        if (window.sessionStorage.getItem(verificationKey) === 'processing') return;
+        window.sessionStorage.setItem(verificationKey, 'processing');
+      }
+
       for (let attempt = 0; attempt < 5; attempt += 1) {
         try {
           await apiGet(`/payments/paystack/verify/${encodeURIComponent(reference)}`);
@@ -212,6 +218,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (error instanceof ApiError && error.status !== 202) {
               console.warn('Could not verify Paystack payment:', error.message);
             }
+            if (typeof window !== 'undefined') window.sessionStorage.removeItem(verificationKey);
             break;
           }
           await new Promise((resolve) => setTimeout(resolve, 2000));
