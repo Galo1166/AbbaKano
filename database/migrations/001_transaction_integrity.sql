@@ -8,11 +8,20 @@ ALTER TABLE users
     ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active',
     ADD COLUMN IF NOT EXISTS dedicated_account_number VARCHAR(50),
     ADD COLUMN IF NOT EXISTS dedicated_account_reference VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS virtual_account_provider VARCHAR(30),
+    ADD COLUMN IF NOT EXISTS virtual_account_number VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS virtual_account_bank_name VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS virtual_account_name VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS virtual_account_reference VARCHAR(150),
+    ADD COLUMN IF NOT EXISTS virtual_account_status VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS virtual_account_error TEXT,
+    ADD COLUMN IF NOT EXISTS virtual_account_created_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS transaction_pin_hash TEXT,
     ADD COLUMN IF NOT EXISTS transaction_pin_salt TEXT;
 
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique_idx ON users(phone) WHERE phone IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_virtual_account_number_idx ON users(virtual_account_number) WHERE virtual_account_number IS NOT NULL;
 CREATE INDEX IF NOT EXISTS users_referrer_user_id_idx ON users(referrer_user_id);
 
 CREATE TABLE IF NOT EXISTS device_credentials (

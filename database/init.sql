@@ -11,6 +11,14 @@ CREATE TABLE IF NOT EXISTS users (
 	status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'blocked')),
 	dedicated_account_number VARCHAR(50),
 	dedicated_account_reference VARCHAR(100),
+	virtual_account_provider VARCHAR(30),
+	virtual_account_number VARCHAR(20),
+	virtual_account_bank_name VARCHAR(120),
+	virtual_account_name VARCHAR(120),
+	virtual_account_reference VARCHAR(150),
+	virtual_account_status VARCHAR(20) CHECK (virtual_account_status IN ('pending', 'active', 'failed')),
+	virtual_account_error TEXT,
+	virtual_account_created_at TIMESTAMPTZ,
 	transaction_pin_hash TEXT,
 	transaction_pin_salt TEXT,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -24,10 +32,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20);
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS dedicated_account_number VARCHAR(50);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS dedicated_account_reference VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_provider VARCHAR(30);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_number VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_bank_name VARCHAR(120);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_name VARCHAR(120);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_reference VARCHAR(150);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_status VARCHAR(20);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_error TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS virtual_account_created_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS transaction_pin_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS transaction_pin_salt TEXT;
 UPDATE users SET role = 'admin' WHERE username = 'Admin';
 CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique_idx ON users(phone) WHERE phone IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_virtual_account_number_idx ON users(virtual_account_number) WHERE virtual_account_number IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS agent_profiles (
 	user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
