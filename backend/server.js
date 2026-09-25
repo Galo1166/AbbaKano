@@ -805,15 +805,17 @@ app.post("/login", authLimiter, async (req, res) => {
     const identifier = typeof req.body?.identifier === "string" ? req.body.identifier.trim() : "";
     const password = req.body?.password;
     const normalizedPhone = normalizePhone(identifier);
-    const validIdentifier = PHONE_PATTERN.test(normalizedPhone) || EMAIL_PATTERN.test(identifier.toLowerCase());
+    const validIdentifier = PHONE_PATTERN.test(normalizedPhone)
+        || EMAIL_PATTERN.test(identifier.toLowerCase())
+        || /^[A-Za-z0-9_.-]{1,50}$/.test(identifier);
     if (!validIdentifier || typeof password !== "string" || password.length < 1 || password.length > 128) {
         return res.status(400).json({ message: "Enter a valid phone number or email and password" });
     }
 
     try {
         const result = await pool.query(
-            "SELECT id, username, full_name, phone, email, password_hash, role, status FROM users WHERE phone = $1 OR email = $2",
-            [normalizedPhone, identifier.toLowerCase()]
+            "SELECT id, username, full_name, phone, email, password_hash, role, status FROM users WHERE phone = $1 OR email = $2 OR LOWER(username) = LOWER($3)",
+            [normalizedPhone, identifier.toLowerCase(), identifier]
         );
         const user = result.rows[0];
 
@@ -1521,6 +1523,17 @@ app.get("/admin/audit-log", requireSession, requireAdmin, async (req, res) => {
     const result = await pool.query(`SELECT a.id, a.action, a.details, a.ip_address, a.created_at, u.username AS actor
         FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.created_at DESC LIMIT 300`);
     res.json({ auditLog: result.rows });
+});
+
+app.get("/admin/risk-cases", requireSession, requireAdmin, async (req, res) => {
+    const status = typeof req.query.status === "string" ? req.query.status : "";
+    const result = await pool.query(`SELECT f.id, f.user_id, u.username, u.email, f.operation,
+        f.risk_score, f.reason_codes, f.ip_address, f.created_at,
+        CASE WHEN f.risk_score >= 80 THEN 'open' WHEN f.risk_score >= 50 THEN 'reviewing' ELSE 'resolved' END AS status
+        FROM fraud_events f LEFT JOIN users u ON u.id = f.user_id
+        WHERE ($1 = '' OR CASE WHEN f.risk_score >= 80 THEN 'open' WHEN f.risk_score >= 50 THEN 'reviewing' ELSE 'resolved' END = $1)
+        ORDER BY f.created_at DESC LIMIT 300`, [status]);
+    res.json({ cases: result.rows });
 });
 
 app.get("/admin/analytics", requireSession, requireAdmin, async (req, res) => {
