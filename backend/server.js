@@ -32,7 +32,8 @@ const COOKIE_SAME_SITE = SECURE_COOKIES ? "None" : "Lax";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\d{10,15}$/;
 const PIN_PATTERN = /^\d{4}$/;
-const VTU_NETWORKS = new Set(["MTN", "Airtel", "Glo", "9mobile"]);
+const VTU_NETWORKS = new Set(["MTN", "AIRTEL", "GLO", "9MOBILE"]);
+const VTU_ELECTRICITY_NETWORKS = new Set(["AEDC", "EKEDC", "EEDC", "IBEDC", "IKEDC", "JED", "KAEDCO", "KEDCO", "PHED"]);
 const VTU_RATE_LIMIT = Number(process.env.VTU_RATE_LIMIT || 10);
 const VERIFIED_AGENT_RATE_LIMIT = Number(process.env.VERIFIED_AGENT_RATE_LIMIT || 120);
 const VTU_RATE_WINDOW_SECONDS = Number(process.env.VTU_RATE_WINDOW_SECONDS || 60);
@@ -430,15 +431,18 @@ function validateVtuRequest(body, type) {
     const normalizedPhone = typeof phone === "string" ? phone.replace(/[\s-]/g, "") : "";
     const pinValidation = validateTransactionPin(pin);
     if (pinValidation.error) return { error: pinValidation.error };
+    const normalizedNetwork = typeof network === "string" ? network.trim().toUpperCase() : "";
     const validNetwork = type === "cable_tv"
-        ? ["dstv", "gotv", "startimes"].includes(String(network).toLowerCase())
-        : VTU_NETWORKS.has(network);
-    if (typeof network !== "string" || !validNetwork) return { error: "Choose a supported network" };
+        ? ["DSTV", "GOTV", "STARTIMES"].includes(normalizedNetwork)
+        : type === "electricity"
+            ? VTU_ELECTRICITY_NETWORKS.has(normalizedNetwork)
+            : VTU_NETWORKS.has(normalizedNetwork);
+    if (!validNetwork) return { error: "Choose a supported network" };
     if (!PHONE_PATTERN.test(normalizedPhone)) return { error: "Enter a valid phone number" };
     if (["airtime", "electricity"].includes(type) && (!Number.isInteger(amount) || amount < 50 || amount > 100000)) return { error: "Amount must be between 50 and 100,000 naira" };
     if (["data", "cable_tv", "electricity"].includes(type) && typeof planToken !== "string") return { error: "Choose a valid plan" };
     if (type === "data" && (typeof amount !== "number" || !Number.isFinite(amount))) return { error: "Choose a valid data plan" };
-    return { network, phone: normalizedPhone, amount, planCode: type === "data" ? planCode : null, planToken: type === "data" ? planToken : null, provider: null, pin: pinValidation.pin };
+    return { network: type === "cable_tv" ? normalizedNetwork.toLowerCase() : normalizedNetwork, phone: normalizedPhone, amount, planCode: type === "data" ? planCode : null, planToken: type === "data" ? planToken : null, provider: null, pin: pinValidation.pin };
 }
 
 function getIdempotencyKey(req) {
