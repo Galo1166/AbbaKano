@@ -602,7 +602,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: Palette.onSurface,
     fontFamily: Typography.family,
     fontWeight: '500',

@@ -25,6 +25,7 @@ export interface CheckoutDraft {
 interface CheckoutContextType {
   isSheetOpen: boolean;
   isPinModalOpen: boolean;
+  isPurchaseProcessing: boolean;
   pinError: string | null;
   isReceiptOpen: boolean;
   paymentSuccessCount: number;
@@ -47,6 +48,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [paymentSuccessCount, setPaymentSuccessCount] = useState(0);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isPurchaseProcessing, setIsPurchaseProcessing] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [activeReceipt, setActiveReceipt] = useState<TransactionRecord | null>(null);
@@ -55,6 +57,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setDraft(newDraft);
     setIsSheetOpen(true);
     setIsPinModalOpen(false);
+    setIsPurchaseProcessing(false);
     setPinError(null);
     setIsReceiptOpen(false);
   };
@@ -67,11 +70,13 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setIsSheetOpen(false);
     setPinError(null);
     setIsPinModalOpen(true);
+    setIsPurchaseProcessing(false);
   };
 
   const cancelPin = () => {
     setIsPinModalOpen(false);
     setPinError(null);
+    setIsPurchaseProcessing(false);
   };
 
   const verifyPinAndExecute = async (pin: string): Promise<boolean> => {
@@ -81,6 +86,8 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setPinError('Enter your 4-digit transaction PIN.');
       return false;
     }
+
+    setIsPurchaseProcessing(true);
 
     const endpoint = draft.type === 'DATA' ? '/vtu/data' :
       draft.type === 'AIRTIME' ? '/vtu/airtime' :
@@ -130,6 +137,8 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error instanceof ApiError) console.warn(error.message);
       setPinError(message);
       return false;
+    } finally {
+      setIsPurchaseProcessing(false);
     }
   };
 
@@ -159,6 +168,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         isSheetOpen,
         isPinModalOpen,
+        isPurchaseProcessing,
         pinError,
         isReceiptOpen,
         paymentSuccessCount,

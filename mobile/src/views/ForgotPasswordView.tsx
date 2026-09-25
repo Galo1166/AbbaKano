@@ -491,7 +491,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     textTransform: 'uppercase',
   },
   brandTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: Palette.onSurface,
     fontFamily: Typography.family,

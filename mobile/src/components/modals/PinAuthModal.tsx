@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
@@ -15,7 +15,7 @@ import { Numpad } from '@/components/common/Numpad';
 import { getBiometricTransactionPin } from '@/lib/biometricAuth';
 
 export const PinAuthModal: React.FC = () => {
-  const { isPinModalOpen, cancelPin, verifyPinAndExecute, pinError, draft } = useCheckout();
+  const { isPinModalOpen, isPurchaseProcessing, cancelPin, verifyPinAndExecute, pinError, draft } = useCheckout();
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [pin, setPin] = useState('');
@@ -33,7 +33,7 @@ export const PinAuthModal: React.FC = () => {
   const displayedError = pinError || errorMsg;
 
   const handleKeyPress = (val: string) => {
-    if (pin.length < 4) {
+    if (!isPurchaseProcessing && pin.length < 4) {
       const nextPin = pin + val;
       setPin(nextPin);
       setErrorMsg(null);
@@ -51,11 +51,13 @@ export const PinAuthModal: React.FC = () => {
   };
 
   const handleBackspace = () => {
+    if (isPurchaseProcessing) return;
     setPin((prev) => prev.slice(0, -1));
     setErrorMsg(null);
   };
 
   const handleBiometric = () => {
+    if (isPurchaseProcessing) return;
     setPin('••••');
     setTimeout(() => {
       void getBiometricTransactionPin().then(async (transactionPin) => {
@@ -108,8 +110,16 @@ export const PinAuthModal: React.FC = () => {
             showPinDots={true}
           />
 
+          {isPurchaseProcessing && (
+            <View style={styles.processingBox} accessibilityRole="progressbar">
+              <ActivityIndicator size="small" color={Palette.primaryLight} />
+              <Text style={styles.processingTitle}>Processing purchase...</Text>
+              <Text style={styles.processingText}>Please wait while we confirm your transaction.</Text>
+            </View>
+          )}
+
           {/* Cancel button */}
-          <Pressable style={styles.cancelBtn} onPress={cancelPin} hitSlop={8}>
+          <Pressable style={styles.cancelBtn} onPress={cancelPin} hitSlop={8} disabled={isPurchaseProcessing}>
             <Text style={styles.cancelBtnText}>Cancel Transaction</Text>
           </Pressable>
         </View>
@@ -131,7 +141,8 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     maxWidth: 380,
     backgroundColor: Palette.surface,
     borderRadius: Rounded.xxl,
-    padding: Spacing.five,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.five,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Palette.borderHigh,
@@ -164,6 +175,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: Spacing.two,
     lineHeight: 16,
+    maxWidth: 320,
   },
   errorBox: {
     flexDirection: 'row',
@@ -188,6 +200,29 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   cancelBtnText: {
     fontSize: 13,
     fontWeight: '600',
+    color: Palette.onSurfaceMuted,
+  },
+  processingBox: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Rounded.md,
+    backgroundColor: Palette.surfaceHigh,
+    borderWidth: 1,
+    borderColor: Palette.borderHigh,
+  },
+  processingTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Palette.onSurface,
+  },
+  processingText: {
+    fontSize: 11,
+    lineHeight: 15,
+    textAlign: 'center',
     color: Palette.onSurfaceMuted,
   },
 });

@@ -188,7 +188,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     flex: 1,
     height: '100%',
     color: Palette.onSurface,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '500',
   },
   errorText: {
