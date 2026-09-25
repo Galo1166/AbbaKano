@@ -143,6 +143,7 @@ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS wallet_ledger_user_id_idx ON wallet_ledger(user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS wallet_ledger_idempotency_key_idx ON wallet_ledger(idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS wallet_ledger_transaction_entry_idx
 	ON wallet_ledger(transaction_id, entry_type)
 	WHERE transaction_id IS NOT NULL;

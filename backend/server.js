@@ -1,5 +1,6 @@
 
 const express = require("express");
+const path = require("path");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const { RedisStore } = require("rate-limit-redis");
@@ -46,6 +47,8 @@ const CORS_ORIGINS = new Set(
         .map((origin) => origin.trim())
         .filter(Boolean)
 );
+
+app.use("/admin-dashboard", express.static(path.join(__dirname, "admin")));
 
 function toBase64Url(value) {
     return Buffer.from(value).toString("base64url");
@@ -1378,6 +1381,146 @@ app.post("/agents/request", requireSession, requireCsrf, async (req, res) => {
         console.error(error);
         res.status(500).json({ message: "Could not create agent request" });
     }
+});
+
+// Admin API: all routes below require a signed user session and an admin role.
+app.get("/admin/auth/me", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(
+        "SELECT id, username, full_name, email, role, status FROM users WHERE id = $1",
+        [req.session.sub]
+    );
+    res.json({ admin: result.rows[0], permissions: ["dashboard.read", "users.manage", "transactions.read", "ledger.manage", "audit.read"] });
+});
+
+app.post("/admin/auth/logout", requireSession, requireAdmin, (req, res) => {
+    res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=${COOKIE_SAME_SITE}`);
+    res.sendStatus(204);
+});
+
+app.get("/admin/dashboard/summary", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(`SELECT
+        (SELECT COUNT(*) FROM users WHERE role = 'user') AS users,
+        (SELECT COUNT(*) FROM deposits WHERE status = 'success') AS deposits,
+        (SELECT COALESCE(SUM(amount_kobo), 0) FROM deposits WHERE status = 'success') AS deposit_volume_kobo,
+        (SELECT COUNT(*) FROM vtu_transactions) AS transactions,
+        (SELECT COUNT(*) FROM vtu_transactions WHERE status = 'success') AS successful,
+        (SELECT COUNT(*) FROM vtu_transactions WHERE status = 'pending') AS pending,
+        (SELECT COUNT(*) FROM vtu_transactions WHERE status = 'failed') AS failed,
+        (SELECT COALESCE(SUM(amount_kobo), 0) FROM vtu_transactions WHERE status = 'success') AS transaction_volume_kobo,
+        (SELECT COUNT(*) FROM users WHERE status = 'active' AND role = 'user') AS active_users`);
+    const row = result.rows[0] || {};
+    res.json({ summary: {
+        users: Number(row.users || 0),
+        activeUsers: Number(row.active_users || 0),
+        deposits: Number(row.deposits || 0),
+        depositVolume: Number(row.deposit_volume_kobo || 0) / 100,
+        transactions: Number(row.transactions || 0),
+        successful: Number(row.successful || 0),
+        pending: Number(row.pending || 0),
+        failed: Number(row.failed || 0),
+        transactionVolume: Number(row.transaction_volume_kobo || 0) / 100
+    } });
+});
+
+app.get("/admin/dashboard/trend", requireSession, requireAdmin, async (req, res) => {
+    const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 90);
+    const result = await pool.query(`SELECT day::date AS date, COALESCE(SUM(amount_kobo), 0) AS volume_kobo
+        FROM generate_series(CURRENT_DATE - ($1::int - 1), CURRENT_DATE, INTERVAL '1 day') AS day
+        LEFT JOIN vtu_transactions ON created_at::date = day::date AND status = 'success'
+        GROUP BY day::date ORDER BY day::date`, [days]);
+    res.json({ trend: result.rows.map((row) => ({ date: row.date, volume: Number(row.volume_kobo || 0) / 100 })) });
+});
+
+app.get("/admin/dashboard/revenue-by-type", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(`SELECT type, COUNT(*)::int AS count, COALESCE(SUM(amount_kobo), 0) AS volume_kobo
+        FROM vtu_transactions WHERE status = 'success' GROUP BY type ORDER BY volume_kobo DESC`);
+    res.json({ revenue: result.rows.map((row) => ({ type: row.type, count: row.count, volume: Number(row.volume_kobo || 0) / 100 })) });
+});
+
+app.get("/admin/dashboard/today", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(`SELECT
+        (SELECT COUNT(*) FROM vtu_transactions WHERE created_at >= CURRENT_DATE) AS transactions,
+        (SELECT COALESCE(SUM(amount_kobo), 0) FROM vtu_transactions WHERE created_at >= CURRENT_DATE AND status = 'success') AS volume_kobo,
+        (SELECT COUNT(DISTINCT user_id) FROM vtu_transactions WHERE created_at >= CURRENT_DATE) AS active_users`);
+    const row = result.rows[0] || {};
+    res.json({ today: { transactions: Number(row.transactions || 0), volume: Number(row.volume_kobo || 0) / 100, activeUsers: Number(row.active_users || 0) } });
+});
+
+app.get("/admin/users", requireSession, requireAdmin, async (req, res) => {
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
+    const offset = (page - 1) * limit;
+    const search = typeof req.query.search === "string" ? `%${req.query.search.trim()}%` : "%";
+    const status = typeof req.query.status === "string" && ["active", "blocked"].includes(req.query.status) ? req.query.status : null;
+    const [rows, count] = await Promise.all([
+        pool.query(`SELECT u.id, u.username, u.full_name, u.email, u.phone, u.status, u.role, u.created_at,
+                           COALESCE(w.balance_kobo, 0) AS balance_kobo
+                    FROM users u LEFT JOIN wallets w ON w.user_id = u.id
+                    WHERE u.role = 'user' AND (u.username ILIKE $1 OR COALESCE(u.email, '') ILIKE $1 OR COALESCE(u.phone, '') ILIKE $1)
+                      AND ($2::text IS NULL OR u.status = $2)
+                    ORDER BY u.created_at DESC LIMIT $3 OFFSET $4`, [search, status, limit, offset]),
+        pool.query(`SELECT COUNT(*) FROM users u WHERE u.role = 'user' AND (u.username ILIKE $1 OR COALESCE(u.email, '') ILIKE $1 OR COALESCE(u.phone, '') ILIKE $1) AND ($2::text IS NULL OR u.status = $2)`, [search, status])
+    ]);
+    res.json({ users: rows.rows.map((row) => ({ ...row, balance: Number(row.balance_kobo || 0) / 100 })), page, limit, total: Number(count.rows[0].count) });
+});
+
+app.get("/admin/users/:userId", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(`SELECT u.id, u.username, u.full_name, u.email, u.phone, u.status, u.role, u.created_at,
+        COALESCE(w.balance_kobo, 0) AS balance_kobo, ap.status AS tier FROM users u
+        LEFT JOIN wallets w ON w.user_id = u.id LEFT JOIN agent_profiles ap ON ap.user_id = u.id WHERE u.id = $1`, [Number(req.params.userId)]);
+    if (!result.rows[0]) return res.status(404).json({ message: "User not found" });
+    res.json({ user: { ...result.rows[0], balance: Number(result.rows[0].balance_kobo || 0) / 100 } });
+});
+
+app.get("/admin/users/:userId/history", requireSession, requireAdmin, async (req, res) => {
+    const userId = Number(req.params.userId);
+    const result = await pool.query(`SELECT reference AS id, 'deposit' AS type, amount_kobo, status, created_at FROM deposits WHERE user_id = $1
+        UNION ALL SELECT reference AS id, type, amount_kobo, status, created_at FROM vtu_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200`, [userId]);
+    res.json({ history: result.rows.map((row) => ({ ...row, amount: Number(row.amount_kobo || 0) / 100 })) });
+});
+
+app.patch("/admin/users/:userId/status", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+    const status = req.body?.status;
+    if (!["active", "blocked"].includes(status)) return res.status(400).json({ message: "Invalid account status" });
+    const result = await pool.query("UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2 AND role = 'user' RETURNING id, username, status", [status, Number(req.params.userId)]);
+    if (!result.rows[0]) return res.status(404).json({ message: "User not found" });
+    await pool.query("INSERT INTO audit_logs (user_id, action, details) VALUES ($1, 'admin.user_status_changed', $2)", [req.session.sub, { targetUserId: Number(req.params.userId), status }]);
+    res.json({ user: result.rows[0] });
+});
+
+app.post("/admin/users/:userId/ledger", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+    const amount = Number(req.body?.amount);
+    const direction = req.body?.direction;
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    const idempotencyKey = req.headers["idempotency-key"];
+    if (!Number.isInteger(amount) || amount <= 0 || !["credit", "debit"].includes(direction) || !reason || typeof idempotencyKey !== "string") return res.status(400).json({ message: "Valid direction, amount, reason, and Idempotency-Key are required" });
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        const existing = await client.query("SELECT id FROM wallet_ledger WHERE idempotency_key = $1 FOR UPDATE", [idempotencyKey]);
+        if (existing.rows[0]) {
+            await client.query("COMMIT");
+            return res.status(200).json({ message: "Ledger adjustment already applied", idempotencyKey });
+        }
+        const wallet = await client.query("UPDATE wallets SET balance_kobo = balance_kobo + $1, updated_at = NOW() WHERE user_id = $2 AND balance_kobo + $1 >= 0 RETURNING balance_kobo", [direction === "credit" ? amount * 100 : -amount * 100, Number(req.params.userId)]);
+        if (!wallet.rows[0]) { await client.query("ROLLBACK"); return res.status(400).json({ message: "User not found or insufficient balance" }); }
+        await client.query(`INSERT INTO wallet_ledger (user_id, entry_type, amount_kobo, balance_after_kobo, idempotency_key) VALUES ($1, 'commission', $2, $3, $4) ON CONFLICT DO NOTHING`, [Number(req.params.userId), direction === "credit" ? amount * 100 : -amount * 100, wallet.rows[0].balance_kobo, idempotencyKey]);
+        await client.query("INSERT INTO audit_logs (user_id, action, details) VALUES ($1, 'admin.ledger_adjusted', $2)", [req.session.sub, { targetUserId: Number(req.params.userId), direction, amount, reason, idempotencyKey }]);
+        await client.query("COMMIT");
+        res.json({ balance: Number(wallet.rows[0].balance_kobo) / 100 });
+    } catch (error) { await client.query("ROLLBACK"); console.error(error); res.status(500).json({ message: "Could not post ledger adjustment" }); } finally { client.release(); }
+});
+
+app.get("/admin/transactions", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(`SELECT vt.reference AS id, vt.type, vt.network, vt.phone, vt.amount_kobo, vt.status, vt.provider, vt.provider_reference, vt.created_at, u.username
+        FROM vtu_transactions vt JOIN users u ON u.id = vt.user_id ORDER BY vt.created_at DESC LIMIT 200`);
+    res.json({ transactions: result.rows.map((row) => ({ ...row, amount: Number(row.amount_kobo || 0) / 100 })) });
+});
+
+app.get("/admin/audit-log", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(`SELECT a.id, a.action, a.details, a.ip_address, a.created_at, u.username AS actor
+        FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.created_at DESC LIMIT 300`);
+    res.json({ auditLog: result.rows });
 });
 
 app.get("/admin/analytics", requireSession, requireAdmin, async (req, res) => {

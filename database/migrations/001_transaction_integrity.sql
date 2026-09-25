@@ -105,6 +105,9 @@ END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS wallet_ledger_deposit_entry_idx
     ON wallet_ledger(deposit_id, entry_type) WHERE deposit_id IS NOT NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS wallet_ledger_idempotency_key_idx
+    ON wallet_ledger(idempotency_key) WHERE idempotency_key IS NOT NULL;
+
 CREATE OR REPLACE FUNCTION protect_terminal_transaction_status()
 RETURNS TRIGGER AS $$
 BEGIN
