@@ -115,7 +115,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         referralEarnings: Number(serverUser.referralEarnings || 0),
         tierLabel: serverUser.agent_status === 'verified' ? 'VERIFIED AGENT' : previous.tierLabel,
         biometricsEnabled: serverUser.biometrics_enabled !== false,
-        appLockEnabled: serverUser.app_lock_enabled !== false,
+        appLockEnabled: serverUser.app_lock_enabled === true,
       }));
       const serverAccount = serverUser.virtualAccount as Record<string, unknown> | null | undefined;
       setVirtualAccounts(serverAccount ? [{

@@ -137,14 +137,14 @@ export const AuthWelcomeView: React.FC<AuthWelcomeViewProps> = ({
           </View>
 
           <View style={styles.storeBadges}>
-            <Pressable style={[styles.storeBadge, { backgroundColor: '#0B0C10', borderColor: 'rgba(255,255,255,0.14)' }]}>
+            <View style={[styles.storeBadge, { backgroundColor: '#0B0C10', borderColor: 'rgba(255,255,255,0.14)' }]}>
               <MaterialIcons name="apple" size={20} color="#FFFFFF" />
               <Text style={styles.storeBadgeText}>App Store</Text>
-            </Pressable>
-            <Pressable style={[styles.storeBadge, { backgroundColor: '#0B0C10', borderColor: 'rgba(255,255,255,0.14)' }]}>
+            </View>
+            <View style={[styles.storeBadge, { backgroundColor: '#0B0C10', borderColor: 'rgba(255,255,255,0.14)' }]}>
               <MaterialIcons name="play-arrow" size={20} color="#FFFFFF" />
               <Text style={styles.storeBadgeText}>Google Play</Text>
-            </Pressable>
+            </View>
           </View>
 
           <View style={styles.trustRow}>

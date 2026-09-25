@@ -708,6 +708,18 @@ app.get("/", (req, res) => {
     });
 });
 
+app.get("/health/config", (req, res) => {
+    res.json({
+        status: "ok",
+        databaseConfigured: Boolean(process.env.DB_HOST || process.env.DATABASE_URL),
+        redisConfigured: Boolean(process.env.REDIS_URL),
+        paystackConfigured: Boolean(PAYSTACK_SECRET_KEY),
+        vtugateConfigured: Boolean(process.env.VTU_GATE_API_KEY),
+        fallbackDisabled: !process.env.VTU_FALLBACK_PROVIDER,
+        environment: process.env.NODE_ENV || "development"
+    });
+});
+
 app.get("/test-db", async (req, res) => {
     try {
         const result = await pool.query("SELECT NOW()");

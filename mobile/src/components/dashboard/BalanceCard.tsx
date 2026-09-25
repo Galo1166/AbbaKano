@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Palette, Rounded, Spacing, Typography } from '@/constants/theme';
+import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 
 interface BalanceCardProps {
@@ -20,7 +20,9 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
     isBalanceMasked,
     toggleBalanceMask,
     user,
+    theme: Palette,
   } = useApp();
+  const styles = useMemo(() => getStyles(Palette), [Palette]);
 
   const formattedMain = `₦${mainBalance.toLocaleString('en-NG', {
     minimumFractionDigits: 2,
@@ -73,6 +75,8 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         <Pressable
           style={({ pressed }) => [styles.actionButton, pressed && styles.btnPressed]}
           onPress={onTransferPress}
+          disabled={!onTransferPress}
+          accessibilityState={{ disabled: !onTransferPress }}
         >
           <MaterialCommunityIcons name="swap-horizontal" size={18} color={Palette.onSurface} />
           <Text style={styles.actionText}>Transfer</Text>
@@ -81,6 +85,8 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         <Pressable
           style={({ pressed }) => [styles.actionButton, pressed && styles.btnPressed]}
           onPress={onHistoryPress}
+          disabled={!onHistoryPress}
+          accessibilityState={{ disabled: !onHistoryPress }}
         >
           <MaterialCommunityIcons name="file-document-outline" size={18} color={Palette.onSurface} />
           <Text style={styles.actionText}>Ledger</Text>
@@ -90,7 +96,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (Palette: PaletteType) => StyleSheet.create({
   cardContainer: {
     backgroundColor: Palette.surface,
     borderRadius: Rounded.xl,
