@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Linking, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp, useTheme } from '@/context/AppContext';
 import { AppBottomNav, AppTabKey } from '@/components/navigation/AppBottomNav';
@@ -26,7 +26,7 @@ import { ForgotPasswordView } from '@/views/ForgotPasswordView';
 import { CheckoutSheet } from '@/components/modals/CheckoutSheet';
 import { PinAuthModal } from '@/components/modals/PinAuthModal';
 import { ReceiptModal } from '@/components/modals/ReceiptModal';
-import { apiPost } from '@/lib/api';
+import { apiPost, hasAuthToken } from '@/lib/api';
 import { AppLockScreen } from '@/components/AppLockScreen';
 
 type AuthState = 'authenticated' | 'welcome' | 'login' | 'register' | 'pin_setup' | 'forgot_password';
@@ -40,7 +40,10 @@ export default function App() {
   const [showReferEarn, setShowReferEarn] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [isAppLocked, setIsAppLocked] = useState(false);
+  const [isAppLocked, setIsAppLocked] = useState(() => (
+    typeof window !== 'undefined' && hasAuthToken()
+  ));
+  const [pinSetupRequiresCurrent, setPinSetupRequiresCurrent] = useState(false);
 
   const { effectiveTheme, sessionStatus, refreshServerState, logout, user } = useApp();
   const T = useTheme();
@@ -69,6 +72,29 @@ export default function App() {
     if (!params.get('reference') && !params.get('trxref')) return;
     setActiveTab('home');
     setShowFundWallet(false);
+  }, []);
+
+  useEffect(() => {
+    const isPaymentReturn = (url: string) => {
+      try {
+        const parsedUrl = new URL(url);
+        return Boolean(parsedUrl.searchParams.get('reference') || parsedUrl.searchParams.get('trxref'));
+      } catch {
+        return false;
+      }
+    };
+
+    const handlePaymentReturn = (url: string) => {
+      if (!isPaymentReturn(url)) return;
+      setActiveTab('home');
+      setShowFundWallet(false);
+    };
+
+    void Linking.getInitialURL().then((url) => {
+      if (url) handlePaymentReturn(url);
+    });
+    const subscription = Linking.addEventListener('url', ({ url }) => handlePaymentReturn(url));
+    return () => subscription.remove();
   }, []);
 
   if (sessionStatus === 'loading') {
@@ -167,7 +193,9 @@ export default function App() {
     return (
       <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
         <AuthPinSetupView
+          requiresCurrentPin={pinSetupRequiresCurrent}
           onPinCompleted={() => {
+            setPinSetupRequiresCurrent(false);
             setActiveTab('home');
             setAuthState('authenticated');
           }}
@@ -224,7 +252,10 @@ export default function App() {
                 onNavigateToFundWallet={() => setShowFundWallet(true)}
                 onNavigateToSupport={() => setShowSupport(true)}
                 onNavigateToAbout={() => setShowAbout(true)}
-                onNavigateToPinSetup={() => setAuthState('pin_setup')}
+                onNavigateToPinSetup={() => {
+                  setPinSetupRequiresCurrent(true);
+                  setAuthState('pin_setup');
+                }}
                 onSignOut={() => {
                   void logout();
                   setActiveTab('home');

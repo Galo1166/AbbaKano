@@ -13,6 +13,7 @@ import { apiPost, ApiError } from '@/lib/api';
 import { saveTransactionPin } from '@/lib/biometricAuth';
 
 interface AuthPinSetupViewProps {
+  requiresCurrentPin?: boolean;
   onPinCompleted: (pin: string) => void;
 }
 
@@ -20,24 +21,26 @@ const NUMPAD = [
   ['1', '2', '3'],
   ['4', '5', '6'],
   ['7', '8', '9'],
-  ['fingerprint', '0', 'backspace'],
+  ['', '0', 'backspace'],
 ];
 
 const NUMPAD_LABELS: Record<string, string> = {
   '1': '', '2': 'ABC', '3': 'DEF',
   '4': 'GHI', '5': 'JKL', '6': 'MNO',
   '7': 'PQRS', '8': 'TUV', '9': 'WXYZ',
-  '0': '', 'fingerprint': '', 'backspace': '',
+  '0': '', 'backspace': '', '': '',
 };
 
 export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
+  requiresCurrentPin = false,
   onPinCompleted,
 }) => {
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
+  const [currentPin, setCurrentPin] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [stage, setStage] = useState<'setup' | 'confirm'>('setup');
+  const [stage, setStage] = useState<'current' | 'setup' | 'confirm'>(requiresCurrentPin ? 'current' : 'setup');
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -45,7 +48,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
     if (saving) return;
     setSaving(true);
     try {
-      await apiPost('/me/transaction-pin', { pin: newPin });
+      await apiPost('/me/transaction-pin', { pin: newPin, ...(requiresCurrentPin ? { currentPin } : {}) });
       await saveTransactionPin(newPin).catch(() => {});
       setFeedback({ type: 'success', message: 'Transaction PIN changed successfully.' });
       setTimeout(() => onPinCompleted(newPin), 1200);
@@ -53,21 +56,45 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
       setFeedback({ type: 'error', message: error instanceof ApiError ? error.message : 'Could not save your transaction PIN.' });
       setPin('');
       setConfirmPin('');
+      setCurrentPin('');
+      setStage(requiresCurrentPin ? 'current' : 'setup');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const verifyCurrentPin = async (pinValue: string) => {
+    if (saving) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      await apiPost('/me/transaction-pin/verify-current', { pin: pinValue });
+      setCurrentPin(pinValue);
       setStage('setup');
+    } catch (error) {
+      setFeedback({ type: 'error', message: error instanceof ApiError ? error.message : 'Current PIN is incorrect' });
+      setCurrentPin('');
     } finally {
       setSaving(false);
     }
   };
 
   const handleKeyPress = (key: string) => {
-    if (key === 'fingerprint') return;
+    if (key === '') return;
     if (key === 'backspace') {
-      if (stage === 'setup') setPin(p => p.slice(0, -1));
+      if (stage === 'current') setCurrentPin(p => p.slice(0, -1));
+      else if (stage === 'setup') setPin(p => p.slice(0, -1));
       else setConfirmPin(p => p.slice(0, -1));
       return;
     }
 
-    if (stage === 'setup') {
+    if (stage === 'current') {
+      if (currentPin.length < 4) {
+        const nextCurrentPin = currentPin + key;
+        setCurrentPin(nextCurrentPin);
+        if (nextCurrentPin.length === 4) setTimeout(() => void verifyCurrentPin(nextCurrentPin), 300);
+      }
+    } else if (stage === 'setup') {
       if (pin.length < 4) {
         const newPin = pin + key;
         setPin(newPin);
@@ -95,7 +122,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
     }
   };
 
-  const currentPin = stage === 'setup' ? pin : confirmPin;
+  const displayedPin = stage === 'current' ? currentPin : stage === 'setup' ? pin : confirmPin;
 
   return (
     <View style={styles.container}>
@@ -105,12 +132,14 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
           <MaterialIcons name="lock" size={32} color={Palette.primary} />
         </View>
         <Text style={styles.headerTitle}>
-          {stage === 'setup' ? 'Create Security PIN' : 'Confirm Your PIN'}
+          {stage === 'current' ? 'Enter Current PIN' : stage === 'setup' ? (requiresCurrentPin ? 'Create New PIN' : 'Create Security PIN') : 'Confirm New PIN'}
         </Text>
         <Text style={styles.headerSubtitle}>
-          {stage === 'setup'
-            ? 'Set up a 4-digit PIN to secure your AbbaKano wallet'
-            : 'Re-enter your 4-digit PIN to confirm'}
+          {stage === 'current'
+            ? 'Enter your current 4-digit PIN to continue'
+            : stage === 'setup'
+              ? 'Create a new 4-digit PIN for your wallet'
+              : 'Enter your new 4-digit PIN again to confirm'}
         </Text>
       </View>
 
@@ -121,7 +150,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
             key={i}
             style={[
               styles.pinDot,
-              currentPin.length > i && styles.pinDotFilled,
+              displayedPin.length > i && styles.pinDotFilled,
             ]}
           />
         ))}
@@ -142,16 +171,13 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
                 key={key}
                 style={({ pressed }) => [
                   styles.numpadKey,
-                  key === 'fingerprint' && styles.numpadKeySpecial,
                   key === 'backspace' && styles.numpadKeySpecial,
                   pressed && styles.numpadKeyPressed,
                 ]}
                 onPress={() => handleKeyPress(key)}
                 disabled={saving}
               >
-                {key === 'fingerprint' ? (
-                  <MaterialIcons name="fingerprint" size={28} color={Palette.onSurface} />
-                ) : key === 'backspace' ? (
+                {key === '' ? null : key === 'backspace' ? (
                   <MaterialIcons name="backspace" size={24} color={Palette.onSurface} />
                 ) : (
                   <View style={styles.numpadKeyContent}>

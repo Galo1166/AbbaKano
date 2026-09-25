@@ -6,9 +6,9 @@ const { RedisStore } = require("rate-limit-redis");
 const { createClient } = require("redis");
 const jwt = require("jsonwebtoken");
 const pool = require("./db");
-const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, resolvePlanToken } = require("./vtu-provider");
+const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken } = require("./vtu-provider");
 const { calculateCreditAmount, isVerifiedPaystackDeposit } = require("./transaction-state");
-const { buildFallbackDedicatedAccount } = require("./dedicated-account");
+const { buildFallbackDedicatedAccount, createGafiapayAccount } = require("./dedicated-account");
 const { awardReferralCommission } = require("./referral");
 const {
     generateRegistrationOptions,
@@ -21,8 +21,9 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const AUTH_SECRET = process.env.AUTH_SECRET;
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || "http://localhost:5173/";
+const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || "http://localhost:3000/payments/paystack/callback";
 const PAYSTACK_FRONTEND_URL = process.env.PAYSTACK_FRONTEND_URL || "http://localhost:5173/";
+const PAYSTACK_APP_CALLBACK_URL = process.env.PAYSTACK_APP_CALLBACK_URL || "abbakanodatasubapp://payment";
 const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || (process.env.NODE_ENV === "production" ? "abbakano-1.onrender.com" : "localhost");
 const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || (process.env.NODE_ENV === "production" ? "https://abbakano-1.onrender.com" : "http://localhost:5173");
 const SESSION_COOKIE = "session";
@@ -754,20 +755,6 @@ app.post("/signup", authLimiter, async (req, res) => {
             [user.id]
         );
 
-        const dedicatedAccount = await createDedicatedAccount(user);
-        if (!dedicatedAccount.dedicatedAccountNumber || !dedicatedAccount.dedicatedAccountReference) {
-            throw new Error("Paystack returned an incomplete dedicated account");
-        }
-
-        await client.query(
-            `UPDATE users
-             SET dedicated_account_number = $1,
-                 dedicated_account_reference = $2,
-                 updated_at = NOW()
-             WHERE id = $3`,
-            [dedicatedAccount.dedicatedAccountNumber, dedicatedAccount.dedicatedAccountReference, user.id]
-        );
-
         await client.query("COMMIT");
 
         const authToken = setSessionCookie(res, user);
@@ -777,20 +764,12 @@ app.post("/signup", authLimiter, async (req, res) => {
             message: "Account created successfully",
             authToken,
             csrfToken,
-            user: { ...user, dedicatedAccountNumber: dedicatedAccount.dedicatedAccountNumber }
+            user
         });
     } catch (error) {
         await client.query("ROLLBACK");
         if (error.code === "23505") {
             return res.status(409).json({ message: "Phone or email is already registered" });
-        }
-
-        if (error.message?.startsWith("Dedicated account provisioning failed")
-            || error.message === "PAYSTACK_SECRET_KEY is required to create a dedicated account"
-            || error.message === "Paystack returned an incomplete dedicated account") {
-            return res.status(502).json({
-                message: "Could not create your dedicated account. Please try again later."
-            });
         }
 
         console.error(error);
@@ -1060,6 +1039,9 @@ app.get("/me", requireSession, async (req, res) => {
                       WHERE user_id = u.id AND entry_type = 'earned'), 0) AS referral_earnings_kobo,
             u.biometrics_enabled, u.app_lock_enabled,
             u.dedicated_account_number, u.dedicated_account_reference,
+            u.virtual_account_provider, u.virtual_account_number, u.virtual_account_bank_name,
+            u.virtual_account_name, u.virtual_account_status,
+            u.virtual_account_error, u.virtual_account_created_at,
             u.transaction_pin_hash IS NOT NULL AS has_transaction_pin,
             ap.status AS agent_status, ap.daily_limit_kobo
          FROM users u
@@ -1073,11 +1055,73 @@ app.get("/me", requireSession, async (req, res) => {
     const user = result.rows[0];
     res.json({ user: {
         ...user,
+        virtualAccount: user.virtual_account_number ? {
+            provider: user.virtual_account_provider,
+            bankName: user.virtual_account_bank_name,
+            accountNumber: user.virtual_account_number,
+            accountName: user.virtual_account_name,
+            status: user.virtual_account_status,
+            error: user.virtual_account_error,
+            createdAt: user.virtual_account_created_at
+        } : null,
         walletBalance: Number(user.wallet_balance_kobo) / 100,
         referralCommissionBalance: Number(user.referral_commission_balance_kobo) / 100,
         referralCount: Number(user.referral_count || 0),
         referralEarnings: Number(user.referral_earnings_kobo || 0) / 100
     } });
+});
+
+app.post("/me/virtual-account", requireSession, requireCsrf, async (req, res) => {
+    const identityType = req.body?.identityType === "nin" ? "nin" : req.body?.identityType === "bvn" ? "bvn" : null;
+    const identityValue = typeof req.body?.identityValue === "string" ? req.body.identityValue.replace(/\D/g, "") : "";
+    if (!identityType || !/^\d{11}$/.test(identityValue)) {
+        return res.status(400).json({ message: "Enter a valid 11-digit BVN or NIN" });
+    }
+
+    const userResult = await pool.query(
+        `SELECT id, full_name, email, virtual_account_number, virtual_account_status
+         FROM users WHERE id = $1`,
+        [req.session.sub]
+    );
+    const user = userResult.rows[0];
+    if (!user) return res.status(401).json({ message: "Authentication required" });
+    if (user.virtual_account_number && user.virtual_account_status === "active") {
+        return res.json({ status: "active", message: "Virtual account already exists" });
+    }
+
+    await pool.query(
+        `UPDATE users SET virtual_account_status = 'pending', virtual_account_error = NULL, updated_at = NOW() WHERE id = $1`,
+        [user.id]
+    );
+    try {
+        const account = await createGafiapayAccount({
+            name: user.full_name,
+            email: user.email,
+            ...(identityType === "bvn" ? { bvn: identityValue } : { nin: identityValue })
+        });
+        await pool.query(
+            `UPDATE users
+             SET virtual_account_provider = $1,
+                 virtual_account_number = $2,
+                 virtual_account_bank_name = $3,
+                 virtual_account_name = $4,
+                 virtual_account_reference = $5,
+                 virtual_account_status = 'active',
+                 virtual_account_created_at = NOW(),
+                 virtual_account_error = NULL,
+                 updated_at = NOW()
+             WHERE id = $6`,
+            [account.provider, account.accountNumber, account.bankName, account.accountName, account.providerReference, user.id]
+        );
+        return res.status(201).json({ status: "active", virtualAccount: account });
+    } catch (error) {
+        await pool.query(
+            `UPDATE users SET virtual_account_status = 'failed', virtual_account_error = $1, updated_at = NOW() WHERE id = $2`,
+            [error.message || "Could not create virtual account", user.id]
+        ).catch(() => {});
+        console.error("GafiaPay account generation failed:", error.message || error);
+        return res.status(502).json({ message: "Could not create your virtual account. Please try again." });
+    }
 });
 
 app.patch("/me/security-settings", requireSession, requireCsrf, async (req, res) => {
@@ -1167,6 +1211,18 @@ app.post("/me/transaction-pin", requireSession, async (req, res) => {
     const pinValidation = validateTransactionPin(req.body?.pin);
     if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });
 
+    const existing = await pool.query(
+        "SELECT transaction_pin_hash, transaction_pin_salt FROM users WHERE id = $1",
+        [req.session.sub]
+    );
+    const currentPin = req.body?.currentPin;
+    if (existing.rows[0]?.transaction_pin_hash) {
+        const currentPinValidation = validateTransactionPin(currentPin);
+        if (currentPinValidation.error || hashPin(currentPinValidation.pin, existing.rows[0].transaction_pin_salt) !== existing.rows[0].transaction_pin_hash) {
+            return res.status(401).json({ message: "Current PIN is incorrect" });
+        }
+    }
+
     const salt = crypto.randomBytes(16).toString("hex");
     const pinHash = hashPin(pinValidation.pin, salt);
 
@@ -1180,6 +1236,22 @@ app.post("/me/transaction-pin", requireSession, async (req, res) => {
     );
 
     res.json({ message: "Transaction PIN saved successfully" });
+});
+
+app.post("/me/transaction-pin/verify-current", requireSession, async (req, res) => {
+    const pinValidation = validateTransactionPin(req.body?.pin);
+    if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });
+
+    const result = await pool.query(
+        "SELECT transaction_pin_hash, transaction_pin_salt FROM users WHERE id = $1",
+        [req.session.sub]
+    );
+    const user = result.rows[0];
+    if (!user?.transaction_pin_hash || hashPin(pinValidation.pin, user.transaction_pin_salt) !== user.transaction_pin_hash) {
+        return res.status(401).json({ message: "Current PIN is incorrect" });
+    }
+
+    res.json({ verified: true });
 });
 
 app.post("/me/app-lock/verify", requireSession, async (req, res) => {
@@ -1628,6 +1700,7 @@ app.post("/payments/paystack/initialize", requireSession, requireCsrf, async (re
     const feeKobo = Number(req.body?.feeKobo || 0) * 100;
     const dedicatedAccountNumber = typeof req.body?.dedicatedAccountNumber === "string" ? req.body.dedicatedAccountNumber.trim() : null;
     const dedicatedAccountReference = typeof req.body?.dedicatedAccountReference === "string" ? req.body.dedicatedAccountReference.trim() : null;
+    const returnToApp = req.body?.returnToApp === true;
 
     if (!Number.isInteger(amount) || amount < 100 || amount > 1000000) {
         return res.status(400).json({ message: "Amount must be an integer between 100 and 1,000,000 naira" });
@@ -1656,7 +1729,9 @@ app.post("/payments/paystack/initialize", requireSession, requireCsrf, async (re
                 email: user.email,
                 amount: amount * 100,
                 reference,
-                callback_url: PAYSTACK_CALLBACK_URL,
+                callback_url: returnToApp
+                    ? `${PAYSTACK_CALLBACK_URL}${PAYSTACK_CALLBACK_URL.includes("?") ? "&" : "?"}return=app`
+                    : PAYSTACK_CALLBACK_URL,
                 metadata: {
                     user_id: String(user.id),
                     purpose: dedicatedAccountNumber ? "dedicated_account" : "wallet_deposit",
@@ -1681,8 +1756,14 @@ app.post("/payments/paystack/initialize", requireSession, requireCsrf, async (re
 
 app.get("/payments/paystack/callback", async (req, res) => {
     const reference = typeof req.query.reference === "string" ? req.query.reference : "";
+    const returnToApp = req.query.return === "app";
+    const returnUrl = returnToApp ? PAYSTACK_APP_CALLBACK_URL : PAYSTACK_FRONTEND_URL;
+    const redirectWith = (params) => {
+        const separator = returnUrl.includes("?") ? "&" : "?";
+        return res.redirect(`${returnUrl}${separator}${params}`);
+    };
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(reference)) {
-        return res.redirect(`${PAYSTACK_FRONTEND_URL}?payment=invalid`);
+        return redirectWith("payment=invalid");
     }
 
     const client = await pool.connect();
@@ -1692,7 +1773,7 @@ app.get("/payments/paystack/callback", async (req, res) => {
             [reference]
         );
         const deposit = depositResult.rows[0];
-        if (!deposit) return res.redirect(`${PAYSTACK_FRONTEND_URL}?payment=missing`);
+        if (!deposit) return redirectWith("payment=missing");
         if (deposit.status === "pending") {
             const payment = await paystackRequest(`/transaction/verify/${encodeURIComponent(reference)}`);
             const verified = isVerifiedPaystackDeposit(payment, { ...deposit, reference });
@@ -1706,11 +1787,11 @@ app.get("/payments/paystack/callback", async (req, res) => {
                 await client.query("COMMIT");
             }
         }
-        return res.redirect(`${PAYSTACK_FRONTEND_URL}?reference=${encodeURIComponent(reference)}`);
+        return redirectWith(`reference=${encodeURIComponent(reference)}`);
     } catch (error) {
         await client.query("ROLLBACK").catch(() => {});
         console.error(error);
-        return res.redirect(`${PAYSTACK_FRONTEND_URL}?reference=${encodeURIComponent(reference)}&payment=pending`);
+        return redirectWith(`reference=${encodeURIComponent(reference)}&payment=pending`);
     } finally {
         client.release();
     }
@@ -1860,16 +1941,47 @@ app.get("/vtu/plans", requireSession, async (req, res) => {
     }
 });
 
+app.get("/vtu/account-details", requireSession, async (req, res) => {
+    try {
+        res.json({ account: await getVtuGateAccountDetails() });
+    } catch (error) {
+        console.error(error);
+        res.status(502).json({ message: error.message || "Could not load VTU account details" });
+    }
+});
+
 app.get("/vtu/service-plans", requireSession, async (req, res) => {
     try {
         const service = req.query.service === "cable" || req.query.service === "electricity" ? req.query.service : null;
         const provider = typeof req.query.provider === "string" ? req.query.provider.trim() : "";
         const meterType = req.query.meterType === "postpaid" ? "postpaid" : "prepaid";
         if (!service || !provider) return res.status(400).json({ message: "Choose a supported service and provider" });
+        if (service === "cable" && process.env.VTU_GATE_API_KEY) {
+            const smartcardNumber = typeof req.query.smartcardNumber === "string" ? req.query.smartcardNumber.replace(/\D/g, "") : "";
+            if (!/^\d{10}$/.test(smartcardNumber)) return res.json({ plans: [] });
+            const user = await pool.query("SELECT phone FROM users WHERE id = $1", [req.session.sub]);
+            const result = await verifyVtuGateCable({ provider, smartcardNumber, phone: user.rows[0]?.phone || "" });
+            return res.json({ plans: result.plans });
+        }
         res.json({ plans: await getVtpassServicePlans({ service, provider, meterType }) });
     } catch (error) {
         console.error(error);
         res.status(502).json({ message: error.message || "Could not load service plans" });
+    }
+});
+
+app.post("/vtu/verify-electricity", requireSession, requireCsrf, async (req, res) => {
+    const provider = typeof req.body?.provider === "string" ? req.body.provider.trim().toLowerCase() : "";
+    const meterNumber = typeof req.body?.meterNumber === "string" ? req.body.meterNumber.replace(/\D/g, "") : "";
+    if (!provider || !/^\d{8,14}$/.test(meterNumber)) {
+        return res.status(400).json({ message: "Enter a valid meter number" });
+    }
+
+    try {
+        res.json(await verifyVtuGateElectricity({ provider, meterNo: meterNumber }));
+    } catch (error) {
+        console.error(error);
+        res.status(502).json({ message: error.message || "Could not verify electricity meter" });
     }
 });
 
@@ -1881,7 +1993,10 @@ app.post("/vtu/verify-cable", requireSession, requireCsrf, async (req, res) => {
     }
 
     try {
-        const result = await verifyVtpassCableCustomer({ provider, smartcardNumber });
+        const user = await pool.query("SELECT phone FROM users WHERE id = $1", [req.session.sub]);
+        const result = process.env.VTU_GATE_API_KEY
+            ? await verifyVtuGateCable({ provider, smartcardNumber, phone: user.rows[0]?.phone || "" })
+            : await verifyVtpassCableCustomer({ provider, smartcardNumber });
         if (!result.customerName) return res.status(502).json({ message: "VTPass did not return a customer name" });
         res.json(result);
     } catch (error) {

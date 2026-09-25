@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Appearance } from 'react-native';
+import { Appearance, Linking } from 'react-native';
 import {
   UserProfile,
   VirtualAccount,
@@ -7,7 +7,6 @@ import {
   TransactionType,
   KycTierInfo,
   MOCK_USER,
-  MOCK_VIRTUAL_ACCOUNTS,
   MOCK_TRANSACTIONS,
   MOCK_KYC_TIERS,
 } from '@/constants/mockData';
@@ -65,6 +64,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [referralCommissionBalance, setReferralCommissionBalance] = useState<number>(0);
   const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<TransactionRecord[]>(MOCK_TRANSACTIONS);
+    const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
   const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
   const [unreadNotifications, setUnreadNotifications] = useState<number>(3);
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('loading');
@@ -117,6 +117,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         biometricsEnabled: serverUser.biometrics_enabled !== false,
         appLockEnabled: serverUser.app_lock_enabled !== false,
       }));
+      const serverAccount = serverUser.virtualAccount as Record<string, unknown> | null | undefined;
+      setVirtualAccounts(serverAccount ? [{
+        provider: String(serverAccount.provider || ''),
+        bankName: String(serverAccount.bankName || 'Virtual Bank'),
+        accountNumber: String(serverAccount.accountNumber || ''),
+        accountName: String(serverAccount.accountName || ''),
+        status: serverAccount.status === 'pending' || serverAccount.status === 'failed' ? serverAccount.status : 'active',
+        error: serverAccount.error ? String(serverAccount.error) : null,
+      }] : []);
       setMainBalance(Number(walletResponse.balance || 0));
       setReferralCommissionBalance(Number(serverUser.referralCommissionBalance || 0));
       setTransactions(transactionsResponse.transactions.map((transaction) => {
@@ -176,18 +185,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    const getReference = (url: string): string | null => {
+      try {
+        const parsedUrl = new URL(url);
+        return parsedUrl.searchParams.get('reference') || parsedUrl.searchParams.get('trxref');
+      } catch {
+        return null;
+      }
+    };
 
-    const params = new URLSearchParams(window.location.search);
-    const reference = params.get('reference') || params.get('trxref');
-    if (!reference) return;
-
-    const verifyPayment = async () => {
+    const verifyPayment = async (reference: string) => {
       for (let attempt = 0; attempt < 5; attempt += 1) {
         try {
           await apiGet(`/payments/paystack/verify/${encodeURIComponent(reference)}`);
           await refreshServerState();
-          window.localStorage.removeItem('abbakano_pending_payment');
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem('abbakano_pending_payment');
+          }
+          if (typeof window !== 'undefined') {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            window.location.reload();
+          }
           break;
         } catch (error) {
           if (!(error instanceof ApiError) || error.status !== 202 || attempt === 4) {
@@ -196,13 +214,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             break;
           }
-          await new Promise((resolve) => window.setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       }
-      window.history.replaceState({}, document.title, window.location.pathname);
     };
 
-    void verifyPayment();
+    const handleUrl = (url: string) => {
+      const reference = getReference(url);
+      if (reference) void verifyPayment(reference);
+    };
+
+    if (typeof window !== 'undefined') {
+      const reference = getReference(window.location.href);
+      if (reference) {
+        void verifyPayment(reference);
+      }
+    }
+
+    void Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    });
+    const subscription = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    return () => subscription.remove();
   }, []);
 
   // ── Theme State ──────────────────────────────────────────────────────────────
@@ -309,7 +342,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         referralCommissionBalance,
         isBalanceMasked,
         toggleBalanceMask,
-        virtualAccounts: MOCK_VIRTUAL_ACCOUNTS,
+        virtualAccounts,
         transactions,
         kycTiers,
         addTransaction,

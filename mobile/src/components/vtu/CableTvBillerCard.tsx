@@ -62,7 +62,7 @@ export const CableTvBillerCard: React.FC = () => {
     setPlansError(null);
     try {
       const response = await apiGet<{ plans: CablePlan[] }>(
-        `/vtu/service-plans?service=cable&provider=${encodeURIComponent(provider.id)}`,
+        `/vtu/service-plans?service=cable&provider=${encodeURIComponent(provider.id)}&smartcardNumber=${encodeURIComponent(smartcardNumber)}`,
       );
       const nextPlans = (response.plans || []).map((plan) => ({
         ...plan,
@@ -82,8 +82,13 @@ export const CableTvBillerCard: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!/^\d{10}$/.test(smartcardNumber)) {
+      setPlans([]);
+      setSelectedPackageCode('');
+      return;
+    }
     void loadPlans(selectedProvider);
-  }, [selectedProvider]);
+  }, [selectedProvider, smartcardNumber]);
 
   useEffect(() => {
     setVerifiedCustomer(null);

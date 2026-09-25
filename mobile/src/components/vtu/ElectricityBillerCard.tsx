@@ -7,7 +7,7 @@ import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { apiGet, ApiError } from '@/lib/api';
+import { apiGet, apiPost, ApiError } from '@/lib/api';
 
 type ElectricityPlan = {
   code: string;
@@ -55,14 +55,24 @@ export const ElectricityBillerCard: React.FC = () => {
     }
   }, [paymentSuccessCount]);
 
-  // Simulate instant customer meter verification when 11 digits are entered
   useEffect(() => {
-    if (meterNumber.length === 11) {
-      setVerifiedCustomer('ALHAJI SANI BELLO • KANO METROPOLITAN');
-    } else {
-      setVerifiedCustomer(null);
-    }
-  }, [meterNumber]);
+    setVerifiedCustomer(null);
+    if (meterNumber.length < 8) return;
+
+    let cancelled = false;
+    void apiPost<{ customerName: string }>('/vtu/verify-electricity', {
+      provider: selectedDisCo.id,
+      meterNumber,
+    }).then((response) => {
+      if (!cancelled) setVerifiedCustomer(response.customerName || null);
+    }).catch(() => {
+      if (!cancelled) setVerifiedCustomer(null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [meterNumber, selectedDisCo.id]);
 
   const presetAmounts = ['1000', '2000', '3000', '5000', '10000', '20000'];
 

@@ -3,6 +3,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { apiPost, ApiError } from '@/lib/api';
 import { PaletteType, Typography } from '@/constants/theme';
+import { authenticateBiometric } from '@/lib/biometricAuth';
 
 type AppLockScreenProps = { theme: PaletteType; onUnlock: () => void };
 
@@ -23,6 +24,12 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({ theme, onUnlock })
     }
   };
   const press = (key: string) => {
+    if (key === 'fingerprint') {
+      void authenticateBiometric('Unlock AbbaKano').then((authenticated) => {
+        if (authenticated) onUnlock();
+      });
+      return;
+    }
     if (key === 'backspace') return setPin((current) => current.slice(0, -1));
     if (pin.length >= 4) return;
     const next = pin + key;
@@ -34,7 +41,7 @@ export const AppLockScreen: React.FC<AppLockScreenProps> = ({ theme, onUnlock })
     <Text style={[styles.title, { color: theme.onSurface }]}>App Locked</Text>
     <Text style={[styles.subtitle, { color: theme.onSurfaceVariant }]}>Enter your 4-digit PIN to continue</Text>
     <View style={styles.dots}>{[0, 1, 2, 3].map((index) => <View key={index} style={[styles.dot, { borderColor: theme.primary }, pin.length > index && { backgroundColor: theme.primary }]} />)}</View>
-    <View style={styles.pad}>{['1','2','3','4','5','6','7','8','9','0','backspace'].map((key) => <Pressable key={key} onPress={() => press(key)} disabled={checking} style={styles.key}>{key === 'backspace' ? <MaterialIcons name="backspace" size={22} color={theme.onSurface} /> : <Text style={[styles.digit, { color: theme.onSurface }]}>{key}</Text>}</Pressable>)}</View>
+    <View style={styles.pad}>{['1','2','3','4','5','6','7','8','9','fingerprint','0','backspace'].map((key) => <Pressable key={key} onPress={() => press(key)} disabled={checking} style={styles.key}>{key === 'fingerprint' ? <MaterialIcons name="fingerprint" size={28} color={theme.onSurface} /> : key === 'backspace' ? <MaterialIcons name="backspace" size={22} color={theme.onSurface} /> : <Text style={[styles.digit, { color: theme.onSurface }]}>{key}</Text>}</Pressable>)}</View>
   </View>;
 };
 
