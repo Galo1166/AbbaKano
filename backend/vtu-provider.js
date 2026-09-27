@@ -11,6 +11,8 @@ const VTU_GATE_BASE_URL = process.env.VTU_GATE_BASE_URL;
 const VTU_GATE_API_KEY = process.env.VTU_GATE_API_KEY;
 const VTU_GATE_PROVIDER = new VtuGateProvider({ baseUrl: VTU_GATE_BASE_URL, apiKey: VTU_GATE_API_KEY });
 const PRIMARY_PROVIDER = (process.env.VTU_PRIMARY_PROVIDER || (VTPASS_BASE_URL ? "vtpass" : "smeplug")).toLowerCase();
+const VTU_PLAN_CACHE_TTL_MS = Number(process.env.VTU_PLAN_CACHE_TTL_MS || 300000);
+const vtuPlanCache = new Map();
 const FALLBACK_PROVIDER = String(process.env.VTU_FALLBACK_PROVIDER || "").trim().toLowerCase();
 const VTPASS_FALLBACK_CODES = new Set((process.env.VTPASS_FALLBACK_CODES || "028").split(",").map((code) => code.trim()).filter(Boolean));
 const PROVIDER_TIMEOUT_MS = Number(process.env.VTU_PROVIDER_TIMEOUT_MS || 15000);
@@ -122,14 +124,23 @@ function resolvePlanToken(token, network) {
         const plan = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
         const normalizedNetwork = typeof network === "string" ? network.trim().toUpperCase() : "";
         const planNetwork = typeof plan.network === "string" ? plan.network.trim().toUpperCase() : "";
+        const planCode = typeof plan.code === "string" ? plan.code : typeof plan.providerCode === "string" ? plan.providerCode : "";
         const hasValidNetwork = !planNetwork || planNetwork === normalizedNetwork || planNetwork === "MOBILE";
 
         if (plan.expiresAt < Math.floor(Date.now() / 1000)
             || !hasValidNetwork
             || !["vtpass", "smeplug", "vtugate"].includes(plan.provider)
-            || typeof plan.code !== "string" || !Number.isFinite(Number(plan.price))) {
+            || !planCode
+            || !Number.isFinite(Number(plan.price))) {
             return { error: "This data plan is no longer available" };
         }
+
+        if (planNetwork && planNetwork !== normalizedNetwork && planNetwork !== "MOBILE") {
+            return { error: "This data plan is not available for the selected network" };
+        }
+
+        plan.code = planCode;
+        plan.providerCode = planCode;
         return { plan };
     } catch {
         return { error: "Choose a valid data plan" };
@@ -446,8 +457,11 @@ async function getVtuGatePlans({ network, planType } = {}) {
 
 async function getPlans({ network, planType } = {}) {
     if (isVtuGateConfigured()) {
+        const cacheKey = `${String(network || "all").toUpperCase()}:${String(planType || "all").toUpperCase()}`;
+        const cached = vtuPlanCache.get(cacheKey);
+        if (cached && Date.now() - cached.createdAt < VTU_PLAN_CACHE_TTL_MS) return cached.plans;
         const plans = await getVtuGatePlans({ network, planType });
-        return plans.map((plan) => ({
+        const normalizedPlans = plans.map((plan) => ({
             label: plan.label,
             price: plan.price,
             code: plan.providerCode,
@@ -455,6 +469,8 @@ async function getPlans({ network, planType } = {}) {
             provider: plan.provider,
             selectionToken: encodePlanToken(plan)
         }));
+        vtuPlanCache.set(cacheKey, { createdAt: Date.now(), plans: normalizedPlans });
+        return normalizedPlans;
     }
 
     assertConfigured();
@@ -641,7 +657,7 @@ async function purchase({ type, network, phone, amount, planCode, provider, refe
     throw lastError;
 }
 
-async function purchaseWithVtuGate({ type, network, phone, amount, planCode, reference }) {
+async function purchaseWithVtuGate({ type, network, phone, amount, planCode, reference, meterNumber, smartcardNumber }) {
     if (!isVtuGateConfigured()) {
         throw new ProviderError("VTU Gate is not configured", { provider: "vtugate", retryable: false });
     }
@@ -660,7 +676,14 @@ async function purchaseWithVtuGate({ type, network, phone, amount, planCode, ref
         serviceId = Number(parts[0]);
         providerPlanCode = parts[1];
         const planName = parts[2] ? decodeURIComponent(parts.slice(2).join(":")) : providerPlanCode;
-        const response = await VTU_GATE_PROVIDER.buyCableTv({ serviceId, phone, smartcardNumber: phone, amount, planCode: providerPlanCode, planName });
+        const response = await VTU_GATE_PROVIDER.buyCableTv({
+            serviceId,
+            phone,
+            smartcardNumber: String(smartcardNumber || "").replace(/\D/g, ""),
+            amount,
+            planCode: providerPlanCode,
+            planName
+        });
         return {
             provider: "vtugate",
             providerRequestId: String(response.data?.transaction_id || reference),
@@ -671,7 +694,8 @@ async function purchaseWithVtuGate({ type, network, phone, amount, planCode, ref
         const separator = String(planCode || "").indexOf(":");
         if (separator <= 0) throw new ProviderError("VTU Gate electricity plan is missing its service ID", { provider: "vtugate", retryable: false });
         serviceId = Number(String(planCode).slice(0, separator));
-        return VTU_GATE_PROVIDER.buyElectricity({ serviceId, meterNo: phone, disco: network, amount, phoneNumber: phone }).then((response) => ({
+        const meterNo = String(meterNumber || "").replace(/\D/g, "");
+        return VTU_GATE_PROVIDER.buyElectricity({ serviceId, meterNo, disco: network, amount, phoneNumber: phone }).then((response) => ({
             provider: "vtugate",
             providerRequestId: String(response.data?.transaction_id || reference),
             providerReference: String(response.data?.external_reference || response.data?.transaction_id || reference),

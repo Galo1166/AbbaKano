@@ -18,7 +18,7 @@ test("awardReferralCommission credits the referrer balance and ledger", async ()
 
     assert.equal(result.credited, true);
     assert.equal(result.amountKobo, 25000);
-    assert.equal(REFERRAL_COMMISSION_KOBO, 20000);
+    assert.equal(REFERRAL_COMMISSION_KOBO, 10000);
     assert.equal(calls.length, 2);
     assert.match(calls[0].sql, /INSERT INTO referral_commission_balances/i);
     assert.match(calls[1].sql, /INSERT INTO referral_commission_ledger/i);

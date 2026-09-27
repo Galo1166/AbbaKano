@@ -348,6 +348,7 @@ export const ForgotPasswordView: React.FC<ForgotPasswordViewProps> = ({
                 <MaterialIcons name="dialpad" size={20} color={Palette.onSurfaceMuted} />
                 <TextInput
                   style={styles.textInput}
+                  underlineColorAndroid="transparent"
                   value={otpCode}
                   onChangeText={setOtpCode}
                   placeholder="Enter 6-digit OTP code"
@@ -837,6 +838,9 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   },
   inputGroup: {
     gap: Spacing.two,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
   },
   inputBox: {
     flexDirection: 'row',
@@ -844,13 +848,13 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     height: 52,
     backgroundColor: Palette.surface,
     borderRadius: Rounded.xl,
-    borderWidth: 1,
-    borderColor: Palette.borderHigh,
     paddingHorizontal: Spacing.four,
     gap: Spacing.three,
   },
   textInput: {
     flex: 1,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     fontSize: 15,
     color: Palette.onSurface,
     fontFamily: Typography.family,

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_role VARCHAR(30) NOT NULL DEFAULT 'super_admin';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(120);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20);
@@ -46,6 +47,43 @@ ALTER TABLE users ALTER COLUMN app_lock_enabled SET DEFAULT FALSE;
 UPDATE users SET role = 'admin' WHERE username = 'Admin';
 CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique_idx ON users(phone) WHERE phone IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_virtual_account_number_idx ON users(virtual_account_number) WHERE virtual_account_number IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS admin_roles (
+	id BIGSERIAL PRIMARY KEY,
+	slug VARCHAR(30) NOT NULL UNIQUE,
+	name VARCHAR(80) NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS admin_permissions (
+	id BIGSERIAL PRIMARY KEY,
+	slug VARCHAR(60) NOT NULL UNIQUE,
+	name VARCHAR(120) NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admin_role_permissions (
+	role_id BIGINT NOT NULL REFERENCES admin_roles(id) ON DELETE CASCADE,
+	permission_id BIGINT NOT NULL REFERENCES admin_permissions(id) ON DELETE CASCADE,
+	PRIMARY KEY (role_id, permission_id)
+);
+INSERT INTO admin_roles (slug, name) VALUES
+	('super_admin', 'Super admin'), ('finance', 'Finance'), ('support', 'Support'), ('analyst', 'Analyst')
+ON CONFLICT DO NOTHING;
+INSERT INTO admin_permissions (slug, name) VALUES
+	('dashboard.read', 'View dashboard'), ('users.read', 'View users'), ('users.block', 'Block users'),
+	('ledger.adjust', 'Adjust wallet ledger'), ('transactions.read', 'View transactions'),
+	('analytics.read', 'View analytics'), ('risk.read', 'View risk cases'), ('audit.read', 'View audit log'),
+	('agents.manage', 'Manage agents')
+ON CONFLICT DO NOTHING;
+INSERT INTO admin_role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM admin_roles r CROSS JOIN admin_permissions p WHERE r.slug = 'super_admin'
+ON CONFLICT DO NOTHING;
+INSERT INTO admin_role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM admin_roles r JOIN admin_permissions p ON p.slug IN ('dashboard.read','transactions.read','ledger.adjust') WHERE r.slug = 'finance'
+ON CONFLICT DO NOTHING;
+INSERT INTO admin_role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM admin_roles r JOIN admin_permissions p ON p.slug IN ('dashboard.read','users.read','risk.read') WHERE r.slug = 'support'
+ON CONFLICT DO NOTHING;
+INSERT INTO admin_role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM admin_roles r JOIN admin_permissions p ON p.slug IN ('dashboard.read','analytics.read') WHERE r.slug = 'analyst'
+ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS agent_profiles (
 	user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

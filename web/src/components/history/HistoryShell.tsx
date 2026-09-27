@@ -1,0 +1,308 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { ApiError, apiRequest } from "@/lib/api";
+import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
+
+type Transaction = {
+  id?: string | number;
+  type?: string;
+  label?: string;
+  amount?: number;
+  status?: string;
+  date?: string;
+  currency?: string;
+};
+
+type Status = "success" | "pending" | "failed";
+
+const filters = ["All Services", "Data Bundles", "Airtime", "Electricity", "Cable TV", "Wallet Funding"];
+
+function formatNaira(amount: number) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    minimumFractionDigits: 2,
+  }).format(amount || 0);
+}
+
+function normalizedStatus(value?: string): Status {
+  const status = value?.toLowerCase();
+  return status === "success" || status === "failed" ? status : "pending";
+}
+
+function transactionCategory(transaction: Transaction) {
+  const type = transaction.type?.toLowerCase() || "";
+  const label = transaction.label?.toLowerCase() || "";
+
+  if (type === "deposit" || type === "commission" || label.includes("funding")) return "Wallet Funding";
+  if (type === "data" || label.includes("data")) return "Data Bundles";
+  if (type === "airtime" || label.includes("airtime")) return "Airtime";
+  if (type === "electricity" || label.includes("electric")) return "Electricity";
+  if (type === "cable_tv" || label.includes("cable") || label.includes("dstv") || label.includes("gotv")) return "Cable TV";
+
+  return "Other";
+}
+
+function displayTitle(transaction: Transaction) {
+  return transaction.label || (transaction.type || "Wallet transaction").replaceAll("_", " ");
+}
+
+function displayDate(value?: string) {
+  if (!value) return "Recent activity";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function TransactionIcon({ category }: { category: string }) {
+  const path =
+    category === "Data Bundles"
+      ? "M4 7h16M4 12h16M4 17h10"
+      : category === "Airtime"
+        ? "M12 3v18M5 8.5a10 10 0 0 1 14 0M8 12a6 6 0 0 1 8 0"
+        : category === "Wallet Funding"
+          ? "M3 7h18v13H3zM3 7l2-4h14l2 4M16 13h5"
+          : category === "Electricity"
+            ? "m13 2-8 12h6l-1 8 8-12h-6l1-8Z"
+            : "M3 6h18v13H3zM10 10l5 3-5 3v-6Z";
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d={path} />
+    </svg>
+  );
+}
+
+export function HistoryShell({ initialTransactions }: { initialTransactions?: Transaction[] }) {
+  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions || []);
+  const [filter, setFilter] = useState("All Services");
+  const [status, setStatus] = useState("All Status");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Transaction | null>(null);
+  const [loading, setLoading] = useState(!initialTransactions);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [copied, setCopied] = useState("");
+
+  useEffect(() => {
+    if (initialTransactions) return;
+
+    let cancelled = false;
+
+    void apiRequest<{ transactions: Transaction[] }>("/transactions")
+      .then((response) => {
+        if (!cancelled) setTransactions(response.transactions || []);
+      })
+      .catch((error) => {
+        if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : "Could not load transactions.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialTransactions]);
+
+  const filtered = transactions.filter((transaction) => {
+    const matchesFilter = filter === "All Services" || transactionCategory(transaction) === filter;
+    const matchesStatus = status === "All Status" || normalizedStatus(transaction.status) === status;
+    const haystack = `${transaction.label || ""} ${transaction.id} ${transaction.type || ""}`.toLowerCase();
+    return matchesFilter && matchesStatus && haystack.includes(search.toLowerCase());
+  });
+
+  const successfulDeposits = transactions.filter(
+    (transaction) => transactionCategory(transaction) === "Wallet Funding" && normalizedStatus(transaction.status) === "success",
+  );
+  const inflow = successfulDeposits.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const outflow = transactions
+    .filter((transaction) => transactionCategory(transaction) !== "Wallet Funding")
+    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+  async function copyText(value: string, key: string) {
+    await navigator.clipboard?.writeText(value);
+    setCopied(key);
+    window.setTimeout(() => setCopied(""), 1800);
+  }
+
+  async function shareReceipt(transaction: Transaction) {
+    const text = `${displayTitle(transaction)} - ${formatNaira(Number(transaction.amount || 0))} - Ref ${transaction.id}`;
+    if (navigator.share) {
+      await navigator.share({ title: "AbbaKano transaction receipt", text });
+      return;
+    }
+
+    await copyText(text, "share");
+  }
+
+  return (
+    <CustomerPageLayout
+      active="history"
+      eyebrow="Ledger"
+      title="History"
+      subtitle="Transaction Ledger & Records"
+      className="history-page"
+      headerClassName="history-header"
+    >
+      <section className="history-content">
+        <div className="history-summary">
+          <div>
+            <span>Total Outflow</span>
+            <strong>{formatNaira(outflow)}</strong>
+            <small>{transactions.length} debits recorded</small>
+          </div>
+          <div>
+            <span>Total Inflow</span>
+            <strong>{formatNaira(inflow)}</strong>
+            <small>{transactions.filter((transaction) => transactionCategory(transaction) === "Wallet Funding").length} wallet deposits</small>
+          </div>
+        </div>
+
+        <div className="history-toolbar">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search transactions..."
+            aria-label="Search transactions"
+          />
+          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status">
+            <option>All Status</option>
+            <option value="success">Successful</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+
+        <div className="history-filters" role="tablist" aria-label="Transaction categories">
+          {filters.map((item) => (
+            <button
+              className={filter === item ? "active" : ""}
+              type="button"
+              role="tab"
+              aria-selected={filter === item}
+              onClick={() => setFilter(item)}
+              key={item}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div className="history-state">
+            <div className="dashboard-spinner" />
+            <p>Loading transaction ledger...</p>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="history-error" role="alert">
+            {errorMessage}
+            <button type="button" onClick={() => window.location.reload()}>
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !errorMessage && filtered.length === 0 && (
+          <div className="history-state">
+            <h2>No Transactions</h2>
+            <p>No {filter.toLowerCase()} transactions recorded.</p>
+          </div>
+        )}
+
+        {!loading && filtered.length > 0 && (
+          <div className="history-list">
+            {filtered.map((transaction) => {
+              const category = transactionCategory(transaction);
+              const transactionStatus = normalizedStatus(transaction.status);
+
+              return (
+                <button
+                  className="history-row"
+                  type="button"
+                  onClick={() => setSelected(transaction)}
+                  key={transaction.id || `${transaction.date}-${transaction.type}-${transaction.label}`}
+                >
+                  <span className={`history-icon ${transactionStatus}`}>
+                    <TransactionIcon category={category} />
+                  </span>
+                  <span className="history-copy">
+                    <strong>{displayTitle(transaction)}</strong>
+                    <small>{category} · {displayDate(transaction.date)}</small>
+                  </span>
+                  <span className={`history-amount ${category === "Wallet Funding" ? "inflow" : ""}`}>
+                    {category === "Wallet Funding" ? "+" : "-"}
+                    {formatNaira(Number(transaction.amount || 0))}
+                    <em className={`history-status ${transactionStatus}`}>
+                      {transactionStatus === "success" ? "Completed" : transactionStatus === "failed" ? "Failed" : "Pending"}
+                    </em>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {selected && (
+          <div className="data-modal-backdrop">
+            <section className="data-modal history-modal" role="dialog" aria-modal="true" aria-labelledby="history-detail-title">
+              <button className="data-modal-close" type="button" onClick={() => setSelected(null)} aria-label="Close transaction details">
+                x
+              </button>
+
+              <p className="data-kicker">Transaction Audit Details</p>
+              <h2 id="history-detail-title">{displayTitle(selected)}</h2>
+
+              <div className={`history-detail-status ${normalizedStatus(selected.status)}`}>
+                {normalizedStatus(selected.status) === "success"
+                  ? "Successful"
+                  : normalizedStatus(selected.status) === "failed"
+                    ? "Failed"
+                    : "Pending"}
+              </div>
+
+              <div className="history-detail-amount">{formatNaira(Number(selected.amount || 0))}</div>
+
+              <div className="transaction-summary">
+                <div>
+                  <span>Reference</span>
+                  <strong>
+                    {String(selected.id)}
+                    <button className="copy-inline" type="button" onClick={() => void copyText(String(selected.id), "reference")}>
+                      {copied === "reference" ? "Copied" : "Copy"}
+                    </button>
+                  </strong>
+                </div>
+                <div>
+                  <span>Service</span>
+                  <strong>{transactionCategory(selected)}</strong>
+                </div>
+                <div>
+                  <span>Description</span>
+                  <strong>{selected.label || "Wallet transaction"}</strong>
+                </div>
+                <div>
+                  <span>Date &amp; Timestamp</span>
+                  <strong>{displayDate(selected.date)}</strong>
+                </div>
+              </div>
+
+              <div className="history-detail-actions">
+                <button type="button" onClick={() => void shareReceipt(selected)}>
+                  Share Receipt
+                </button>
+                <button type="button" onClick={() => setSelected(null)}>
+                  Close
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+      </section>
+    </CustomerPageLayout>
+  );
+}

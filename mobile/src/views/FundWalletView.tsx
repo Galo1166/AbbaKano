@@ -5,8 +5,11 @@ import { apiPost } from "@/lib/api";
 import { MaterialIcons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Linking,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,12 +25,37 @@ interface FundWalletViewProps {
 export const FundWalletView: React.FC<FundWalletViewProps> = ({
   onBackPress,
 }) => {
-  const { virtualAccounts, theme: Palette } = useApp();
+  const { virtualAccounts, refreshServerState, theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
   const [gatewayExpanded, setGatewayExpanded] = useState(true);
   const [amount, setAmount] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [identityType, setIdentityType] = useState<"bvn" | "nin">("bvn");
+  const [identityValue, setIdentityValue] = useState("");
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
+
+  const handleCreateAccount = async () => {
+    const value = identityValue.replace(/\D/g, "");
+    if (!/^\d{11}$/.test(value)) {
+      setAccountError(`Enter a valid 11-digit ${identityType.toUpperCase()}.`);
+      return;
+    }
+    setAccountLoading(true);
+    setAccountError(null);
+    try {
+      await apiPost("/me/virtual-account", { identityType, identityValue: value });
+      await refreshServerState();
+      setIdentityValue("");
+      setShowCreateAccount(false);
+    } catch (error) {
+      setAccountError(error instanceof Error ? error.message : "Could not create your virtual account.");
+    } finally {
+      setAccountLoading(false);
+    }
+  };
 
   const handlePaystackDeposit = async () => {
     const parsedAmount = Number(amount.replace(/[^0-9]/g, ""));
@@ -40,7 +68,7 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
     try {
       const response = await apiPost<{ authorizationUrl: string; reference: string }>(
         "/payments/paystack/initialize",
-        { amount: parsedAmount },
+        { amount: parsedAmount, returnToApp: Platform.OS !== "web" },
       );
       if (typeof window !== "undefined") {
         window.localStorage.setItem("abbakano_pending_payment", response.reference || "");
@@ -150,8 +178,18 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
           </View>
         </View>
 
-        {/* Moniepoint Account (Primary) */}
-        {virtualAccounts.map((account, idx) => (
+        {/* Virtual account state */}
+        {virtualAccounts.length === 0 ? (
+          <View style={styles.emptyAccountCard}>
+            <MaterialIcons name="account-balance" size={28} color={Palette.primary} />
+            <Text style={styles.emptyAccountTitle}>No virtual account yet</Text>
+            <Text style={styles.emptyAccountText}>Create one when you are ready to fund by bank transfer. BVN or NIN is requested only for this account.</Text>
+            <Pressable style={styles.createAccountBtn} onPress={() => setShowCreateAccount(true)}>
+              <MaterialIcons name="add-circle-outline" size={19} color="#FFFFFF" />
+              <Text style={styles.paystackBtnText}>Create Virtual Account</Text>
+            </Pressable>
+          </View>
+        ) : virtualAccounts.map((account, idx) => (
           <View key={idx} style={styles.accountCard}>
             <View style={styles.accountCardTop}>
               <View style={styles.accountLeft}>
@@ -173,7 +211,11 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
                   </Text>
                 </View>
               </View>
-              {idx === 0 ? (
+              {account.status === "pending" ? (
+                <View style={styles.altBadge}><Text style={styles.altBadgeText}>Creating...</Text></View>
+              ) : account.status === "failed" ? (
+                <View style={styles.failedBadge}><Text style={styles.failedBadgeText}>Needs retry</Text></View>
+              ) : idx === 0 ? (
                 <View style={styles.recommendedBadge}>
                   <MaterialIcons
                     name="bolt"
@@ -189,8 +231,9 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
               )}
             </View>
 
-            {/* Account Number Row */}
-            <View style={styles.accountNumberBox}>
+            {account.status === "active" && <>
+              {/* Account Number Row */}
+              <View style={styles.accountNumberBox}>
               <Text style={styles.accountNumberLabel}>Account Number</Text>
               <View style={styles.accountNumberRow}>
                 <Text
@@ -231,10 +274,10 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
                   </Text>
                 </Pressable>
               </View>
-            </View>
+              </View>
 
             {/* Account Name Row */}
-            <View style={styles.accountNameRow}>
+              <View style={styles.accountNameRow}>
               <View>
                 <Text style={styles.accountNameLabel}>
                   Beneficiary Account Name
@@ -249,11 +292,37 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
                   size={14}
                   color={Palette.tertiary}
                 />
-                <Text style={styles.verifiedText}>Verified</Text>
+                <Text style={styles.verifiedText}>Active</Text>
               </View>
-            </View>
+              </View>
+            </>}
+            {account.status === "failed" && <Text style={styles.accountErrorText}>{account.error || "Account creation failed. Try again."}</Text>}
           </View>
         ))}
+
+        <Modal visible={showCreateAccount} transparent animationType="slide" onRequestClose={() => !accountLoading && setShowCreateAccount(false)}>
+          <View style={styles.modalBackdrop}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => !accountLoading && setShowCreateAccount(false)} />
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Create Virtual Account</Text>
+              <Text style={styles.modalSubtitle}>Your identity is required by the virtual-account provider. It is only requested when you choose this option.</Text>
+              <View style={styles.identityToggle}>
+                {(["bvn", "nin"] as const).map((type) => (
+                  <Pressable key={type} style={[styles.identityOption, identityType === type && styles.identityOptionActive]} onPress={() => setIdentityType(type)} disabled={accountLoading}>
+                    <Text style={[styles.identityOptionText, identityType === type && styles.identityOptionTextActive]}>{type.toUpperCase()}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput value={identityValue} onChangeText={(value) => { setIdentityValue(value.replace(/\D/g, "")); setAccountError(null); }} keyboardType="number-pad" maxLength={11} placeholder={`Enter 11-digit ${identityType.toUpperCase()}`} placeholderTextColor={Palette.onSurfaceMuted} style={styles.identityInput} editable={!accountLoading} />
+              {accountError && <Text style={styles.accountErrorText}>{accountError}</Text>}
+              <Pressable style={[styles.createAccountBtn, accountLoading && styles.disabledBtn]} onPress={() => void handleCreateAccount()} disabled={accountLoading}>
+                {accountLoading ? <ActivityIndicator color="#FFFFFF" /> : <MaterialIcons name="verified-user" size={18} color="#FFFFFF" />}
+                <Text style={styles.paystackBtnText}>{accountLoading ? "Creating account..." : "Create Secure Account"}</Text>
+              </Pressable>
+              <Pressable onPress={() => setShowCreateAccount(false)} disabled={accountLoading}><Text style={styles.cancelText}>Cancel</Text></Pressable>
+            </View>
+          </View>
+        </Modal>
 
         {/* === SECURITY NOTICE === */}
         <View style={styles.securityCard}>
@@ -335,8 +404,34 @@ const getStyles = (Palette: PaletteType) =>
       letterSpacing: 0.5,
     },
 
-    // Account Card
-    accountCard: {
+    emptyAccountCard: {
+            alignItems: "center",
+            backgroundColor: Palette.surface,
+            borderRadius: Rounded.xl,
+            borderColor: Palette.border,
+            borderWidth: 1,
+            padding: Spacing.five,
+            gap: Spacing.two,
+          },
+          emptyAccountTitle: { color: Palette.onSurface, fontFamily: Typography.family, fontSize: 16, fontWeight: "700" },
+          emptyAccountText: { color: Palette.onSurfaceVariant, fontFamily: Typography.family, fontSize: 12, lineHeight: 18, textAlign: "center" },
+          createAccountBtn: { alignItems: "center", backgroundColor: Palette.primary, borderRadius: Rounded.xl, flexDirection: "row", gap: 8, justifyContent: "center", minHeight: 48, paddingHorizontal: Spacing.four, width: "100%" },
+          failedBadge: { backgroundColor: Palette.errorContainer, borderRadius: Rounded.full, paddingHorizontal: 10, paddingVertical: 4 },
+          failedBadgeText: { color: Palette.error, fontFamily: Typography.family, fontSize: 11, fontWeight: "700" },
+          accountErrorText: { color: Palette.error, fontFamily: Typography.family, fontSize: 12, lineHeight: 18 },
+          modalBackdrop: { backgroundColor: "rgba(0, 0, 0, 0.65)", flex: 1, justifyContent: "flex-end" },
+          modalCard: { backgroundColor: Palette.surface, borderTopLeftRadius: Rounded.xl, borderTopRightRadius: Rounded.xl, gap: Spacing.three, padding: Spacing.five },
+          modalTitle: { color: Palette.onSurface, fontFamily: Typography.family, fontSize: 21, fontWeight: "800" },
+          modalSubtitle: { color: Palette.onSurfaceVariant, fontFamily: Typography.family, fontSize: 13, lineHeight: 19 },
+          identityToggle: { backgroundColor: Palette.surfaceLow, borderRadius: Rounded.lg, flexDirection: "row", padding: 4 },
+          identityOption: { alignItems: "center", borderRadius: Rounded.md, flex: 1, paddingVertical: 11 },
+          identityOptionActive: { backgroundColor: Palette.primary },
+          identityOptionText: { color: Palette.onSurfaceMuted, fontFamily: Typography.family, fontSize: 12, fontWeight: "700" },
+          identityOptionTextActive: { color: "#FFFFFF" },
+          identityInput: { backgroundColor: Palette.surfaceLow, borderColor: Palette.border, borderRadius: Rounded.lg, borderWidth: 1, color: Palette.onSurface, fontFamily: Typography.family, fontSize: 16, height: 50, paddingHorizontal: Spacing.three },
+        cancelText: { color: Palette.onSurfaceMuted, fontFamily: Typography.family, fontSize: 13, textAlign: "center" },
+        // Account Card
+        accountCard: {
       backgroundColor: Palette.surface,
       borderRadius: Rounded.xl,
       padding: Spacing.four,

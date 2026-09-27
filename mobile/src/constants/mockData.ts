@@ -25,6 +25,9 @@ export interface VirtualAccount {
   logoColor?: string;
   feeInfo?: string;
   recommended?: boolean;
+  provider?: string;
+  status?: 'pending' | 'active' | 'failed';
+  error?: string | null;
 }
 
 export interface DataPlan {

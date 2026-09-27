@@ -91,7 +91,7 @@ export const FormInput: React.FC<FormInputProps> = ({
         {leftIcon && <View style={styles.iconSlot}>{leftIcon}</View>}
 
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, styles.webInputReset]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -187,10 +187,17 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   textInput: {
     flex: 1,
     height: '100%',
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     color: Palette.onSurface,
     fontSize: 16,
     fontWeight: '500',
   },
+  webInputReset: {
+    outlineWidth: 0,
+    outlineColor: 'transparent',
+    boxShadow: 'none',
+  } as any,
   errorText: {
     color: Palette.error,
     fontSize: 12,

@@ -149,7 +149,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
                 resizeMode="cover"
               />
             </View>
-            <View>
+            <View style={styles.brandTextBlock}>
               <Text style={styles.brandLabel}>ABBAKANO DATA SUB</Text>
               <Text style={styles.brandSubLabel}>Fast & Reliable VTU Portal</Text>
             </View>
@@ -176,6 +176,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
               <MaterialIcons name="person" size={20} color={Palette.onSurfaceMuted} />
               <TextInput
                 style={styles.textInput}
+                underlineColorAndroid="transparent"
                 value={fullName}
                 onChangeText={(t) => {
                   setFullName(t);
@@ -467,14 +468,18 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   // Header
   header: { gap: Spacing.three },
   brandRow: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
+    justifyContent: 'center',
+    alignSelf: 'center',
+  },
+  brandTextBlock: {
+    alignItems: 'center',
   },
   brandEmblemBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 72,
+    height: 72,
+    borderRadius: 18,
     backgroundColor: '#0F172A',
     overflow: 'hidden',
     elevation: 3,
@@ -486,6 +491,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   brandEmblemImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 18,
   },
   brandLabel: {
     fontSize: 12,
@@ -504,16 +510,21 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     fontWeight: '800',
     color: Palette.onSurface,
     fontFamily: Typography.family,
+    textAlign: 'center',
+    alignSelf: 'center',
   },
   body: {
     fontSize: 14,
     color: Palette.onSurfaceVariant,
     fontFamily: Typography.family,
     lineHeight: 20,
+    textAlign: 'center',
+    alignSelf: 'center',
+    maxWidth: 520,
   },
 
   // Form
-  formSection: { gap: Spacing.three },
+  formSection: { gap: Spacing.three, width: '100%', maxWidth: 520, alignSelf: 'center' },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -583,8 +594,6 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     height: 52,
     backgroundColor: Palette.surface,
     borderRadius: Rounded.xl,
-    borderWidth: 1,
-    borderColor: Palette.borderHigh,
     paddingHorizontal: Spacing.four,
     gap: Spacing.two,
   },
@@ -602,6 +611,8 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   },
   textInput: {
     flex: 1,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     fontSize: 16,
     color: Palette.onSurface,
     fontFamily: Typography.family,
@@ -677,7 +688,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   },
 
   // CTA
-  ctaSection: { gap: Spacing.three },
+  ctaSection: { gap: Spacing.three, width: '100%', maxWidth: 520, alignSelf: 'center' },
   registerBtn: {
     height: 52,
     backgroundColor: Palette.primaryContainer,

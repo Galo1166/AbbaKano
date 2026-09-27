@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 const DEFAULT_API_URL = 'http://localhost:3000';
 
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
@@ -6,6 +8,7 @@ let csrfTokenValue: string | undefined;
 let authTokenValue: string | undefined;
 
 function storedAuthToken(): string | undefined {
+  if (Platform.OS === 'web') return undefined;
   if (typeof localStorage === 'undefined') return undefined;
   return localStorage.getItem('abbakano_auth_token') || undefined;
 }
@@ -42,10 +45,11 @@ export function csrfToken(): string | undefined {
 
 export function clearAuthToken(): void {
   authTokenValue = undefined;
-  if (typeof localStorage !== 'undefined') localStorage.removeItem('abbakano_auth_token');
+  if (Platform.OS !== 'web' && typeof localStorage !== 'undefined') localStorage.removeItem('abbakano_auth_token');
 }
 
 export function hasAuthToken(): boolean {
+  if (Platform.OS === 'web') return true;
   return Boolean(authTokenValue || storedAuthToken());
 }
 
@@ -71,6 +75,7 @@ async function parseResponse(response: Response): Promise<unknown> {
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
+  headers.set('X-Client-Platform', Platform.OS === 'web' ? 'web' : 'native');
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
   const method = (init.method || 'GET').toUpperCase();
@@ -95,7 +100,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     if ('csrfToken' in data && typeof data.csrfToken === 'string') {
       csrfTokenValue = data.csrfToken;
     }
-    if ('authToken' in data && typeof data.authToken === 'string') {
+    if (Platform.OS !== 'web' && 'authToken' in data && typeof data.authToken === 'string') {
       saveAuthToken(data.authToken);
     }
   }

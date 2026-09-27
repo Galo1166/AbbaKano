@@ -1,0 +1,169 @@
+"use client";
+
+import { startRegistration } from "@simplewebauthn/browser";
+import { FormEvent, useEffect, useState } from "react";
+import { ApiError, apiRequest } from "@/lib/api";
+import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
+import { useThemeMode } from "@/lib/theme";
+
+function Icon({ name }: { name: string }) {
+  const paths: Record<string, string> = {
+    back: "M19 12H5M12 19l-7-7 7-7",
+    shield: "M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z",
+    pin: "M7 4h10v5a5 5 0 0 1-10 0V4ZM12 14v7M8 21h8",
+    fingerprint: "M8 8.5a5 5 0 0 1 8 0M5 12a7 7 0 0 1 14 0M9.5 12a2.5 2.5 0 0 1 5 0v5M12 15v6",
+    lock: "M6 10h12v10H6zM8 10V7a4 4 0 0 1 8 0v3",
+    help: "M4 13a8 8 0 0 1 16 0v4M4 13v4a2 2 0 0 0 2 2h2v-6H4m16 0h-4v6h2a2 2 0 0 0 2-2",
+    gift: "M20 12v8H4v-8M2 8h20v4H2zM12 8v12M12 8H8.5a2.5 2.5 0 1 1 2.5-2.5V8Zm0 0h3.5a2.5 2.5 0 1 0-2.5-2.5V8Z",
+    palette: "M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
+    sun: "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
+    moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z",
+  };
+  return <svg aria-hidden="true" viewBox="0 0 24 24"><path d={paths[name] || paths.shield} /></svg>;
+}
+
+function Toggle({ enabled, onChange, disabled = false }: { enabled: boolean; onChange: () => void; disabled?: boolean }) {
+  return <button className={`profile-toggle${enabled ? " enabled" : ""}`} type="button" role="switch" aria-checked={enabled} onClick={onChange} disabled={disabled}><span /></button>;
+}
+
+type ProfileUser = { full_name?: string; fullName?: string; email?: string; phone?: string; biometrics_enabled?: boolean; app_lock_enabled?: boolean; has_transaction_pin?: boolean; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
+
+export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
+  const [user, setUser] = useState<ProfileUser | null>(initialUser || null);
+  const [loading, setLoading] = useState(!initialUser);
+  const [message, setMessage] = useState("");
+  const [biometrics, setBiometrics] = useState(false);
+  const [appLock, setAppLock] = useState(false);
+  const [savingSetting, setSavingSetting] = useState("");
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [pinStep, setPinStep] = useState<"current" | "new" | "confirm">("new");
+  const [pin, setPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinMessage, setPinMessage] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
+  const { theme, themePreference, setThemePreference } = useThemeMode();
+
+  useEffect(() => {
+    if (initialUser) return;
+    let cancelled = false;
+    void apiRequest<{ user: ProfileUser | null }>("/me").then((response) => {
+      if (cancelled) return;
+      if (!response.user) throw new Error("Profile data was not returned.");
+      setUser(response.user);
+      setBiometrics(response.user.biometrics_enabled !== false);
+      setAppLock(response.user.app_lock_enabled === true);
+      setPinStep(response.user.has_transaction_pin ? "current" : "new");
+    }).catch((error) => {
+      if (!cancelled) setMessage(error instanceof ApiError ? error.message : "Could not load your profile.");
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [initialUser]);
+
+  async function saveSecuritySetting(setting: "biometrics" | "appLock", nextValue: boolean) {
+    setSavingSetting(setting);
+    setMessage("");
+    try {
+      if (setting === "biometrics" && nextValue) {
+        const options = await apiRequest<Record<string, unknown>>("/auth/passkey/register/options", { method: "POST", body: JSON.stringify({}) });
+        const response = await startRegistration({ optionsJSON: options as never });
+        await apiRequest("/auth/passkey/register/verify", { method: "POST", body: JSON.stringify(response) });
+      } else if (setting === "biometrics" && !nextValue) {
+        await apiRequest("/auth/passkey", { method: "DELETE" });
+      }
+      const response = await apiRequest<{ biometricsEnabled: boolean; appLockEnabled: boolean }>("/me/security-settings", { method: "PATCH", body: JSON.stringify(setting === "biometrics" ? { biometricsEnabled: nextValue } : { appLockEnabled: nextValue }) });
+      setBiometrics(response.biometricsEnabled);
+      setAppLock(response.appLockEnabled);
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : "Could not save this security setting.");
+    } finally {
+      setSavingSetting("");
+    }
+  }
+
+  function openPinModal() {
+    setPin(""); setNewPin(""); setConfirmPin(""); setPinMessage(""); setPinStep(user?.has_transaction_pin ? "current" : "new"); setShowPinModal(true);
+  }
+
+  async function submitPin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPinMessage("");
+    if (pinStep === "current") {
+      if (!/^\d{4}$/.test(pin)) { setPinMessage("Enter your current 4-digit PIN."); return; }
+      setSavingPin(true);
+      try { await apiRequest("/me/transaction-pin/verify-current", { method: "POST", body: JSON.stringify({ pin }) }); setPinStep("new"); } catch (error) { setPinMessage(error instanceof ApiError ? error.message : "Could not verify your current PIN."); } finally { setSavingPin(false); }
+      return;
+    }
+    if (pinStep === "new") { if (!/^\d{4}$/.test(newPin)) { setPinMessage("Enter a new 4-digit PIN."); return; } setPinStep("confirm"); return; }
+    if (newPin !== confirmPin) { setPinMessage("PINs do not match. Please try again."); return; }
+    setSavingPin(true);
+    try { await apiRequest("/me/transaction-pin", { method: "POST", body: JSON.stringify({ pin: newPin, ...(pin ? { currentPin: pin } : {}) }) }); setShowPinModal(false); setUser((current) => current ? { ...current, has_transaction_pin: true } : current); setMessage("Transaction PIN changed successfully."); } catch (error) { setPinMessage(error instanceof ApiError ? error.message : "Could not save your transaction PIN."); } finally { setSavingPin(false); }
+  }
+
+  async function handleLogout() {
+    try {
+      await apiRequest("/logout", { method: "POST" });
+    } catch (error) {
+      console.error("Could not sign out the customer", error);
+    }
+    window.location.href = "/login";
+  }
+
+  const name = user?.full_name || user?.fullName || "AbbaKano user";
+  if (loading) return <main className="profile-state"><div className="dashboard-spinner" /><p>Loading your profile...</p></main>;
+
+  return (
+    <CustomerPageLayout active="profile" eyebrow="Account" title="Profile" subtitle="Account & Security Settings">
+      <section className="profile-content">
+        <div className="profile-identity"><div className="profile-avatar">{name.slice(0, 1).toUpperCase()}</div><div><h2>{name}</h2><p>{user?.email || "Your AbbaKano wallet"}</p></div></div>
+        {message && <div className="profile-message" role="status">{message}</div>}
+        <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle="Earn N100 for each friend's first data top-up" badge="N100 BONUS" onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
+        <ProfileSection title="Security & Preferences"><ProfileRow icon="pin" title="Change Transaction PIN" subtitle="4-digit wallet security PIN" onClick={openPinModal} /><ProfileRow icon="fingerprint" title="Biometrics Login" subtitle="Face ID / Fingerprint unlock" control={<Toggle enabled={biometrics} disabled={savingSetting === "biometrics"} onChange={() => void saveSecuritySetting("biometrics", !biometrics)} />} /><ProfileRow icon="lock" title="App Lock PIN" subtitle="Screen lock security timeout" control={<Toggle enabled={appLock} disabled={savingSetting === "appLock"} onChange={() => void saveSecuritySetting("appLock", !appLock)} />} /><ProfileRow icon="palette" title="Theme & Appearance" subtitle={themePreference === "system" ? `Auto (${theme === "dark" ? "Dark" : "Light"})` : `${theme === "dark" ? "Dark" : "Light"} mode active`} badge={themePreference === "system" ? "AUTO" : theme.toUpperCase()} onClick={() => setShowThemeModal(true)} /></ProfileSection>
+        <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" /><ProfileRow icon="shield" title="About AbbaKano" subtitle="Version 1.0.0 - Build 2025.02.25" /></ProfileSection>
+        <button className="profile-signout" type="button" onClick={handleLogout}>Sign Out <small>Exit your wallet session safely</small></button>
+      </section>
+      {showThemeModal && (
+        <div className="data-modal-backdrop" onClick={() => setShowThemeModal(false)}>
+          <section className="data-modal theme-modal" role="dialog" aria-modal="true" aria-labelledby="theme-title" onClick={(event) => event.stopPropagation()}>
+            <button className="data-modal-close" type="button" onClick={() => setShowThemeModal(false)} aria-label="Close theme dialog">x</button>
+            <p className="data-kicker">Appearance</p>
+            <h2 id="theme-title">Theme & Appearance</h2>
+            <div className="theme-option-list">
+              {(["system", "dark", "light"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`theme-option${themePreference === mode ? " selected" : ""}`}
+                  onClick={() => {
+                    setThemePreference(mode);
+                    setShowThemeModal(false);
+                  }}
+                >
+                  <span className="theme-option-icon"><Icon name={mode === "system" ? "palette" : mode === "dark" ? "moon" : "sun"} /></span>
+                  <span className="theme-option-copy">
+                    <strong>{mode === "system" ? "System Default" : mode === "dark" ? "Dark Mode" : "Light Mode"}</strong>
+                    <small>{mode === "system" ? `Auto-detects your device (${theme === "dark" ? "Dark" : "Light"})` : mode === "dark" ? "Low-light comfort" : "Bright daylight readability"}</small>
+                  </span>
+                  <span className="theme-option-radio" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+      {showPinModal && <div className="data-modal-backdrop"><section className="data-modal pin-modal" role="dialog" aria-modal="true" aria-labelledby="pin-title"><button className="data-modal-close" type="button" onClick={() => setShowPinModal(false)} aria-label="Close PIN dialog">x</button><p className="data-kicker">Security</p><h2 id="pin-title">{pinStep === "current" ? "Enter Current PIN" : pinStep === "new" ? "Create New PIN" : "Confirm New PIN"}</h2><p className="pin-modal-copy">{pinStep === "current" ? "Enter your current 4-digit PIN to continue" : pinStep === "new" ? "Create a new 4-digit PIN for your wallet" : "Enter your new 4-digit PIN again to confirm"}</p><form className="data-pin-form" onSubmit={submitPin}><input className="pin-modal-input" type="password" inputMode="numeric" maxLength={4} value={pinStep === "current" ? pin : pinStep === "new" ? newPin : confirmPin} onChange={(event) => { const value = event.target.value.replace(/\D/g, ""); if (pinStep === "current") setPin(value); else if (pinStep === "new") setNewPin(value); else setConfirmPin(value); }} placeholder="4-digit PIN" autoFocus />{pinMessage && <div className="data-message error" role="alert">{pinMessage}</div>}<button className="data-purchase-button" type="submit" disabled={savingPin}>{savingPin ? "Saving..." : pinStep === "current" ? "Verify Current PIN" : pinStep === "new" ? "Continue" : "Save New PIN"}</button></form></section></div>}
+    </CustomerPageLayout>
+  );
+}
+
+function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section className="profile-section"><h2>{title}</h2><div className="profile-list">{children}</div></section>;
+}
+
+function ProfileRow({ icon, title, subtitle, badge, control, onClick }: { icon: string; title: string; subtitle: string; badge?: string; control?: React.ReactNode; onClick?: () => void }) {
+  const content = <><span className="profile-row-icon"><Icon name={icon} /></span><span className="profile-row-copy"><strong>{title}</strong><small>{subtitle}</small></span>{badge && <span className="profile-badge">{badge}</span>}{control || <span className="profile-chevron">-&gt;</span>}</>;
+  return onClick ? <button className="profile-row" type="button" onClick={onClick}>{content}</button> : <div className="profile-row">{content}</div>;
+}

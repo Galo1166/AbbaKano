@@ -1,4 +1,4 @@
-const REFERRAL_COMMISSION_KOBO = 20000;
+const REFERRAL_COMMISSION_KOBO = 10000;
 
 async function awardReferralCommission(client, referrerUserId, referredUserId, options = {}) {
     if (!referrerUserId || !Number.isFinite(Number(referrerUserId))) {

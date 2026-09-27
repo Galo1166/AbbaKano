@@ -44,7 +44,9 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
     setLoading(true);
     try {
       await apiPost('/login', { identifier, password });
-      await registerBiometricDevice().catch(() => {});
+      if (rememberDevice) {
+        await registerBiometricDevice().catch(() => {});
+      }
       setIdentifier('');
       setPassword('');
       await onLoginSuccess();
@@ -124,6 +126,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
               />
               <TextInput
                 style={styles.textInput}
+                underlineColorAndroid="transparent"
                 value={identifier}
                 onChangeText={setIdentifier}
                 placeholder="Enter phone number or email"
@@ -151,6 +154,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
               <MaterialIcons name="lock" size={20} color={Palette.onSurfaceMuted} />
               <TextInput
                 style={styles.textInput}
+                underlineColorAndroid="transparent"
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Enter your password"
@@ -310,6 +314,9 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   // Form
   formSection: {
     gap: Spacing.four,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
   },
   inputGroup: {
     gap: Spacing.two,
@@ -326,13 +333,13 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     height: 52,
     backgroundColor: Palette.surface,
     borderRadius: Rounded.xl,
-    borderWidth: 1,
-    borderColor: Palette.borderHigh,
     paddingHorizontal: Spacing.four,
     gap: Spacing.three,
   },
   textInput: {
     flex: 1,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     fontSize: 16,
     color: Palette.onSurface,
     fontFamily: Typography.family,
@@ -376,6 +383,9 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   // CTA
   ctaSection: {
     gap: Spacing.four,
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
   },
   primaryBtn: {
     height: 52,

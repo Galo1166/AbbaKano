@@ -44,7 +44,7 @@ export const ReferEarnView: React.FC<ReferEarnViewProps> = ({ onBackPress }) => 
     {
       step: '3',
       title: 'Unlock Referral Rewards',
-      body: 'You receive ₦200 instantly into your commission balance!',
+      body: 'You receive ₦100 instantly into your commission balance!',
     },
   ];
 
@@ -97,7 +97,7 @@ export const ReferEarnView: React.FC<ReferEarnViewProps> = ({ onBackPress }) => 
           </View>
           <View style={styles.heroCardText}>
             <Text style={styles.heroCardTitle}>Unlimited Reseller Rewards</Text>
-            <Text style={styles.heroCardHighlight}>Earn ₦200 For Every Friend You Invite</Text>
+            <Text style={styles.heroCardHighlight}>Earn ₦100 For Every Friend You Invite</Text>
           </View>
         </View>
 

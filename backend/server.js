@@ -40,6 +40,26 @@ const VERIFIED_AGENT_RATE_LIMIT = Number(process.env.VERIFIED_AGENT_RATE_LIMIT |
 const VTU_RATE_WINDOW_SECONDS = Number(process.env.VTU_RATE_WINDOW_SECONDS || 60);
 const VTU_DAILY_LIMIT_NAIRA = Number(process.env.VTU_DAILY_LIMIT_NAIRA || 100000);
 const VTU_PHONE_DAILY_LIMIT = Number(process.env.VTU_PHONE_DAILY_LIMIT || 3);
+const VTU_GATE_FUNDING_OPTIONS = [
+    {
+        id: "payvessel",
+        name: "Payvessel",
+        fee: "₦32 fee",
+        status: "Live",
+        accountNumber: process.env.VTU_GATE_PAYVESSEL_ACCOUNT || "6716309042",
+        accountName: process.env.VTU_GATE_PAYVESSEL_ACCOUNT_NAME || "Faaz Tech Solution",
+        bankName: "9Payment Service Bank"
+    },
+    {
+        id: "paymentpoint",
+        name: "PaymentPoint",
+        fee: "0.55% fee",
+        status: "Live",
+        accountNumber: process.env.VTU_GATE_PAYMENTPOINT_ACCOUNT || "6673596815",
+        accountName: process.env.VTU_GATE_PAYMENTPOINT_ACCOUNT_NAME || "FaazTechSolutions-Muh (Paymentpoint)",
+        bankName: "PalmPay"
+    }
+];
 const REDIS_URL = process.env.REDIS_URL;
 const CORS_ORIGINS = new Set(
     (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost:8081,http://localhost:8082")
@@ -262,6 +282,27 @@ async function requireAdmin(req, res, next) {
     }
 }
 
+function requirePermission(permission) {
+    return async (req, res, next) => {
+        try {
+            const result = await pool.query(
+                `SELECT 1 FROM users u
+                 JOIN admin_roles r ON r.slug = COALESCE(u.admin_role, 'super_admin')
+                 JOIN admin_role_permissions rp ON rp.role_id = r.id
+                 JOIN admin_permissions p ON p.id = rp.permission_id
+                 WHERE u.id = $1 AND u.role = 'admin' AND p.slug = $2
+                 LIMIT 1`,
+                [req.session.sub, permission]
+            );
+            if (!result.rows[0]) return res.status(403).json({ message: `Permission required: ${permission}` });
+            next();
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Could not verify admin permission" });
+        }
+    };
+}
+
 function setSessionCookie(res, user) {
     const secure = SECURE_COOKIES ? "; Secure" : "";
     const token = createSession(user);
@@ -274,6 +315,10 @@ function setCsrfCookie(res) {
     const token = crypto.randomBytes(32).toString("hex");
     res.append("Set-Cookie", `csrf=${token}; Path=/; Max-Age=7200; SameSite=${COOKIE_SAME_SITE}${secure}`);
     return token;
+}
+
+function responseAuthToken(req, token) {
+    return req.headers["x-client-platform"] === "web" ? {} : { authToken: token };
 }
 
 function getCsrfCookie(req) {
@@ -442,10 +487,13 @@ async function assessVtuRisk(userId, type, input, client) {
 
 function validateVtuRequest(body, type) {
     if (!body || typeof body !== "object") return { error: "A JSON object is required" };
-    const { network, phone, amount, planCode, planToken, pin } = body;
-    const normalizedPhone = typeof phone === "string" ? phone.replace(/[\s-]/g, "") : "";
-    const pinValidation = validateTransactionPin(pin);
-    if (pinValidation.error) return { error: pinValidation.error };
+    const { network, phone, amount, planCode, planToken, pin, transactionAuthorization, meterNumber, smartcardNumber } = body;
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedMeterNumber = typeof meterNumber === "string" ? meterNumber.replace(/\D/g, "") : "";
+    const normalizedSmartcardNumber = typeof smartcardNumber === "string" ? smartcardNumber.replace(/\D/g, "") : "";
+    const pinValidation = pin === undefined || pin === null || pin === "" ? { pin: null } : validateTransactionPin(pin);
+    if (pinValidation.error && typeof transactionAuthorization !== "string") return { error: pinValidation.error };
+    if (typeof transactionAuthorization !== "string" && !pinValidation.pin) return { error: "Authorize with your transaction PIN or biometrics" };
     const normalizedNetwork = typeof network === "string" ? network.trim().toUpperCase() : "";
     const validNetwork = type === "cable_tv"
         ? ["DSTV", "GOTV", "STARTIMES"].includes(normalizedNetwork)
@@ -454,10 +502,23 @@ function validateVtuRequest(body, type) {
             : VTU_NETWORKS.has(normalizedNetwork);
     if (!validNetwork) return { error: "Choose a supported network" };
     if (!PHONE_PATTERN.test(normalizedPhone)) return { error: "Enter a valid phone number" };
+    if (type === "electricity" && !/^\d{8,14}$/.test(normalizedMeterNumber)) return { error: "Enter a valid meter number" };
+    if (type === "cable_tv" && !/^\d{10}$/.test(normalizedSmartcardNumber)) return { error: "Enter a valid smartcard number" };
     if (["airtime", "electricity"].includes(type) && (!Number.isInteger(amount) || amount < 50 || amount > 100000)) return { error: "Amount must be between 50 and 100,000 naira" };
     if (["data", "cable_tv", "electricity"].includes(type) && typeof planToken !== "string") return { error: "Choose a valid plan" };
     if (type === "data" && (typeof amount !== "number" || !Number.isFinite(amount))) return { error: "Choose a valid data plan" };
-    return { network: type === "cable_tv" ? normalizedNetwork.toLowerCase() : normalizedNetwork, phone: normalizedPhone, amount, planCode: type === "data" ? planCode : null, planToken: type === "data" ? planToken : null, provider: null, pin: pinValidation.pin };
+    return {
+        network: type === "cable_tv" ? normalizedNetwork.toLowerCase() : normalizedNetwork,
+        phone: normalizedPhone,
+        meterNumber: type === "electricity" ? normalizedMeterNumber : null,
+        smartcardNumber: type === "cable_tv" ? normalizedSmartcardNumber : null,
+        amount,
+        planCode: type === "data" ? planCode : null,
+        planToken: ["data", "cable_tv", "electricity"].includes(type) ? planToken : null,
+        provider: null,
+        pin: pinValidation.pin,
+        transactionAuthorization: typeof transactionAuthorization === "string" ? transactionAuthorization : null
+    };
 }
 
 function getIdempotencyKey(req) {
@@ -492,7 +553,7 @@ async function executeVtuPurchase(req, res, type) {
         const selection = resolvePlanToken(input.planToken, input.network);
         if (selection.error) return res.status(400).json({ message: selection.error });
         input.provider = selection.plan.provider;
-        input.planCode = selection.plan.code;
+        input.planCode = selection.plan.code || selection.plan.providerCode || null;
         if (type !== "electricity") input.amount = Number(selection.plan.price);
         if (!Number.isFinite(input.amount) || input.amount <= 0 || input.amount > 100000) {
             return res.status(400).json({ message: "This data plan is not available" });
@@ -528,21 +589,45 @@ async function executeVtuPurchase(req, res, type) {
             return res.status(202).json(storedVtuResponse(existing));
         }
 
-        const userPinResult = await client.query(
-            `SELECT transaction_pin_hash, transaction_pin_salt
-             FROM users
-             WHERE id = $1`,
-            [userId]
-        );
-        if (!userPinResult.rows[0]?.transaction_pin_hash) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({ message: "Set a 4-digit transaction PIN first before making a purchase" });
-        }
+        if (input.transactionAuthorization) {
+            let authorization;
+            try {
+                authorization = jwt.verify(input.transactionAuthorization, AUTH_SECRET);
+            } catch {
+                await client.query("ROLLBACK");
+                return res.status(403).json({ message: "Biometric authorization expired. Try again." });
+            }
+            if (String(authorization.sub) !== String(userId) || authorization.purpose !== "transaction") {
+                await client.query("ROLLBACK");
+                return res.status(403).json({ message: "Invalid biometric transaction authorization" });
+            }
+            const consumedChallenge = await client.query(
+                `DELETE FROM passkey_challenges
+                 WHERE user_id = $1 AND challenge = $2 AND purpose = 'transaction' AND expires_at > NOW()
+                 RETURNING user_id`,
+                [userId, authorization.challenge]
+            );
+            if (!consumedChallenge.rowCount) {
+                await client.query("ROLLBACK");
+                return res.status(403).json({ message: "Biometric authorization has already been used" });
+            }
+        } else {
+            const userPinResult = await client.query(
+                `SELECT transaction_pin_hash, transaction_pin_salt
+                 FROM users
+                 WHERE id = $1`,
+                [userId]
+            );
+            if (!userPinResult.rows[0]?.transaction_pin_hash) {
+                await client.query("ROLLBACK");
+                return res.status(400).json({ message: "Set a 4-digit transaction PIN first before making a purchase" });
+            }
 
-        const expectedPinHash = hashPin(input.pin, userPinResult.rows[0].transaction_pin_salt);
-        if (expectedPinHash !== userPinResult.rows[0].transaction_pin_hash) {
-            await client.query("ROLLBACK");
-            return res.status(403).json({ message: "Incorrect transaction PIN" });
+            const expectedPinHash = hashPin(input.pin, userPinResult.rows[0].transaction_pin_salt);
+            if (expectedPinHash !== userPinResult.rows[0].transaction_pin_hash) {
+                await client.query("ROLLBACK");
+                return res.status(403).json({ message: "Incorrect transaction PIN" });
+            }
         }
 
         const keyResult = await client.query(
@@ -793,7 +878,7 @@ app.post("/signup", authLimiter, async (req, res) => {
 
         res.status(201).json({
             message: "Account created successfully",
-            authToken,
+            ...responseAuthToken(req, authToken),
             csrfToken,
             user
         });
@@ -875,7 +960,7 @@ app.post("/login", authLimiter, async (req, res) => {
 
         res.json({
             message: "Login successful",
-            authToken,
+            ...responseAuthToken(req, authToken),
             csrfToken,
             user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role }
         });
@@ -910,7 +995,7 @@ app.post("/auth/device/login", requireDeviceCredential, async (req, res) => {
     if (!user) return res.status(401).json({ message: "User account not found" });
     const authToken = setSessionCookie(res, user);
     const csrfToken = setCsrfCookie(res);
-    res.json({ message: "Biometric login successful", authToken, csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
+    res.json({ message: "Biometric login successful", ...responseAuthToken(req, authToken), csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
 });
 
 async function findUserByIdentifier(identifier) {
@@ -1063,10 +1148,65 @@ app.post("/auth/passkey/login/verify", async (req, res) => {
         await pool.query("DELETE FROM passkey_challenges WHERE user_id = $1", [user.id]);
         const authToken = setSessionCookie(res, user);
         const csrfToken = setCsrfCookie(res);
-        res.json({ message: "Passkey login successful", authToken, csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
+        res.json({ message: "Passkey login successful", ...responseAuthToken(req, authToken), csrfToken, user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, role: user.role } });
     } catch (error) {
         console.error(error);
         res.status(401).json({ message: "Could not verify passkey" });
+    }
+});
+
+app.post("/auth/passkey/transaction/options", requireSession, requireCsrf, async (req, res) => {
+    const credentials = await pool.query("SELECT id, transports FROM passkey_credentials WHERE user_id = $1", [req.session.sub]);
+    if (!credentials.rows.length) return res.status(404).json({ message: "No passkey is registered for this account" });
+    const options = await generateAuthenticationOptions({
+        rpID: WEBAUTHN_RP_ID,
+        userVerification: "required",
+        allowCredentials: credentials.rows.map((credential) => ({ id: credential.id, transports: credential.transports || [] }))
+    });
+    await pool.query(
+        `INSERT INTO passkey_challenges (user_id, challenge, purpose, expires_at)
+         VALUES ($1, $2, 'transaction', NOW() + INTERVAL '2 minutes')
+         ON CONFLICT (user_id) DO UPDATE SET challenge = EXCLUDED.challenge, purpose = EXCLUDED.purpose, expires_at = EXCLUDED.expires_at`,
+        [req.session.sub, options.challenge]
+    );
+    res.json(options);
+});
+
+app.post("/auth/passkey/transaction/verify", requireSession, requireCsrf, async (req, res) => {
+    const challengeResult = await pool.query(
+        `SELECT challenge FROM passkey_challenges
+         WHERE user_id = $1 AND purpose = 'transaction' AND expires_at > NOW()`,
+        [req.session.sub]
+    );
+    const challenge = challengeResult.rows[0]?.challenge;
+    if (!challenge) return res.status(400).json({ message: "Biometric transaction authorization expired" });
+    const stored = await pool.query(
+        "SELECT id, public_key, counter, transports FROM passkey_credentials WHERE id = $1 AND user_id = $2",
+        [req.body?.response?.id, req.session.sub]
+    );
+    const credential = stored.rows[0];
+    if (!credential) return res.status(401).json({ message: "Passkey is not registered" });
+
+    try {
+        const verification = await verifyAuthenticationResponse({
+            response: req.body.response,
+            expectedChallenge: challenge,
+            expectedOrigin: WEBAUTHN_ORIGIN,
+            expectedRPID: WEBAUTHN_RP_ID,
+            credential: {
+                id: credential.id,
+                publicKey: fromBase64Url(credential.public_key),
+                counter: Number(credential.counter),
+                transports: credential.transports || []
+            }
+        });
+        if (!verification.verified) return res.status(401).json({ message: "Biometric authorization failed" });
+        await pool.query("UPDATE passkey_credentials SET counter = $1 WHERE id = $2", [verification.authenticationInfo.newCounter, credential.id]);
+        const transactionAuthorization = jwt.sign({ sub: String(req.session.sub), purpose: "transaction", challenge }, AUTH_SECRET, { expiresIn: "2m" });
+        res.json({ transactionAuthorization });
+    } catch (error) {
+        console.error(error);
+        res.status(401).json({ message: "Could not verify biometric authorization" });
     }
 });
 
@@ -1418,7 +1558,7 @@ app.post("/agents/request", requireSession, requireCsrf, async (req, res) => {
 });
 
 // Admin API: all routes below require a signed user session and an admin role.
-app.get("/admin/auth/me", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/auth/me", requireSession, requireAdmin, requirePermission("dashboard.read"), async (req, res) => {
     const result = await pool.query(
         "SELECT id, username, full_name, email, role, status FROM users WHERE id = $1",
         [req.session.sub]
@@ -1432,7 +1572,33 @@ app.post("/admin/auth/logout", requireSession, requireAdmin, async (req, res) =>
     res.sendStatus(204);
 });
 
-app.get("/admin/dashboard/summary", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/provider-balance", requireSession, requireAdmin, requirePermission("transactions.read"), async (req, res) => {
+    try {
+        const account = await getVtuGateAccountDetails();
+        const balance = Number(
+            account.balance ?? account.available_balance ?? account.wallet_balance ?? account.amount ?? 0
+        );
+        if (!Number.isFinite(balance)) {
+            return res.status(502).json({ message: "VTUGATE returned an invalid account balance" });
+        }
+        res.json({
+            provider: "VTUGATE",
+            providerName: "VTUGATE",
+            balance,
+            currency: "NGN",
+            status: balance <= 0 ? "CRITICAL" : "HEALTHY",
+            lastCheckedAt: new Date().toISOString(),
+            lowBalanceThreshold: Number(process.env.VTU_GATE_LOW_BALANCE_THRESHOLD_NAIRA || 500000),
+            source: "VTUGATE accountdetails",
+            fundingOptions: VTU_GATE_FUNDING_OPTIONS
+        });
+    } catch (error) {
+        console.error("Admin VTUGATE balance lookup failed", error);
+        res.status(502).json({ message: error.message || "Could not load VTUGATE balance" });
+    }
+});
+
+app.get("/admin/dashboard/summary", requireSession, requireAdmin, requirePermission("dashboard.read"), async (req, res) => {
     const result = await pool.query(`SELECT
         (SELECT COUNT(*) FROM users WHERE role = 'user') AS users,
         (SELECT COUNT(*) FROM deposits WHERE status = 'success') AS deposits,
@@ -1457,7 +1623,7 @@ app.get("/admin/dashboard/summary", requireSession, requireAdmin, async (req, re
     } });
 });
 
-app.get("/admin/dashboard/trend", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/dashboard/trend", requireSession, requireAdmin, requirePermission("dashboard.read"), async (req, res) => {
     const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 90);
     const result = await pool.query(`SELECT day::date AS date, COALESCE(SUM(amount_kobo), 0) AS volume_kobo
         FROM generate_series(CURRENT_DATE - ($1::int - 1), CURRENT_DATE, INTERVAL '1 day') AS day
@@ -1466,22 +1632,28 @@ app.get("/admin/dashboard/trend", requireSession, requireAdmin, async (req, res)
     res.json({ trend: result.rows.map((row) => ({ date: row.date, volume: Number(row.volume_kobo || 0) / 100 })) });
 });
 
-app.get("/admin/dashboard/revenue-by-type", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/dashboard/revenue-by-type", requireSession, requireAdmin, requirePermission("dashboard.read"), async (req, res) => {
     const result = await pool.query(`SELECT type, COUNT(*)::int AS count, COALESCE(SUM(amount_kobo), 0) AS volume_kobo
         FROM vtu_transactions WHERE status = 'success' GROUP BY type ORDER BY volume_kobo DESC`);
     res.json({ revenue: result.rows.map((row) => ({ type: row.type, count: row.count, volume: Number(row.volume_kobo || 0) / 100 })) });
 });
 
-app.get("/admin/dashboard/today", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/dashboard/today", requireSession, requireAdmin, requirePermission("dashboard.read"), async (req, res) => {
     const result = await pool.query(`SELECT
         (SELECT COUNT(*) FROM vtu_transactions WHERE created_at >= CURRENT_DATE) AS transactions,
         (SELECT COALESCE(SUM(amount_kobo), 0) FROM vtu_transactions WHERE created_at >= CURRENT_DATE AND status = 'success') AS volume_kobo,
+        (SELECT COALESCE(SUM(amount_kobo), 0) FROM deposits WHERE created_at >= CURRENT_DATE AND status = 'success') AS deposits_volume_kobo,
         (SELECT COUNT(DISTINCT user_id) FROM vtu_transactions WHERE created_at >= CURRENT_DATE) AS active_users`);
     const row = result.rows[0] || {};
-    res.json({ today: { transactions: Number(row.transactions || 0), volume: Number(row.volume_kobo || 0) / 100, activeUsers: Number(row.active_users || 0) } });
+    res.json({ today: {
+        transactions: Number(row.transactions || 0),
+        volume: Number(row.volume_kobo || 0) / 100,
+        depositsVolume: Number(row.deposits_volume_kobo || 0) / 100,
+        activeUsers: Number(row.active_users || 0)
+    } });
 });
 
-app.get("/admin/users", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/users", requireSession, requireAdmin, requirePermission("users.read"), async (req, res) => {
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
     const offset = (page - 1) * limit;
@@ -1489,17 +1661,26 @@ app.get("/admin/users", requireSession, requireAdmin, async (req, res) => {
     const status = typeof req.query.status === "string" && ["active", "blocked"].includes(req.query.status) ? req.query.status : null;
     const [rows, count] = await Promise.all([
         pool.query(`SELECT u.id, u.username, u.full_name, u.email, u.phone, u.status, u.role, u.created_at,
-                           COALESCE(w.balance_kobo, 0) AS balance_kobo
+                   COALESCE(w.balance_kobo, 0) AS balance_kobo,
+                   COALESCE((SELECT COUNT(*) FROM vtu_transactions vt WHERE vt.user_id = u.id), 0) AS total_transactions,
+                   COALESCE((SELECT SUM(amount_kobo) FROM vtu_transactions vt WHERE vt.user_id = u.id AND vt.status = 'success'), 0) AS total_spent_kobo,
+                   (SELECT MAX(created_at) FROM vtu_transactions vt WHERE vt.user_id = u.id) AS last_transaction_at
                     FROM users u LEFT JOIN wallets w ON w.user_id = u.id
                     WHERE u.role = 'user' AND (u.username ILIKE $1 OR COALESCE(u.email, '') ILIKE $1 OR COALESCE(u.phone, '') ILIKE $1)
                       AND ($2::text IS NULL OR u.status = $2)
                     ORDER BY u.created_at DESC LIMIT $3 OFFSET $4`, [search, status, limit, offset]),
         pool.query(`SELECT COUNT(*) FROM users u WHERE u.role = 'user' AND (u.username ILIKE $1 OR COALESCE(u.email, '') ILIKE $1 OR COALESCE(u.phone, '') ILIKE $1) AND ($2::text IS NULL OR u.status = $2)`, [search, status])
     ]);
-    res.json({ users: rows.rows.map((row) => ({ ...row, balance: Number(row.balance_kobo || 0) / 100 })), page, limit, total: Number(count.rows[0].count) });
+    res.json({ users: rows.rows.map((row) => ({
+        ...row,
+        balance: Number(row.balance_kobo || 0) / 100,
+        totalTransactions: Number(row.total_transactions || 0),
+        totalSpent: Number(row.total_spent_kobo || 0) / 100,
+        lastTransactionAt: row.last_transaction_at || row.created_at
+    })), page, limit, total: Number(count.rows[0].count) });
 });
 
-app.get("/admin/users/:userId", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/users/:userId", requireSession, requireAdmin, requirePermission("users.read"), async (req, res) => {
     const result = await pool.query(`SELECT u.id, u.username, u.full_name, u.email, u.phone, u.status, u.role, u.created_at,
         COALESCE(w.balance_kobo, 0) AS balance_kobo, ap.status AS tier FROM users u
         LEFT JOIN wallets w ON w.user_id = u.id LEFT JOIN agent_profiles ap ON ap.user_id = u.id WHERE u.id = $1`, [Number(req.params.userId)]);
@@ -1507,14 +1688,14 @@ app.get("/admin/users/:userId", requireSession, requireAdmin, async (req, res) =
     res.json({ user: { ...result.rows[0], balance: Number(result.rows[0].balance_kobo || 0) / 100 } });
 });
 
-app.get("/admin/users/:userId/history", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/users/:userId/history", requireSession, requireAdmin, requirePermission("users.read"), async (req, res) => {
     const userId = Number(req.params.userId);
     const result = await pool.query(`SELECT reference AS id, 'deposit' AS type, amount_kobo, status, created_at FROM deposits WHERE user_id = $1
         UNION ALL SELECT reference AS id, type, amount_kobo, status, created_at FROM vtu_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 200`, [userId]);
     res.json({ history: result.rows.map((row) => ({ ...row, amount: Number(row.amount_kobo || 0) / 100 })) });
 });
 
-app.patch("/admin/users/:userId/status", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+app.patch("/admin/users/:userId/status", requireSession, requireAdmin, requirePermission("users.block"), requireCsrf, async (req, res) => {
     const status = req.body?.status;
     if (!["active", "blocked"].includes(status)) return res.status(400).json({ message: "Invalid account status" });
     const beforeResult = await pool.query("SELECT id, username, status FROM users WHERE id = $1 AND role = 'user'", [Number(req.params.userId)]);
@@ -1524,7 +1705,7 @@ app.patch("/admin/users/:userId/status", requireSession, requireAdmin, requireCs
     res.json({ user: result.rows[0] });
 });
 
-app.post("/admin/users/:userId/ledger", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+app.post("/admin/users/:userId/ledger", requireSession, requireAdmin, requirePermission("ledger.adjust"), requireCsrf, async (req, res) => {
     const amount = Number(req.body?.amount);
     const direction = req.body?.direction;
     const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
@@ -1547,13 +1728,72 @@ app.post("/admin/users/:userId/ledger", requireSession, requireAdmin, requireCsr
     } catch (error) { await client.query("ROLLBACK"); console.error(error); res.status(500).json({ message: "Could not post ledger adjustment" }); } finally { client.release(); }
 });
 
-app.get("/admin/transactions", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/deposits", requireSession, requireAdmin, requirePermission("transactions.read"), async (req, res) => {
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const offset = (page - 1) * limit;
+    const values = [];
+    const filters = [];
+    const add = (value, clause) => { values.push(value); filters.push(clause.replace("$VALUE", `$${values.length}`)); };
+    const status = typeof req.query.status === "string" && ["pending", "success", "failed"].includes(req.query.status)
+        ? req.query.status
+        : null;
+    if (status) add(status, "d.status = $VALUE");
+    if (typeof req.query.q === "string" && req.query.q.trim()) {
+        add(`%${req.query.q.trim()}%`, `(d.reference ILIKE $VALUE OR COALESCE(d.dedicated_account_number, '') ILIKE $VALUE OR COALESCE(u.username, '') ILIKE $VALUE OR COALESCE(u.full_name, '') ILIKE $VALUE OR COALESCE(u.email, '') ILIKE $VALUE OR COALESCE(u.phone, '') ILIKE $VALUE)`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const rowsValues = [...values, limit, offset];
+    const [rows, count] = await Promise.all([
+        pool.query(`SELECT d.id, d.user_id, d.reference, d.amount_kobo, d.fee_kobo, d.credit_amount_kobo,
+                           d.dedicated_account_number, d.dedicated_account_reference, d.status, d.failure_reason,
+                           d.created_at, d.verified_at, u.username, u.full_name, u.email, u.phone,
+                           u.virtual_account_number, u.virtual_account_bank_name
+                    FROM deposits d JOIN users u ON u.id = d.user_id
+                    ${where} ORDER BY d.created_at DESC LIMIT $${rowsValues.length - 1} OFFSET $${rowsValues.length}`, rowsValues),
+        pool.query(`SELECT COUNT(*) FROM deposits d JOIN users u ON u.id = d.user_id ${where}`, values)
+    ]);
+    res.json({
+        deposits: rows.rows.map((row) => ({
+            id: String(row.id),
+            userId: String(row.user_id),
+            reference: row.reference,
+            customerName: row.full_name || row.username,
+            customerPhone: row.phone || null,
+            customerEmail: row.email || null,
+            virtualAccount: row.dedicated_account_number || row.virtual_account_number || null,
+            bankName: row.virtual_account_bank_name || null,
+            bankRef: row.reference,
+            sessionRef: row.dedicated_account_reference || row.reference,
+            amount: Number(row.amount_kobo || 0) / 100,
+            fee: Number(row.fee_kobo || 0) / 100,
+            creditAmount: Number(row.credit_amount_kobo || row.amount_kobo || 0) / 100,
+            currency: "NGN",
+            status: row.status,
+            failureReason: row.failure_reason || null,
+            createdAt: row.created_at,
+            verifiedAt: row.verified_at,
+            settledAt: row.verified_at || row.created_at
+        })),
+        page,
+        limit,
+        total: Number(count.rows[0].count)
+    });
+});
+
+app.get("/admin/transactions", requireSession, requireAdmin, requirePermission("transactions.read"), async (req, res) => {
     const values = [];
     const filters = [];
     const add = (value, clause) => { values.push(value); filters.push(clause.replace("$VALUE", `$${values.length}`)); };
     if (typeof req.query.q === "string" && req.query.q.trim()) add(`%${req.query.q.trim()}%`, "(vt.reference ILIKE $VALUE OR u.username ILIKE $VALUE OR COALESCE(u.email, '') ILIKE $VALUE OR vt.network ILIKE $VALUE OR vt.phone ILIKE $VALUE)");
     if (typeof req.query.type === "string" && ["airtime", "data", "electricity", "cable_tv"].includes(req.query.type)) add(req.query.type, "vt.type = $VALUE");
-    if (typeof req.query.status === "string" && ["success", "pending", "failed"].includes(req.query.status)) add(req.query.status, "vt.status = $VALUE");
+    if (typeof req.query.carrier === "string" && req.query.carrier.trim()) {
+        const carrier = req.query.carrier.trim().toLowerCase();
+        if (["mtn", "airtel", "glo", "9mobile", "aedc", "ikedc", "kedco", "phed", "jed", "dstv", "gotv", "startimes", "vtugate"].includes(carrier)) {
+            add(`%${carrier}%`, "(LOWER(vt.network) ILIKE $VALUE OR LOWER(COALESCE(vt.provider, '')) ILIKE $VALUE)");
+        }
+    }
+    if (typeof req.query.status === "string" && ["success", "pending", "failed", "refunded"].includes(req.query.status)) add(req.query.status, "vt.status = $VALUE");
     if (typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from)) add(req.query.from, "vt.created_at >= $VALUE::date");
     if (typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to)) add(req.query.to, "vt.created_at < ($VALUE::date + INTERVAL '1 day')");
     if (Number.isFinite(Number(req.query.min)) && Number(req.query.min) >= 0) add(Math.round(Number(req.query.min) * 100), "vt.amount_kobo >= $VALUE");
@@ -1564,13 +1804,13 @@ app.get("/admin/transactions", requireSession, requireAdmin, async (req, res) =>
     res.json({ transactions: result.rows.map((row) => ({ ...row, amount: Number(row.amount_kobo || 0) / 100 })) });
 });
 
-app.get("/admin/audit-log", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/audit-log", requireSession, requireAdmin, requirePermission("audit.read"), async (req, res) => {
     const result = await pool.query(`SELECT a.id, a.action, a.details, a.ip_address, a.created_at, u.username AS actor
         FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.created_at DESC LIMIT 300`);
     res.json({ auditLog: result.rows });
 });
 
-app.get("/admin/risk-cases", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/risk-cases", requireSession, requireAdmin, requirePermission("risk.read"), async (req, res) => {
     const status = typeof req.query.status === "string" ? req.query.status : "";
     const result = await pool.query(`SELECT f.id, f.user_id, u.username, u.email, f.operation,
         f.risk_score, f.reason_codes, f.ip_address, f.created_at,
@@ -1581,7 +1821,7 @@ app.get("/admin/risk-cases", requireSession, requireAdmin, async (req, res) => {
     res.json({ cases: result.rows });
 });
 
-app.get("/admin/analytics", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/analytics", requireSession, requireAdmin, requirePermission("analytics.read"), async (req, res) => {
     const [summaryResult, monthlyResult, topCustomersResult, serviceBreakdownResult, usersResult, transactionsResult] = await Promise.all([
         pool.query(
             `SELECT
@@ -1734,7 +1974,7 @@ app.get("/admin/analytics", requireSession, requireAdmin, async (req, res) => {
     });
 });
 
-app.get("/admin/users/:userId/history", requireSession, requireAdmin, async (req, res) => {
+app.get("/admin/users/:userId/history", requireSession, requireAdmin, requirePermission("users.read"), async (req, res) => {
     const userId = Number(req.params.userId);
     if (!Number.isSafeInteger(userId) || userId < 1) {
         return res.status(400).json({ message: "Invalid user id" });
@@ -1777,7 +2017,7 @@ app.get("/admin/users/:userId/history", requireSession, requireAdmin, async (req
     });
 });
 
-app.post("/admin/users/:userId/fund", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+app.post("/admin/users/:userId/fund", requireSession, requireAdmin, requirePermission("ledger.adjust"), requireCsrf, async (req, res) => {
     const userId = Number(req.params.userId);
     const amount = Number(req.body?.amount);
     if (!Number.isSafeInteger(userId) || userId < 1) {
@@ -1843,7 +2083,7 @@ app.post("/admin/users/:userId/fund", requireSession, requireAdmin, requireCsrf,
     }
 });
 
-app.post("/admin/users/:userId/block", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+app.post("/admin/users/:userId/block", requireSession, requireAdmin, requirePermission("users.block"), requireCsrf, async (req, res) => {
     const userId = Number(req.params.userId);
     const nextStatus = req.body?.status;
 
@@ -1880,8 +2120,7 @@ app.post("/admin/users/:userId/block", requireSession, requireAdmin, requireCsrf
     });
 });
 
-app.get("/admin/agents", requireSession, requireAdmin, async (req, res) => {
-    const beforeResult = await pool.query("SELECT status FROM agent_profiles WHERE user_id = $1", [userId]);
+app.get("/admin/agents", requireSession, requireAdmin, requirePermission("agents.manage"), async (req, res) => {
     const result = await pool.query(
         `SELECT u.id, u.username, u.email, ap.status, ap.daily_limit_kobo,
                 ap.verified_at, ap.updated_at
@@ -1892,11 +2131,12 @@ app.get("/admin/agents", requireSession, requireAdmin, async (req, res) => {
     res.json({ agents: result.rows });
 });
 
-app.post("/admin/agents/:userId/verify", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+app.post("/admin/agents/:userId/verify", requireSession, requireAdmin, requirePermission("agents.manage"), requireCsrf, async (req, res) => {
     const userId = Number(req.params.userId);
     if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).json({ message: "Invalid user id" });
     const status = req.body?.status;
     if (!['verified', 'suspended', 'pending'].includes(status)) return res.status(400).json({ message: "Invalid agent status" });
+    const beforeResult = await pool.query("SELECT status FROM agent_profiles WHERE user_id = $1", [userId]);
     const result = await pool.query(
         `UPDATE agent_profiles
          SET status = $1, verified_by = CASE WHEN $1 = 'verified' THEN $2 ELSE verified_by END,
