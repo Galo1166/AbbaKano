@@ -704,6 +704,7 @@ a { color: inherit; text-decoration: none; }
 .profile-avatar { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 14px; background: var(--primary); color: white; font-size: 1.2rem; font-weight: 800; }
 .profile-identity h2 { margin: 0 0 4px; font-size: 1rem; }
 .profile-identity p { margin: 0; color: var(--text-subtle); font-size: 0.75rem; }
+.profile-identity .profile-phone { margin-top: 4px; color: var(--text-muted); }
 .profile-message { margin-top: 16px; border: 1px solid rgba(0, 208, 132, 0.28); border-radius: 12px; background: rgba(0, 208, 132, 0.08); color: var(--tertiary); padding: 13px 15px; font-size: 0.78rem; }
 .profile-section { margin-top: 30px; }
 .profile-section > h2 { margin: 0 0 12px; color: var(--text-subtle); font-size: 0.68rem; letter-spacing: 0.13em; text-transform: uppercase; }
@@ -713,6 +714,7 @@ a { color: inherit; text-decoration: none; }
 .profile-row:hover { background: var(--surface-high); }
 .profile-row-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 11px; background: rgba(37, 99, 235, 0.12); color: var(--primary); }
 .profile-row-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.profile-service-symbol { font-family: "Material Symbols Outlined", sans-serif; font-size: 21px; font-weight: 500; line-height: 1; font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24; }
 .profile-row-copy { display: grid; min-width: 0; flex: 1; gap: 4px; }
 .profile-row-copy strong { font-size: 0.82rem; }
 .profile-row-copy small { color: var(--text-subtle); font-size: 0.7rem; }
@@ -725,6 +727,18 @@ a { color: inherit; text-decoration: none; }
 .profile-toggle:disabled { cursor: wait; opacity: 0.55; }
 .profile-signout { display: grid; width: 100%; margin-top: 30px; border: 1px solid rgba(239, 68, 68, 0.28); border-radius: 14px; background: rgba(239, 68, 68, 0.07); color: #ff8f86; cursor: pointer; padding: 16px; text-align: left; font: inherit; font-size: 0.82rem; font-weight: 800; }
 .profile-signout small { margin-top: 5px; color: var(--text-subtle); font-size: 0.7rem; font-weight: 500; }
+.signout-modal h2 { margin-bottom: 10px; }
+.signout-copy { margin: 0; color: var(--text-muted); font-size: 0.78rem; line-height: 1.55; }
+.signout-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 22px; }
+.signout-actions button { min-height: 44px; border-radius: 10px; cursor: pointer; font: inherit; font-size: 0.74rem; font-weight: 800; }
+.signout-actions button:disabled { cursor: wait; opacity: 0.6; }
+.signout-actions .fund-cancel { border: 1px solid var(--border); }
+.signout-confirm { border: 1px solid #b91c1c; background: #b91c1c; color: white; }
+.signout-confirm:hover { background: #991b1b; }
+.profile-page .profile-content.about-content { padding-bottom: 40px; }
+.about-copy { margin: 0; color: var(--text-muted); font-size: 0.86rem; line-height: 1.7; }
+.about-contact { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.about-contact a { color: var(--primary); font-size: 0.82rem; font-weight: 700; }
 .theme-option-list { display: grid; gap: 12px; margin-top: 18px; }
 .theme-option { display: flex; align-items: center; gap: 14px; width: 100%; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-high); color: var(--text); cursor: pointer; padding: 14px 16px; text-align: left; font: inherit; transition: border-color 180ms ease, background 180ms ease; }
 .theme-option.selected { border-color: var(--primary); background: rgba(37, 99, 235, 0.08); }

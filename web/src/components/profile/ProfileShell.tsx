@@ -1,6 +1,7 @@
 "use client";
 
 import { startRegistration } from "@simplewebauthn/browser";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
@@ -15,6 +16,8 @@ function Icon({ name }: { name: string }) {
     lock: "M6 10h12v10H6zM8 10V7a4 4 0 0 1 8 0v3",
     help: "M4 13a8 8 0 0 1 16 0v4M4 13v4a2 2 0 0 0 2 2h2v-6H4m16 0h-4v6h2a2 2 0 0 0 2-2",
     gift: "M20 12v8H4v-8M2 8h20v4H2zM12 8v12M12 8H8.5a2.5 2.5 0 1 1 2.5-2.5V8Zm0 0h3.5a2.5 2.5 0 1 0-2.5-2.5V8Z",
+    services: "M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4",
+    info: "M12 16v-4M12 8h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     palette: "M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
     sun: "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
     moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z",
@@ -29,6 +32,7 @@ function Toggle({ enabled, onChange, disabled = false }: { enabled: boolean; onC
 type ProfileUser = { full_name?: string; fullName?: string; email?: string; phone?: string; biometrics_enabled?: boolean; app_lock_enabled?: boolean; has_transaction_pin?: boolean; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
 
 export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
+  const router = useRouter();
   const [user, setUser] = useState<ProfileUser | null>(initialUser || null);
   const [loading, setLoading] = useState(!initialUser);
   const [message, setMessage] = useState("");
@@ -37,6 +41,8 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
   const [savingSetting, setSavingSetting] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [pinStep, setPinStep] = useState<"current" | "new" | "confirm">("new");
   const [pin, setPin] = useState("");
   const [newPin, setNewPin] = useState("");
@@ -104,12 +110,14 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
   }
 
   async function handleLogout() {
+    setSigningOut(true);
     try {
       await apiRequest("/logout", { method: "POST" });
     } catch (error) {
       console.error("Could not sign out the customer", error);
+    } finally {
+      window.location.href = "/login";
     }
-    window.location.href = "/login";
   }
 
   const name = user?.full_name || user?.fullName || "AbbaKano user";
@@ -118,13 +126,28 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
   return (
     <CustomerPageLayout active="profile" eyebrow="Account" title="Profile" subtitle="Account & Security Settings">
       <section className="profile-content">
-        <div className="profile-identity"><div className="profile-avatar">{name.slice(0, 1).toUpperCase()}</div><div><h2>{name}</h2><p>{user?.email || "Your AbbaKano wallet"}</p></div></div>
+        <div className="profile-identity"><div className="profile-avatar">{name.slice(0, 1).toUpperCase()}</div><div><h2>{name}</h2><p>{user?.email || "Your AbbaKano wallet"}</p><p className="profile-phone">{user?.phone || "Phone number not added"}</p></div></div>
         {message && <div className="profile-message" role="status">{message}</div>}
+        <ProfileSection title="Explore"><ProfileRow icon="services" title="Services" subtitle="Airtime, data, electricity and TV" onClick={() => router.push("/services")} /></ProfileSection>
         <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle="Earn N100 for each friend's first data top-up" badge="N100 BONUS" onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
         <ProfileSection title="Security & Preferences"><ProfileRow icon="pin" title="Change Transaction PIN" subtitle="4-digit wallet security PIN" onClick={openPinModal} /><ProfileRow icon="fingerprint" title="Biometrics Login" subtitle="Face ID / Fingerprint unlock" control={<Toggle enabled={biometrics} disabled={savingSetting === "biometrics"} onChange={() => void saveSecuritySetting("biometrics", !biometrics)} />} /><ProfileRow icon="lock" title="App Lock PIN" subtitle="Screen lock security timeout" control={<Toggle enabled={appLock} disabled={savingSetting === "appLock"} onChange={() => void saveSecuritySetting("appLock", !appLock)} />} /><ProfileRow icon="palette" title="Theme & Appearance" subtitle={themePreference === "system" ? `Auto (${theme === "dark" ? "Dark" : "Light"})` : `${theme === "dark" ? "Dark" : "Light"} mode active`} badge={themePreference === "system" ? "AUTO" : theme.toUpperCase()} onClick={() => setShowThemeModal(true)} /></ProfileSection>
-        <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" /><ProfileRow icon="shield" title="About AbbaKano" subtitle="Version 1.0.0 - Build 2025.02.25" /></ProfileSection>
-        <button className="profile-signout" type="button" onClick={handleLogout}>Sign Out <small>Exit your wallet session safely</small></button>
+        <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" onClick={() => router.push("/support")} /><ProfileRow icon="info" title="About AbbaKano" subtitle="About the platform and its services" onClick={() => router.push("/about")} /></ProfileSection>
+        <button className="profile-signout" type="button" onClick={() => setShowSignOutModal(true)} aria-haspopup="dialog">Sign Out <small>Exit your wallet session safely</small></button>
       </section>
+      {showSignOutModal && (
+        <div className="data-modal-backdrop" onClick={() => !signingOut && setShowSignOutModal(false)}>
+          <section className="data-modal signout-modal" role="dialog" aria-modal="true" aria-labelledby="signout-title" onClick={(event) => event.stopPropagation()}>
+            <button className="data-modal-close" type="button" onClick={() => setShowSignOutModal(false)} disabled={signingOut} aria-label="Close sign-out confirmation">x</button>
+            <p className="data-kicker">Account</p>
+            <h2 id="signout-title">Sign out of AbbaKano?</h2>
+            <p className="signout-copy">You’ll need to sign in again to access your wallet and account.</p>
+            <div className="signout-actions">
+              <button className="fund-cancel" type="button" onClick={() => setShowSignOutModal(false)} disabled={signingOut}>Cancel</button>
+              <button className="signout-confirm" type="button" onClick={() => void handleLogout()} disabled={signingOut}>{signingOut ? "Signing out..." : "Sign Out"}</button>
+            </div>
+          </section>
+        </div>
+      )}
       {showThemeModal && (
         <div className="data-modal-backdrop" onClick={() => setShowThemeModal(false)}>
           <section className="data-modal theme-modal" role="dialog" aria-modal="true" aria-labelledby="theme-title" onClick={(event) => event.stopPropagation()}>
