@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const backendUrl = process.env.BACKEND_URL || "http://localhost:3000";
+const backendUrl = process.env.BACKEND_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
 async function proxy(request: NextRequest, context: RouteContext) {
+  if (!backendUrl) {
+    return NextResponse.json({ message: "Backend is not configured. Set BACKEND_URL on the web service." }, { status: 503 });
+  }
+
   const { path } = await context.params;
   const target = `${backendUrl.replace(/\/$/, "")}/${path.join("/")}${request.nextUrl.search}`;
   const headers = new Headers();
@@ -18,7 +22,12 @@ async function proxy(request: NextRequest, context: RouteContext) {
   headers.set("x-client-platform", "web");
 
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text();
-  const response = await fetch(target, { method: request.method, headers, body, redirect: "manual" });
+  let response: Response;
+  try {
+    response = await fetch(target, { method: request.method, headers, body, redirect: "manual" });
+  } catch {
+    return NextResponse.json({ message: "Could not reach the backend. Check BACKEND_URL on the web service." }, { status: 502 });
+  }
   const responseHeaders = new Headers();
   const contentType = response.headers.get("content-type");
   const setCookie = response.headers.get("set-cookie");

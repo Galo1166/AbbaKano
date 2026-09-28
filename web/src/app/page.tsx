@@ -78,7 +78,7 @@ export default function Home() {
 
         <aside className="receipt" aria-label="Example transaction receipt">
           <div className="receipt-heading"><span>Transaction receipt</span><span className="receipt-id">#AB-88214</span></div>
-          <div className="receipt-line"><span>MTN Data - 2GB</span><strong>NGN 1,450</strong></div>
+          <div className="receipt-line"><span>MTN Data - 5GB</span><strong>NGN 1500</strong></div>
           <div className="receipt-line"><span>IKEDC Electricity</span><strong>NGN 8,000</strong></div>
           <div className="receipt-line"><span>GOtv Max - 1 month</span><strong>NGN 6,200</strong></div>
           <div className="receipt-line"><span>Airtel Airtime</span><strong>NGN 1,000</strong></div>

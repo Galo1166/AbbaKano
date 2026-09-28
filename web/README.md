@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Render backend connection
+
+In the Render dashboard, set `BACKEND_URL` on the web service to the backend service's URL, for example `https://your-backend.onrender.com` (without an endpoint path), then redeploy the web service. The web app proxies `/api/auth/*` requests server-side, so `NEXT_PUBLIC_API_BASE_URL` is not used for customer API requests. Local development defaults to `http://localhost:3000`.
+
 ## Getting Started
 
 First, run the development server:
