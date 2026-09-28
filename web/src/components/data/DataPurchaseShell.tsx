@@ -78,6 +78,8 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
   const [purchasing, setPurchasing] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const phoneDigits = phone.replace(/\D/g, "");
+  const validPhone = /^(?:0\d{10}|234\d{10})$/.test(phoneDigits);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +91,14 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
 
   useEffect(() => {
     let cancelled = false;
+    if (!validPhone) {
+      setPlans([]);
+      setSelectedPlan(null);
+      setErrorMessage("");
+      setLoading(false);
+      return () => { cancelled = true; };
+    }
+
     async function loadPlans() {
       setLoading(true);
       setErrorMessage("");
@@ -112,7 +122,7 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
     }
     void loadPlans();
     return () => { cancelled = true; };
-  }, [network, reloadKey]);
+  }, [network, phone, reloadKey, validPhone]);
 
   const availablePlans = plans.filter((plan) => {
     const planCategory = (plan.category || "GENERAL").toUpperCase();
@@ -132,12 +142,13 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
 
   function choosePhone(value: string) {
     setPhone(value);
+    setSelectedPlan(null);
     const detected = detectNetwork(value);
     if (detected) chooseNetwork(detected);
   }
 
-  function openCheckout(plan: Plan) {
-    setSelectedPlan(plan);
+  function openCheckout() {
+    if (!selectedPlan || !validPhone) return;
     setPurchaseMessage("");
     setPin("");
     setShowCheckout(true);
@@ -191,16 +202,18 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
     <main className="data-page"><WebDesktopSidebar active="data" />
       <header className="data-header"><button className="data-back" type="button" onClick={goHome}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7" /></svg><span>Dashboard</span></button><div><p className="data-kicker">VTU Hub</p><h1>Buy Data Bundle</h1><p>Instant SME, Gifting &amp; Corporate Data</p></div></header>
       <section className="data-content">
-        <div className="data-section-heading"><span>SELECT NETWORK OPERATOR</span><small>{detectedNetwork ? `${detectedNetwork} detected` : "Choose a network"}</small></div>
+        <div className="data-section-heading"><span>SELECT PROVIDER</span><small>{detectedNetwork ? `${detectedNetwork} detected` : "Choose a network"}</small></div>
         <div className="network-grid">{networks.map((item) => <button className={`network-card${network === item.id ? " selected" : ""}`} type="button" onClick={() => chooseNetwork(item.id)} key={item.id}><span className="network-logo" style={{ backgroundColor: item.color }}><Image src={item.logo} alt="" width={31} height={31} /></span><span>{item.label}</span>{network === item.id && <i />}</button>)}</div>
 
         <div className="data-tabs" role="tablist" aria-label="Data plan category">{categories.map((item) => <button className={category === item.id ? "active" : ""} type="button" role="tab" aria-selected={category === item.id} onClick={() => { setCategory(item.id); setSelectedPlan(null); }} key={item.id}>{item.label}</button>)}</div>
-        <label className="data-phone-label">Beneficiary Phone Number {detectedNetwork && <small style={{ color: networks.find((item) => item.id === detectedNetwork)?.color }}>{detectedNetwork}</small>}<input value={phone} onChange={(event) => choosePhone(event.target.value)} placeholder="Enter phone number" inputMode="tel" /></label>
+        <label className="data-phone-label">Recipient Phone Number {detectedNetwork && <small style={{ color: networks.find((item) => item.id === detectedNetwork)?.color }}>{detectedNetwork}</small>}<input value={phone} onChange={(event) => choosePhone(event.target.value)} placeholder="Enter phone number" inputMode="tel" /></label>
 
-        <div className="data-plans-heading"><span>AVAILABLE {network} {category} PLANS</span>{loading && <small>LOADING PLANS...</small>}</div>
-        {errorMessage && <div className="data-message error" role="alert">{errorMessage}<button type="button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
-        {!loading && !errorMessage && availablePlans.length === 0 && <div className="data-empty">No {category.toLowerCase()} plans are currently available for {network}.</div>}
-        <div className="plan-grid">{availablePlans.map((plan) => <button className={`plan-card${selectedPlan?.code === plan.code ? " selected" : ""}`} type="button" onClick={() => openCheckout(plan)} key={`${plan.code}-${plan.label}`}><span>{plan.label}</span><strong>{formatNaira(plan.price)}</strong><span className="plan-purchase">Purchase</span></button>)}</div>
+        <div className="data-plans-heading"><span>{validPhone ? `AVAILABLE ${network} ${category} PLANS` : "AVAILABLE PLANS"}</span>{loading && validPhone && <small>LOADING PLANS...</small>}</div>
+        {!validPhone && <div className="data-empty">Enter a valid phone number to view available plans.</div>}
+        {validPhone && errorMessage && <div className="data-message error" role="alert">{errorMessage}<button type="button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
+        {validPhone && !loading && !errorMessage && availablePlans.length === 0 && <div className="data-empty">No {category.toLowerCase()} plans are currently available for {network}.</div>}
+        {validPhone && <div className="plan-grid">{availablePlans.map((plan) => <button className={`plan-card${selectedPlan?.code === plan.code ? " selected" : ""}`} type="button" aria-pressed={selectedPlan?.code === plan.code} onClick={() => setSelectedPlan(plan)} key={`${plan.code}-${plan.label}`}><span>{plan.label}</span><strong>{formatNaira(plan.price)}</strong><span className="plan-purchase">{selectedPlan?.code === plan.code ? "Selected" : "Select"}</span></button>)}</div>}
+        <button className="airtime-submit" type="button" disabled={!validPhone || !selectedPlan || loading || purchasing} onClick={openCheckout}>{purchasing ? "Processing..." : selectedPlan ? `Pay ${formatNaira(selectedPlan.price)}` : "Select a data plan"}</button>
       </section>
 
       {showCheckout && selectedPlan && <div className="data-modal-backdrop" role="presentation"><section className="data-modal review-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><button className="data-modal-close" type="button" onClick={() => setShowCheckout(false)} aria-label="Close checkout">x</button><p className="data-kicker">Review &amp; Confirm</p><h2 id="checkout-title">Transaction Summary</h2><div className="total-due"><span>TOTAL AMOUNT DUE</span><strong>{formatNaira(selectedPlan.price)}</strong></div><div className="transaction-summary"><div><span>Service</span><strong>{network} {selectedPlan.label}</strong></div><div><span>Beneficiary / Recipient</span><strong>{phone || "Not provided"}</strong></div><div><span>Package / Plan</span><strong>{selectedPlan.label}</strong></div><div><span>Payment Method</span><strong>AbbaKano Main Wallet</strong></div><div><span>Current Wallet Balance</span><strong>{walletBalance === null ? "Loading..." : formatNaira(walletBalance)}</strong></div><div><span>Balance After Transaction</span><strong>{walletBalance === null ? "Loading..." : formatNaira(walletBalance - selectedPlan.price)}</strong></div></div><form className="data-pin-form" onSubmit={submitPurchase}><label>Transaction PIN<div className="pin-authorization-row"><input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} placeholder="Enter 4-digit PIN" autoComplete="current-password" /><button className="biometric-action" type="button" onClick={() => void authorizeBiometric()} disabled={purchasing} aria-label="Authorize with biometrics" title="Authorize with biometrics"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7.5 8.5a6 6 0 0 1 9 0M5 12a7 7 0 0 1 14 0M9.5 12a2.5 2.5 0 0 1 5 0v5M12 14.5V20M8 16v1a4 4 0 0 0 8 0v-1" /></svg></button></div></label>{purchaseMessage && <div className="data-message error" role="alert">{purchaseMessage}</div>}<button className="data-purchase-button" type="submit" disabled={purchasing}>{purchasing ? "Processing..." : "Confirm & Authorize PIN"}</button></form></section></div>}

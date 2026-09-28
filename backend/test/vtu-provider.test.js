@@ -4,7 +4,8 @@ const crypto = require("crypto");
 
 process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-secret";
 process.env.VTU_PRIMARY_PROVIDER = "vtugate";
-const { resolvePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName } = require("../vtu-provider");
+process.env.VTU_GATE_API_KEY = "test-gate-key";
+const { resolvePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName, verifyVtuGateCable } = require("../vtu-provider");
 
 test("VTU Gate-only mode is enabled when selected explicitly", () => {
     assert.equal(isVtuGateOnly(), true);
@@ -19,6 +20,45 @@ test("VTU Gate cable customer names normalize nested customer details", () => {
     assert.equal(normalizeVtuGateCustomerName({ data: { customer: { name: "StarTimes Customer" } } }), "StarTimes Customer");
     assert.equal(normalizeVtuGateCustomerName({ data: { customer_details: { full_name: "Cable Customer" } } }), "Cable Customer");
     assert.equal(normalizeVtuGateCustomerName({ data: { cable_plans: [] } }), "");
+});
+
+test("VTU Gate GOtv verification uses its catalog service ID and returns verified plans", async () => {
+    const originalFetch = global.fetch;
+    const requests = [];
+    global.fetch = async (url, options) => {
+        requests.push({ url: String(url), options });
+        const payload = requests.length === 1
+            ? { status: true, data: [
+                { service_type: "tv", tv_name: "DStv", service_id: 71 },
+                { service_type: "tv", tv_name: "GOtv", service_id: 82 }
+            ] }
+            : { status: true, data: {
+                smartcard_name: "GOtv Test Customer",
+                cable_plans: [{ name: "GOtv Smallie", code: "smallie", price: "1900" }]
+            } };
+        return { ok: true, status: 200, json: async () => payload };
+    };
+
+    try {
+        const result = await verifyVtuGateCable({
+            provider: "gotv",
+            smartcardNumber: "1234567890",
+            phone: "08012345678"
+        });
+
+        assert.equal(requests.length, 2);
+        assert.match(requests[0].url, /\/fetchallservices$/);
+        assert.match(requests[1].url, /\/verifycabletv$/);
+        assert.equal(new URLSearchParams(requests[1].options.body).get("service_id"), "82");
+        assert.equal(new URLSearchParams(requests[1].options.body).get("smartcard_number"), "1234567890");
+        assert.equal(result.provider, "vtugate");
+        assert.equal(result.customerName, "GOtv Test Customer");
+        assert.deepEqual(result.plans.map(({ label, price }) => ({ label, price })), [
+            { label: "GOtv Smallie", price: 1900 }
+        ]);
+    } finally {
+        global.fetch = originalFetch;
+    }
 });
 
 function makeToken(plan) {

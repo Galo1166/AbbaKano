@@ -803,6 +803,7 @@ app.get("/health/config", (req, res) => {
         redisConfigured: Boolean(process.env.REDIS_URL),
         paystackConfigured: Boolean(PAYSTACK_SECRET_KEY),
         vtugateConfigured: Boolean(process.env.VTU_GATE_API_KEY),
+        cableVerificationProvider: isVtuGateOnly() || Boolean(process.env.VTU_GATE_API_KEY) ? "vtugate" : "vtpass",
         fallbackDisabled: !process.env.VTU_FALLBACK_PROVIDER,
         environment: process.env.NODE_ENV || "development"
     });

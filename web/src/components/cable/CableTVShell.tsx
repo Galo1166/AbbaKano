@@ -60,20 +60,29 @@ export function CableTVShell() {
       setPlans([]);
       setSelectedPlan(null);
       setCustomerName('');
+      setMessage('');
       return;
     }
+
+    let active = true;
+    setPlans([]);
+    setSelectedPlan(null);
+    setCustomerName('');
+    setMessage('');
 
     const timer = window.setTimeout(() => {
       void apiRequest<{ customerName?: string; plans?: CablePlan[] }>('/vtu/verify-cable', {
         method: 'POST',
         body: JSON.stringify({ provider: provider.toLowerCase(), smartcardNumber: smartcard }),
       }).then((response) => {
+        if (!active) return;
         const nextPlans = (response.plans || []).filter((plan) => typeof plan?.selectionToken === 'string' && plan.selectionToken.length > 0);
         setPlans(nextPlans);
         setCustomerName(response.customerName || 'Customer verified');
         if (nextPlans.length > 0) setSelectedPlan(nextPlans[0]);
         else setSelectedPlan(null);
       }).catch((error) => {
+        if (!active) return;
         setPlans([]);
         setSelectedPlan(null);
         setCustomerName('');
@@ -81,7 +90,10 @@ export function CableTVShell() {
       });
     }, 300);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [provider, smartcardNumber]);
 
   const validPhone = /^(?:\+?234|0)\d{10}$/.test(accountPhone.replace(/\s+/g, ''));
