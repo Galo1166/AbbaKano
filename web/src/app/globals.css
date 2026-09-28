@@ -306,15 +306,6 @@ a { color: inherit; text-decoration: none; }
   padding: 46px 0 90px;
 }
 .support-header { margin-bottom: 22px; }
-.support-back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 18px;
-  color: var(--primary);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
 .support-header h1 {
   margin: 8px 0 12px;
   font-size: clamp(2.2rem, 5vw, 4rem);
@@ -604,28 +595,29 @@ a { color: inherit; text-decoration: none; }
 .data-page { min-height: 100vh; background: var(--canvas); color: var(--text); font-family: "Plus Jakarta Sans", "IBM Plex Sans", "Segoe UI", sans-serif; padding-bottom: 64px; }
 .data-header, .data-content { width: min(780px, calc(100% - 40px)); margin-inline: auto; }
 .data-header { padding: 34px 0 30px; }
-.data-back, .fund-back, .airtime-back, .history-back, .profile-back {
+.data-back, .fund-back, .airtime-back, .history-back, .profile-back, .dashboard-back-button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 34px;
-  border: 0;
+  border: 1px solid var(--text-subtle);
   border-radius: 8px;
-  background: transparent;
-  color: var(--text-subtle);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
-  padding: 7px 9px 7px 4px;
+  padding: 8px 12px;
   font: inherit;
   font-size: 0.8rem;
   font-weight: 700;
-  transition: background 180ms ease, color 180ms ease;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
 }
-.data-back:hover, .fund-back:hover, .airtime-back:hover, .history-back:hover, .profile-back:hover {
+.data-back:hover, .fund-back:hover, .airtime-back:hover, .history-back:hover, .profile-back:hover, .dashboard-back-button:hover {
+  border-color: var(--primary);
   background: var(--surface-high);
   color: var(--primary);
 }
-.data-back:focus-visible, .fund-back:focus-visible, .airtime-back:focus-visible, .history-back:focus-visible, .profile-back:focus-visible { outline: 3px solid var(--secondary); outline-offset: 2px; }
-.data-back svg, .fund-back::before, .airtime-back::before, .history-back::before, .profile-back::before { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.data-back:focus-visible, .fund-back:focus-visible, .airtime-back:focus-visible, .history-back:focus-visible, .profile-back:focus-visible, .dashboard-back-button:focus-visible { outline: 3px solid var(--secondary); outline-offset: 2px; }
+.data-back svg, .dashboard-back-button svg, .fund-back::before, .airtime-back::before, .history-back::before, .profile-back::before { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .data-back svg { display: inline-block; }
 .fund-back::before, .airtime-back::before, .history-back::before, .profile-back::before { content: "←"; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 900; }
 .data-kicker { margin: 0 0 9px; color: var(--secondary); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
@@ -690,8 +682,6 @@ a { color: inherit; text-decoration: none; }
 .profile-page { min-height: 100vh; background: var(--canvas); color: var(--text); font-family: "Plus Jakarta Sans", "IBM Plex Sans", "Segoe UI", sans-serif; padding-bottom: 64px; }
 .profile-header, .profile-content { width: min(780px, calc(100% - 40px)); margin-inline: auto; }
 .profile-header { padding: 32px 0 28px; }
-.profile-back { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 34px; color: var(--text-subtle); font-size: 0.8rem; font-weight: 700; }
-.profile-back svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .profile-header h1 { margin: 0 0 8px; color: var(--text); font-size: 2.4rem; letter-spacing: -0.05em; }
 .profile-header > p:last-child { margin: 0; color: var(--text-muted); font-size: 0.86rem; }
 .profile-identity { display: flex; align-items: center; gap: 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 18px; }
@@ -786,7 +776,6 @@ a { color: inherit; text-decoration: none; }
 .history-page { min-height: 100vh; background: var(--canvas); color: var(--text); font-family: "Plus Jakarta Sans", "IBM Plex Sans", "Segoe UI", sans-serif; padding-bottom: 64px; }
 .history-header, .history-content { width: min(780px, calc(100% - 40px)); margin-inline: auto; }
 .history-header { padding: 32px 0 28px; }
-.history-back { display: inline-block; margin-bottom: 34px; color: var(--text-subtle); font-size: 0.8rem; font-weight: 700; }
 .history-header h1 { margin: 0 0 8px; color: var(--text); font-size: 2.4rem; letter-spacing: -0.05em; }
 .history-header > p:last-child { margin: 0; color: var(--text-muted); font-size: 0.86rem; }
 .history-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
@@ -835,7 +824,6 @@ a { color: inherit; text-decoration: none; }
 .fund-page { min-height: 100vh; background: var(--canvas); color: var(--text); font-family: "Plus Jakarta Sans", "IBM Plex Sans", "Segoe UI", sans-serif; padding-bottom: 64px; }
 .fund-header, .fund-content { width: min(780px, calc(100% - 40px)); margin-inline: auto; }
 .fund-header { padding: 32px 0 28px; }
-.fund-back { margin-bottom: 34px; }
 .fund-header h1 { margin: 0 0 8px; color: var(--text); font-size: 2.4rem; letter-spacing: -0.05em; }
 .fund-header > p:last-child { margin: 0; color: var(--text-muted); font-size: 0.86rem; }
 .fund-card, .account-card { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); padding: 20px; }
@@ -878,7 +866,6 @@ a { color: inherit; text-decoration: none; }
 .airtime-page { min-height: 100vh; background: var(--canvas); color: var(--text); font-family: "Plus Jakarta Sans", "IBM Plex Sans", "Segoe UI", sans-serif; padding-bottom: 64px; }
 .airtime-header, .airtime-content { width: min(780px, calc(100% - 40px)); margin-inline: auto; }
 .airtime-header { padding: 32px 0 28px; }
-.airtime-back { margin-bottom: 34px; }
 .airtime-header h1 { margin: 0 0 8px; color: var(--text); font-size: 2.4rem; letter-spacing: -0.05em; }
 .airtime-header > p:last-child { margin: 0; color: var(--text-muted); font-size: 0.86rem; }
 .airtime-amount-label { display: grid; gap: 8px; margin-top: 22px; color: var(--text); font-size: 0.8rem; font-weight: 800; }
@@ -1001,7 +988,7 @@ a { color: inherit; text-decoration: none; }
   .dashboard-bottom-nav .data-tab svg { width: 28px; height: 28px; stroke-width: 2; }
 	.data-header, .data-content { width: min(100% - 28px, 780px); }
 	.data-header { padding-top: 22px; }
-	.data-back { margin-bottom: 30px; }
+  .data-back, .dashboard-back-button { margin-bottom: 30px; }
 	.network-grid { gap: 7px; }
 	.network-card { min-height: 84px; padding: 8px; font-size: 0.66rem; }
 	.network-logo { width: 27px; height: 27px; font-size: 0.76rem; }

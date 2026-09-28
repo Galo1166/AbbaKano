@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
+import { DashboardBackButton } from "@/components/navigation/DashboardBackButton";
 
 const faqs = [
   {
@@ -63,9 +63,7 @@ export default function SupportPage() {
 
       <div className="support-shell">
         <header className="support-header">
-          <Link href="/app" className="support-back-link">
-            ← Back to dashboard
-          </Link>
+          <DashboardBackButton />
           <p className="data-kicker">Customer Support</p>
           <h1>Customer Support</h1>
           <p className="support-intro">24/7 Multi-Channel Resolution Desk</p>
