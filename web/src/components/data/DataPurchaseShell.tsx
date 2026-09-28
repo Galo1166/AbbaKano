@@ -212,7 +212,7 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
         {!validPhone && <div className="data-empty">Enter a valid phone number to view available plans.</div>}
         {validPhone && errorMessage && <div className="data-message error" role="alert">{errorMessage}<button type="button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
         {validPhone && !loading && !errorMessage && availablePlans.length === 0 && <div className="data-empty">No {category.toLowerCase()} plans are currently available for {network}.</div>}
-        {validPhone && <div className="plan-grid">{availablePlans.map((plan) => <button className={`plan-card${selectedPlan?.code === plan.code ? " selected" : ""}`} type="button" aria-pressed={selectedPlan?.code === plan.code} onClick={() => setSelectedPlan(plan)} key={`${plan.code}-${plan.label}`}><span>{plan.label}</span><strong>{formatNaira(plan.price)}</strong><span className="plan-purchase">{selectedPlan?.code === plan.code ? "Selected" : "Select"}</span></button>)}</div>}
+        {validPhone && <div className="airtime-presets">{availablePlans.map((plan) => <button className={selectedPlan?.code === plan.code ? "active" : ""} type="button" aria-pressed={selectedPlan?.code === plan.code} onClick={() => setSelectedPlan(plan)} key={`${plan.code}-${plan.label}`}>{plan.label}<br />{formatNaira(plan.price)}</button>)}</div>}
         <button className="airtime-submit" type="button" disabled={!validPhone || !selectedPlan || loading || purchasing} onClick={openCheckout}>{purchasing ? "Processing..." : selectedPlan ? `Pay ${formatNaira(selectedPlan.price)}` : "Select a data plan"}</button>
       </section>
 
