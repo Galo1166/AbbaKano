@@ -19,3 +19,7 @@ Open the dashboard through the backend origin, for example `http://localhost:300
 Admin accounts are regular `users` rows with `role = 'admin'` and `admin_role = 'super_admin'`; no separate admin-user migration is needed. The database must already have the admin schema and permissions from `database/migrations/001_transaction_integrity.sql`.
 
 To create an admin on Render, temporarily set `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` on the backend service, deploy, then open its Shell and run `npm run create-admin`. The script lowercases the email, hashes the password with the same scrypt format used by login, checks the migration and permissions, and refuses to overwrite an existing account. Remove both temporary variables and redeploy after it succeeds. Do not put the password in a command, source file, or migration.
+
+## Use VTU Gate only
+
+Set `VTU_PRIMARY_PROVIDER=vtugate` and `VTU_GATE_API_KEY` on the backend service. `VTU_GATE_BASE_URL` is optional and defaults to the VTU Gate API URL. In this mode data, cable TV, and electricity plans, verification, and purchases use VTU Gate only; requests with older VTPass plan tokens are rejected before reserving wallet funds. Remove `VTPASS_*`, `VTU_PROVIDER_*`, and `VTU_FALLBACK_PROVIDER` settings if you do not intend to keep those integrations configured. Redeploy the backend after changing provider settings.

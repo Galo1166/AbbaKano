@@ -3,7 +3,23 @@ const assert = require("node:assert/strict");
 const crypto = require("crypto");
 
 process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-secret";
-const { resolvePlanToken } = require("../vtu-provider");
+process.env.VTU_PRIMARY_PROVIDER = "vtugate";
+const { resolvePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName } = require("../vtu-provider");
+
+test("VTU Gate-only mode is enabled when selected explicitly", () => {
+    assert.equal(isVtuGateOnly(), true);
+});
+
+test("VTU Gate cable customer names normalize top-level aliases", () => {
+    assert.equal(normalizeVtuGateCustomerName({ data: { smartcard_name: "DSTV Customer" } }), "DSTV Customer");
+    assert.equal(normalizeVtuGateCustomerName({ data: { customerName: "GOtv Customer" } }), "GOtv Customer");
+});
+
+test("VTU Gate cable customer names normalize nested customer details", () => {
+    assert.equal(normalizeVtuGateCustomerName({ data: { customer: { name: "StarTimes Customer" } } }), "StarTimes Customer");
+    assert.equal(normalizeVtuGateCustomerName({ data: { customer_details: { full_name: "Cable Customer" } } }), "Cable Customer");
+    assert.equal(normalizeVtuGateCustomerName({ data: { cable_plans: [] } }), "");
+});
 
 function makeToken(plan) {
     const payload = Buffer.from(JSON.stringify({ ...plan, expiresAt: Math.floor(Date.now() / 1000) + 60 * 60 })).toString("base64url");

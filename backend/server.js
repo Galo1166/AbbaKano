@@ -7,7 +7,7 @@ const { RedisStore } = require("rate-limit-redis");
 const { createClient } = require("redis");
 const jwt = require("jsonwebtoken");
 const pool = require("./db");
-const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken } = require("./vtu-provider");
+const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtuGateOnly } = require("./vtu-provider");
 const { calculateCreditAmount, isVerifiedPaystackDeposit } = require("./transaction-state");
 const { buildFallbackDedicatedAccount, createGafiapayAccount } = require("./dedicated-account");
 const { awardReferralCommission } = require("./referral");
@@ -552,6 +552,9 @@ async function executeVtuPurchase(req, res, type) {
     if (["data", "cable_tv", "electricity"].includes(type)) {
         const selection = resolvePlanToken(input.planToken, input.network);
         if (selection.error) return res.status(400).json({ message: selection.error });
+        if (isVtuGateOnly() && selection.plan.provider !== "vtugate") {
+            return res.status(400).json({ message: "Only VTU Gate plans are available. Reload the plans and try again." });
+        }
         input.provider = selection.plan.provider;
         input.planCode = selection.plan.code || selection.plan.providerCode || null;
         if (type !== "electricity") input.amount = Number(selection.plan.price);
@@ -2416,7 +2419,7 @@ app.get("/vtu/service-plans", requireSession, async (req, res) => {
         const provider = typeof req.query.provider === "string" ? req.query.provider.trim() : "";
         const meterType = req.query.meterType === "postpaid" ? "postpaid" : "prepaid";
         if (!service || !provider) return res.status(400).json({ message: "Choose a supported service and provider" });
-        if (service === "cable" && process.env.VTU_GATE_API_KEY) {
+        if (service === "cable" && (isVtuGateOnly() || process.env.VTU_GATE_API_KEY)) {
             const smartcardNumber = typeof req.query.smartcardNumber === "string" ? req.query.smartcardNumber.replace(/\D/g, "") : "";
             if (!/^\d{10}$/.test(smartcardNumber)) return res.json({ plans: [] });
             const user = await pool.query("SELECT phone FROM users WHERE id = $1", [req.session.sub]);
@@ -2454,10 +2457,13 @@ app.post("/vtu/verify-cable", requireSession, requireCsrf, async (req, res) => {
 
     try {
         const user = await pool.query("SELECT phone FROM users WHERE id = $1", [req.session.sub]);
-        const result = process.env.VTU_GATE_API_KEY
+        const result = isVtuGateOnly() || process.env.VTU_GATE_API_KEY
             ? await verifyVtuGateCable({ provider, smartcardNumber, phone: user.rows[0]?.phone || "" })
             : await verifyVtpassCableCustomer({ provider, smartcardNumber });
-        if (!result.customerName) return res.status(502).json({ message: "VTPass did not return a customer name" });
+        if (!result.customerName) {
+            const providerName = result.provider === "vtugate" ? "VTU Gate" : "VTPass";
+            return res.status(502).json({ message: `${providerName} did not return a customer name` });
+        }
         res.json(result);
     } catch (error) {
         console.error(error);

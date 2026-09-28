@@ -7,10 +7,11 @@ const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL;
 const VTPASS_API_KEY = process.env.VTPASS_API_KEY;
 const VTPASS_PUBLIC_KEY = process.env.VTPASS_PUBLIC_KEY;
 const VTPASS_SECRET_KEY = process.env.VTPASS_SECRET_KEY;
-const VTU_GATE_BASE_URL = process.env.VTU_GATE_BASE_URL;
+const VTU_GATE_BASE_URL = process.env.VTU_GATE_BASE_URL || "https://api.vtugate.com/api/v1";
 const VTU_GATE_API_KEY = process.env.VTU_GATE_API_KEY;
 const VTU_GATE_PROVIDER = new VtuGateProvider({ baseUrl: VTU_GATE_BASE_URL, apiKey: VTU_GATE_API_KEY });
 const PRIMARY_PROVIDER = (process.env.VTU_PRIMARY_PROVIDER || (VTPASS_BASE_URL ? "vtpass" : "smeplug")).toLowerCase();
+const VTU_GATE_ONLY = PRIMARY_PROVIDER === "vtugate";
 const VTU_PLAN_CACHE_TTL_MS = Number(process.env.VTU_PLAN_CACHE_TTL_MS || 300000);
 const vtuPlanCache = new Map();
 const FALLBACK_PROVIDER = String(process.env.VTU_FALLBACK_PROVIDER || "").trim().toLowerCase();
@@ -39,6 +40,10 @@ function providerRequestOptions(options = {}) {
 }
 
 function assertConfigured() {
+    if (VTU_GATE_ONLY) {
+        if (!isVtuGateConfigured()) throw new Error("VTU Gate is selected but VTU_GATE_API_KEY is not configured");
+        return;
+    }
     if (isVtuGateConfigured()) return;
     if (VTPASS_BASE_URL && VTPASS_API_KEY && VTPASS_PUBLIC_KEY && VTPASS_SECRET_KEY) return;
     if (!PROVIDER_URL || !PROVIDER_API_KEY) {
@@ -321,6 +326,10 @@ function isVtuGateConfigured() {
     return Boolean(VTU_GATE_BASE_URL && VTU_GATE_API_KEY);
 }
 
+function isVtuGateOnly() {
+    return VTU_GATE_ONLY;
+}
+
 function normalizeNetworkName(value) {
     return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -399,11 +408,55 @@ async function getVtuGateCablePlans({ provider, smartcardNumber, phone }) {
     }));
 }
 
+function normalizeVtuGateCustomerName(payload) {
+    const containers = [
+        payload?.data?.customer,
+        payload?.data?.customer_details,
+        payload?.data?.customerDetails,
+        payload?.data?.customer_data,
+        payload?.data?.customerData,
+        payload?.data,
+        payload?.customer,
+        payload?.customer_details,
+        payload?.customerDetails,
+        payload?.result,
+        payload?.content,
+        payload
+    ];
+    const fields = [
+        "smartcard_name",
+        "smartcardName",
+        "smartcardname",
+        "customer_name",
+        "customerName",
+        "customername",
+        "customer_full_name",
+        "customerFullName",
+        "full_name",
+        "fullName",
+        "account_name",
+        "accountName",
+        "name"
+    ];
+
+    for (const container of containers) {
+        if (typeof container === "string" && container.trim()) return container.trim();
+        if (!container || typeof container !== "object") continue;
+        for (const field of fields) {
+            const value = container[field];
+            if (typeof value === "string" && value.trim()) return value.trim();
+        }
+    }
+
+    return "";
+}
+
 async function verifyVtuGateCable({ provider, smartcardNumber, phone }) {
     const serviceId = await getVtuGateCableServiceId(provider);
     const response = await VTU_GATE_PROVIDER.verifyCableTv({ serviceId, phone, smartcardNumber });
     return {
-        customerName: String(response.data?.smartcard_name || response.data?.customer_name || ""),
+        provider: "vtugate",
+        customerName: normalizeVtuGateCustomerName(response),
         plans: (response.data?.cable_plans || []).map((plan) => ({
             label: plan.name,
             price: Number(plan.price),
@@ -425,6 +478,7 @@ async function verifyVtuGateElectricity({ provider, meterNo }) {
     const response = await VTU_GATE_PROVIDER.verifyElectricity({ serviceId, meterNo, disco: provider });
     const data = response.data || {};
     return {
+        provider: "vtugate",
         customerName: String(data.customer_name || data.customerName || data.name || ""),
         customerAddress: String(data.customer_address || data.customerAddress || data.address || "")
     };
@@ -456,7 +510,7 @@ async function getVtuGatePlans({ network, planType } = {}) {
 }
 
 async function getPlans({ network, planType } = {}) {
-    if (isVtuGateConfigured()) {
+    if (VTU_GATE_ONLY || isVtuGateConfigured()) {
         const cacheKey = `${String(network || "all").toUpperCase()}:${String(planType || "all").toUpperCase()}`;
         const cached = vtuPlanCache.get(cacheKey);
         if (cached && Date.now() - cached.createdAt < VTU_PLAN_CACHE_TTL_MS) return cached.plans;
@@ -491,8 +545,8 @@ async function getPlans({ network, planType } = {}) {
 }
 
 async function getVtpassServicePlans({ service, provider, meterType } = {}) {
-    if (service === "electricity" && isVtuGateConfigured()) return getVtuGateElectricityPlans({ provider, meterType });
-    if (service === "cable" && isVtuGateConfigured()) throw new Error("Enter a smartcard number to load cable packages");
+    if (service === "electricity" && (VTU_GATE_ONLY || isVtuGateConfigured())) return getVtuGateElectricityPlans({ provider, meterType });
+    if (service === "cable" && (VTU_GATE_ONLY || isVtuGateConfigured())) throw new Error("Enter a smartcard number to load cable packages");
     if (!isVtpassConfigured()) throw new Error("VTPass is not configured");
     const serviceId = vtpassBillServiceId(service, provider);
     if (!serviceId) throw new Error("Choose a supported bill provider");
@@ -623,6 +677,13 @@ function resolveNetworkId(network, networkMap) {
 
 async function purchase({ type, network, phone, amount, planCode, provider, reference }) {
     assertConfigured();
+
+    if (VTU_GATE_ONLY) {
+        if (provider && provider !== "vtugate") {
+            throw new ProviderError("Only VTU Gate is enabled. Reload the service plans and try again.", { provider: "vtugate", retryable: false });
+        }
+        return purchaseWithVtuGate({ type, network, phone, amount, planCode, reference });
+    }
 
     if (type === "airtime" && isVtuGateConfigured()) return purchaseWithVtuGate({ type, network, phone, amount, planCode, reference });
     if (type === "airtime") return purchaseWithSmeplug({ type, network, phone, amount, planCode, reference });
@@ -828,4 +889,4 @@ function createReference(userId, type) {
     return `vtu_${type}_${userId}_${crypto.randomUUID()}`;
 }
 
-module.exports = { ProviderError, purchase, createReference, getPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtpassFallbackEligible: (code) => VTPASS_FALLBACK_CODES.has(String(code)) };
+module.exports = { ProviderError, purchase, createReference, getPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName, isVtpassFallbackEligible: (code) => VTPASS_FALLBACK_CODES.has(String(code)) };
