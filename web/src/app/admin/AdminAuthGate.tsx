@@ -20,6 +20,8 @@ export default function AdminAuthGate({ children }: { children: React.ReactNode 
       return;
     }
 
+    if (authorized) return;
+
     let isCancelled = false;
     setChecking(true);
 
@@ -41,7 +43,7 @@ export default function AdminAuthGate({ children }: { children: React.ReactNode 
     return () => {
       isCancelled = true;
     };
-  }, [pathname, router]);
+  }, [authorized, pathname, router]);
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
