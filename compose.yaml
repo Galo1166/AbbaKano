@@ -97,7 +97,7 @@ services:
       PGPASSWORD: postgres
     volumes:
       - ./database/migrations:/migrations:ro
-    command: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/migrations/001_transaction_integrity.sql", "-f", "/migrations/002_mtn_general_data_plans.sql"]
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/migrations/001_transaction_integrity.sql", "-f", "/migrations/002_mtn_general_data_plans.sql", "-f", "/migrations/003_mtn_general_plan_validity.sql"]
     depends_on:
       database:
         condition: service_healthy

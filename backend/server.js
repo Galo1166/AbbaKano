@@ -7,7 +7,7 @@ const { RedisStore } = require("rate-limit-redis");
 const { createClient } = require("redis");
 const jwt = require("jsonwebtoken");
 const pool = require("./db");
-const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, encodePlanToken, isVtuGateOnly } = require("./vtu-provider");
+const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtuGateOnly } = require("./vtu-provider");
 const { calculateCreditAmount, isVerifiedPaystackDeposit } = require("./transaction-state");
 const { buildFallbackDedicatedAccount, createGafiapayAccount } = require("./dedicated-account");
 const { awardReferralCommission } = require("./referral");
@@ -576,6 +576,9 @@ async function executeVtuPurchase(req, res, type) {
     if (["data", "cable_tv", "electricity"].includes(type)) {
         const selection = resolvePlanToken(input.planToken, input.network);
         if (selection.error) return res.status(400).json({ message: selection.error });
+        if (type === "data" && input.network === "MTN" && selection.plan.providerPrice !== undefined) {
+            return res.status(503).json({ message: "MTN General purchases will be available after the new data provider is connected." });
+        }
         if (isVtuGateOnly() && selection.plan.provider !== "vtugate") {
             return res.status(400).json({ message: "Only VTU Gate plans are available. Reload the plans and try again." });
         }
@@ -907,7 +910,6 @@ app.post("/signup", async (req, res) => {
         const user = result.rows[0];
         if (referrerUserId) {
             await awardReferralCommission(client, referrerUserId, user.id, {
-                amountKobo: 20000,
                 reference: `referral_${referrerUserId}_${user.id}_${Date.now()}`
             });
         }
@@ -2455,29 +2457,19 @@ app.get("/vtu/plans", requireSession, async (req, res) => {
 
         if (isMtnGeneral) {
             const savedPlans = await pool.query(
-                `SELECT plan_key, label, provider, provider_code, provider_price_kobo, selling_price_kobo
+                `SELECT plan_key, label, validity_period, selling_price_kobo
                  FROM admin_mtn_general_data_plans
                  WHERE enabled = TRUE
                  ORDER BY size_mb`
             );
-            const adminPlans = savedPlans.rows.map((plan) => {
-                const sellingPrice = Number(plan.selling_price_kobo) / 100;
-                const providerPrice = Number(plan.provider_price_kobo) / 100;
-                return {
-                    label: plan.label,
-                    price: sellingPrice,
-                    code: plan.provider_code,
-                    category: "GENERAL",
-                    provider: plan.provider,
-                    selectionToken: encodePlanToken({
-                        provider: plan.provider,
-                        network: "MTN",
-                        providerCode: plan.provider_code,
-                        price: sellingPrice,
-                        providerPrice
-                    })
-                };
-            });
+            const adminPlans = savedPlans.rows.map((plan) => ({
+                label: plan.label,
+                price: Number(plan.selling_price_kobo) / 100,
+                code: `mtn-general-${plan.plan_key}`,
+                category: "GENERAL",
+                validityPeriod: plan.validity_period,
+                purchaseAvailable: false
+            }));
             plans = planType
                 ? adminPlans
                 : [...plans.filter((plan) => {
@@ -2493,26 +2485,9 @@ app.get("/vtu/plans", requireSession, async (req, res) => {
     }
 });
 
-app.get("/admin/vtu-data-plans/mtn-catalog", requireSession, requireAdmin, async (req, res) => {
-    try {
-        const plans = await getVtuPlans({ network: "MTN" });
-        res.json({ plans: plans.map((plan) => ({
-            label: plan.label,
-            price: Number(plan.price),
-            code: plan.code,
-            category: plan.category || "GENERAL",
-            provider: plan.provider
-        })) });
-    } catch (error) {
-        console.error("Could not load MTN provider plan catalog", error);
-        res.status(502).json({ message: error.message || "Could not load MTN provider plans" });
-    }
-});
-
 app.get("/admin/vtu-data-plans/mtn-general", requireSession, requireAdmin, async (req, res) => {
     const result = await pool.query(
-        `SELECT plan_key, label, size_mb, provider, provider_code, provider_label,
-                provider_price_kobo, selling_price_kobo, enabled
+        `SELECT plan_key, label, size_mb, validity_period, selling_price_kobo, enabled
          FROM admin_mtn_general_data_plans
          ORDER BY size_mb`
     );
@@ -2520,10 +2495,7 @@ app.get("/admin/vtu-data-plans/mtn-general", requireSession, requireAdmin, async
         key: plan.plan_key,
         label: plan.label,
         sizeMb: Number(plan.size_mb),
-        provider: plan.provider,
-        providerCode: plan.provider_code,
-        providerLabel: plan.provider_label,
-        providerPrice: Number(plan.provider_price_kobo) / 100,
+        validityPeriod: plan.validity_period,
         sellingPrice: Number(plan.selling_price_kobo) / 100,
         enabled: plan.enabled
     })) });
@@ -2533,49 +2505,26 @@ app.patch("/admin/vtu-data-plans/mtn-general/:planKey", requireSession, requireA
     const planKey = String(req.params.planKey || "").toLowerCase();
     const sellingPrice = Number(req.body?.sellingPrice);
     const enabled = req.body?.enabled;
-    const provider = typeof req.body?.provider === "string" ? req.body.provider : "";
-    const providerCode = typeof req.body?.providerCode === "string" ? req.body.providerCode : "";
+    const validityPeriod = req.body?.validityPeriod;
     if (!MTN_GENERAL_DATA_PLAN_KEYS.has(planKey)) return res.status(404).json({ message: "MTN General plan not found" });
-    if (!Number.isSafeInteger(sellingPrice) || sellingPrice < 0 || sellingPrice > 100000 || typeof enabled !== "boolean") {
-        return res.status(400).json({ message: "Enter a whole-naira selling price and enabled state" });
+    if (!Number.isSafeInteger(sellingPrice) || sellingPrice < 0 || sellingPrice > 100000 || typeof enabled !== "boolean"
+        || !["daily", "weekly", "monthly"].includes(validityPeriod)) {
+        return res.status(400).json({ message: "Enter a whole-naira price, validity period, and enabled state" });
     }
-
-    let providerPlan = null;
-    if (provider || providerCode || enabled) {
-        if (!provider || !providerCode) return res.status(400).json({ message: "Select a provider bundle before saving this plan" });
-        if (isVtuGateOnly() && provider !== "vtugate") {
-            return res.status(400).json({ message: "Only VTU Gate bundles can be used by the active provider configuration" });
-        }
-        try {
-            const catalog = await getVtuPlans({ network: "MTN" });
-            providerPlan = catalog.find((plan) => plan.provider === provider && plan.code === providerCode);
-        } catch (error) {
-            console.error("Could not validate MTN provider bundle", error);
-            return res.status(502).json({ message: error.message || "Could not validate this provider bundle" });
-        }
-        if (!providerPlan) return res.status(400).json({ message: "This provider bundle is no longer available. Refresh the catalog and select it again." });
-    }
-    if (enabled && (!providerPlan || sellingPrice <= 0)) {
-        return res.status(400).json({ message: "Set a selling price and provider bundle before enabling this plan" });
+    if (enabled && sellingPrice <= 0) {
+        return res.status(400).json({ message: "Set a selling price before enabling this plan" });
     }
 
     const result = await pool.query(
         `UPDATE admin_mtn_general_data_plans
-         SET provider = $1,
-             provider_code = $2,
-             provider_label = $3,
-             provider_price_kobo = $4,
-             selling_price_kobo = $5,
-             enabled = $6,
+         SET validity_period = $1,
+             selling_price_kobo = $2,
+             enabled = $3,
              updated_at = NOW()
-         WHERE plan_key = $7
-         RETURNING plan_key, label, size_mb, provider, provider_code, provider_label,
-                   provider_price_kobo, selling_price_kobo, enabled`,
+         WHERE plan_key = $4
+         RETURNING plan_key, label, size_mb, validity_period, selling_price_kobo, enabled`,
         [
-            providerPlan?.provider || null,
-            providerPlan?.code || null,
-            providerPlan?.label || null,
-            Math.round(Number(providerPlan?.price || 0) * 100),
+            validityPeriod,
             Math.round(sellingPrice * 100),
             enabled,
             planKey
@@ -2586,10 +2535,7 @@ app.patch("/admin/vtu-data-plans/mtn-general/:planKey", requireSession, requireA
         key: plan.plan_key,
         label: plan.label,
         sizeMb: Number(plan.size_mb),
-        provider: plan.provider,
-        providerCode: plan.provider_code,
-        providerLabel: plan.provider_label,
-        providerPrice: Number(plan.provider_price_kobo) / 100,
+        validityPeriod: plan.validity_period,
         sellingPrice: Number(plan.selling_price_kobo) / 100,
         enabled: plan.enabled
     } });

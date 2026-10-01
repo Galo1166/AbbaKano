@@ -64,20 +64,9 @@ export type MtnGeneralDataPlan = {
   key: string;
   label: string;
   sizeMb: number;
-  provider: string | null;
-  providerCode: string | null;
-  providerLabel: string | null;
-  providerPrice: number;
+  validityPeriod: "daily" | "weekly" | "monthly";
   sellingPrice: number;
   enabled: boolean;
-};
-
-export type ProviderDataPlan = {
-  label: string;
-  price: number;
-  code: string;
-  category: string;
-  provider: string;
 };
 
 function normalizeCarrierName(value: string | null | undefined): Carrier {
@@ -234,19 +223,13 @@ export async function fetchMtnGeneralDataPlans(): Promise<MtnGeneralDataPlan[]> 
   return response.plans;
 }
 
-export async function fetchMtnProviderDataPlans(): Promise<ProviderDataPlan[]> {
-  const response = await apiRequest<{ plans: ProviderDataPlan[] }>("/admin/vtu-data-plans/mtn-catalog");
-  return response.plans;
-}
-
 export async function saveMtnGeneralDataPlan(
-  plan: Pick<MtnGeneralDataPlan, "key" | "provider" | "providerCode" | "sellingPrice" | "enabled">
+  plan: Pick<MtnGeneralDataPlan, "key" | "validityPeriod" | "sellingPrice" | "enabled">
 ): Promise<MtnGeneralDataPlan> {
   const response = await apiRequest<{ plan: MtnGeneralDataPlan }>(`/admin/vtu-data-plans/mtn-general/${plan.key}`, {
     method: "PATCH",
     body: JSON.stringify({
-      provider: plan.provider,
-      providerCode: plan.providerCode,
+      validityPeriod: plan.validityPeriod,
       sellingPrice: plan.sellingPrice,
       enabled: plan.enabled,
     }),

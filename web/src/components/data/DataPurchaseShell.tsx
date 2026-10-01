@@ -10,7 +10,7 @@ import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
 type Network = "MTN" | "AIRTEL" | "GLO" | "9MOBILE";
 type Category = "GENERAL" | "SME" | "GIFTING";
-type Plan = { label: string; price: number; code: string; category?: string; selectionToken?: string; provider?: string };
+type Plan = { label: string; price: number; code: string; category?: string; selectionToken?: string; provider?: string; validityPeriod?: "daily" | "weekly" | "monthly"; purchaseAvailable?: boolean };
 type Receipt = { status: string; message: string; reference?: string; label: string; network: Network; phone: string; amount: number };
 
 const networks: Array<{ id: Network; label: string; color: string; logo: string }> = [
@@ -146,13 +146,18 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
   }
 
   function openCheckout() {
-    if (!selectedPlan || !validPhone) return;
+    if (!selectedPlan || !validPhone || selectedPlan.purchaseAvailable === false) return;
     setPurchaseMessage("");
     setPin("");
     setShowCheckout(true);
   }
 
   async function executePurchase(transactionAuthorization?: string) {
+    if (selectedPlan?.purchaseAvailable === false) {
+      setPurchaseMessage("This MTN General plan will be purchasable when the new data provider is connected.");
+      setPurchasing(false);
+      return;
+    }
     if (!selectedPlan || phone.replace(/\D/g, "").length < 11 || (!transactionAuthorization && !/^\d{4}$/.test(pin))) {
       setPurchaseMessage("Enter a valid phone number and 4-digit transaction PIN.");
       setPurchasing(false);
@@ -210,8 +215,9 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
         {!validPhone && <div className="data-empty">Enter a valid phone number to view available plans.</div>}
         {validPhone && errorMessage && <div className="data-message error" role="alert">{errorMessage}<button type="button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
         {validPhone && !loading && !errorMessage && availablePlans.length === 0 && <div className="data-empty">No {category.toLowerCase()} plans are currently available for {network}.</div>}
-        {validPhone && <div className="airtime-presets">{availablePlans.map((plan) => <button className={selectedPlan?.code === plan.code ? "active" : ""} type="button" aria-pressed={selectedPlan?.code === plan.code} onClick={() => setSelectedPlan(plan)} key={`${plan.code}-${plan.label}`}>{plan.label}<br />{formatNaira(plan.price)}</button>)}</div>}
-        <button className="airtime-submit" type="button" disabled={!validPhone || !selectedPlan || loading || purchasing} onClick={openCheckout}>{purchasing ? "Processing..." : selectedPlan ? `Pay ${formatNaira(selectedPlan.price)}` : "Select a data plan"}</button>
+        {validPhone && <div className="airtime-presets">{availablePlans.map((plan) => <button className={selectedPlan?.code === plan.code ? "active" : ""} type="button" aria-pressed={selectedPlan?.code === plan.code} onClick={() => setSelectedPlan(plan)} key={`${plan.code}-${plan.label}`}>{plan.label}{plan.validityPeriod ? ` · ${plan.validityPeriod[0].toUpperCase()}${plan.validityPeriod.slice(1)}` : ""}<br />{formatNaira(plan.price)}</button>)}</div>}
+        {validPhone && network === "MTN" && category === "GENERAL" && availablePlans.some((plan) => plan.purchaseAvailable === false) && <p className="data-empty">MTN General plans can be viewed now. Purchases will be enabled when the new data provider is connected.</p>}
+        <button className="airtime-submit" type="button" disabled={!validPhone || !selectedPlan || selectedPlan.purchaseAvailable === false || loading || purchasing} onClick={openCheckout}>{purchasing ? "Processing..." : selectedPlan?.purchaseAvailable === false ? "Purchases coming soon" : selectedPlan ? `Pay ${formatNaira(selectedPlan.price)}` : "Select a data plan"}</button>
       </section>
 
       {showCheckout && selectedPlan && <div className="data-modal-backdrop" role="presentation"><section className="data-modal review-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><button className="data-modal-close" type="button" onClick={() => setShowCheckout(false)} aria-label="Close checkout">x</button><p className="data-kicker">Review &amp; Confirm</p><h2 id="checkout-title">Transaction Summary</h2><div className="total-due"><span>TOTAL AMOUNT DUE</span><strong>{formatNaira(selectedPlan.price)}</strong></div><div className="transaction-summary"><div><span>Service</span><strong>{network} {selectedPlan.label}</strong></div><div><span>Beneficiary / Recipient</span><strong>{phone || "Not provided"}</strong></div><div><span>Package / Plan</span><strong>{selectedPlan.label}</strong></div><div><span>Payment Method</span><strong>AbbaKano Main Wallet</strong></div><div><span>Current Wallet Balance</span><strong>{walletBalance === null ? "Loading..." : formatNaira(walletBalance)}</strong></div><div><span>Balance After Transaction</span><strong>{walletBalance === null ? "Loading..." : formatNaira(walletBalance - selectedPlan.price)}</strong></div></div><form className="data-pin-form" onSubmit={submitPurchase}><label>Transaction PIN<div className="pin-authorization-row"><input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} placeholder="Enter 4-digit PIN" autoComplete="current-password" /><button className="biometric-action" type="button" onClick={() => void authorizeBiometric()} disabled={purchasing} aria-label="Authorize with biometrics" title="Authorize with biometrics"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7.5 8.5a6 6 0 0 1 9 0M5 12a7 7 0 0 1 14 0M9.5 12a2.5 2.5 0 0 1 5 0v5M12 14.5V20M8 16v1a4 4 0 0 0 8 0v-1" /></svg></button></div></label>{purchaseMessage && <div className="data-message error" role="alert">{purchaseMessage}</div>}<button className="data-purchase-button" type="submit" disabled={purchasing}>{purchasing ? "Processing..." : "Confirm & Authorize PIN"}</button></form></section></div>}

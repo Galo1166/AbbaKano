@@ -17,9 +17,10 @@ createdb myapp
 psql -d myapp -f database/init.sql
 psql -d myapp -f database/migrations/001_transaction_integrity.sql
 psql -d myapp -f database/migrations/002_mtn_general_data_plans.sql
+psql -d myapp -f database/migrations/003_mtn_general_plan_validity.sql
 ```
 
-Apply each new numbered migration once to existing production databases before deploying backend changes. Migration `002` creates the admin-managed MTN General plans and preserves provider fulfillment prices separately from customer wallet prices.
+Apply each new numbered migration once to existing production databases before deploying backend changes. Migration `002` creates admin-managed MTN General plans; migration `003` adds validity presets, clears the old VTU Gate mappings, and disables those plans until the new provider integration is connected.
 
 From `backend/`, install dependencies, configure the required secret and database connection, then start the API:
 

@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { fetchMtnGeneralDataPlans, fetchMtnProviderDataPlans, fetchTransactions, saveMtnGeneralDataPlan } from "@admin/services/api";
+import { fetchMtnGeneralDataPlans, fetchTransactions, saveMtnGeneralDataPlan } from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge, { txStatusVariant } from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
 import Toggle from "@admin/components/ui/Toggle";
-import type { MtnGeneralDataPlan, ProviderDataPlan } from "@admin/services/api";
+import type { MtnGeneralDataPlan } from "@admin/services/api";
 import type { Transaction } from "@admin/types/telecom";
 
 const CARRIERS = ["ALL", "MTN", "AIRTEL", "GLO", "9MOBILE"] as const;
@@ -51,7 +51,6 @@ export default function VtuServicesPage() {
   ]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [mtnPlans, setMtnPlans] = useState<MtnGeneralDataPlan[]>([]);
-  const [mtnProviderCatalog, setMtnProviderCatalog] = useState<ProviderDataPlan[]>([]);
   const [loadingMtnPlans, setLoadingMtnPlans] = useState(true);
   const [savingPlanKey, setSavingPlanKey] = useState<string | null>(null);
   const [planFeedback, setPlanFeedback] = useState<{ message: string; error: boolean } | null>(null);
@@ -65,11 +64,10 @@ export default function VtuServicesPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchMtnGeneralDataPlans(), fetchMtnProviderDataPlans()])
-      .then(([plans, catalog]) => {
+    fetchMtnGeneralDataPlans()
+      .then((plans) => {
         if (cancelled) return;
         setMtnPlans(plans);
-        setMtnProviderCatalog(catalog);
       })
       .catch((error: unknown) => {
         if (!cancelled) setPlanFeedback({
@@ -85,16 +83,6 @@ export default function VtuServicesPage() {
 
   const updateMtnPlan = (planKey: string, changes: Partial<MtnGeneralDataPlan>) => {
     setMtnPlans((current) => current.map((plan) => plan.key === planKey ? { ...plan, ...changes } : plan));
-  };
-
-  const selectMtnProviderPlan = (planKey: string, value: string) => {
-    const selected = mtnProviderCatalog.find((plan) => `${plan.provider}|${plan.code}` === value);
-    updateMtnPlan(planKey, {
-      provider: selected?.provider || null,
-      providerCode: selected?.code || null,
-      providerLabel: selected?.label || null,
-      providerPrice: selected?.price || 0,
-    });
   };
 
   const handleSaveMtnPlan = async (plan: MtnGeneralDataPlan) => {
@@ -233,9 +221,9 @@ export default function VtuServicesPage() {
 
       <section className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
         <div className="mb-4">
-          <h2 className="text-sm font-bold text-slate-900">MTN General bundle pricing</h2>
+          <h2 className="text-sm font-bold text-slate-900">MTN General plans</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Map each customer bundle to a live provider plan, set the wallet price, then enable it for the web app.
+            Set the customer price and validity. Enabled plans appear in General; purchases remain unavailable until the new provider is connected.
           </p>
         </div>
 
@@ -251,31 +239,28 @@ export default function VtuServicesPage() {
           </div>
         ) : mtnPlans.length === 0 ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            MTN General pricing could not be loaded. Check the backend database migration and provider configuration, then reload this page.
+            MTN General plans could not be loaded. Check the backend database migration, then reload this page.
           </p>
         ) : (
           <div className="grid gap-3">
             {mtnPlans.map((plan) => (
-              <article key={plan.key} className="grid min-w-0 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-[minmax(75px,0.5fr)_minmax(180px,2fr)_minmax(120px,0.8fr)_auto_auto] sm:items-end">
+              <article key={plan.key} className="grid min-w-0 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-[minmax(75px,0.7fr)_minmax(140px,1fr)_minmax(120px,0.8fr)_auto_auto] sm:items-end">
                 <div>
                   <p className="text-sm font-bold text-slate-900">{plan.label}</p>
                   <p className="text-[11px] text-slate-500">MTN · General</p>
                 </div>
 
                 <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-slate-600">
-                  Provider bundle
+                  Validity
                   <select
-                    value={plan.provider && plan.providerCode ? `${plan.provider}|${plan.providerCode}` : ""}
-                    onChange={(event) => selectMtnProviderPlan(plan.key, event.target.value)}
+                    value={plan.validityPeriod}
+                    onChange={(event) => updateMtnPlan(plan.key, { validityPeriod: event.target.value as MtnGeneralDataPlan["validityPeriod"] })}
                     className="h-10 min-w-0 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-normal text-slate-800"
                     disabled={savingPlanKey === plan.key}
                   >
-                    <option value="">Choose provider bundle</option>
-                    {mtnProviderCatalog.map((providerPlan) => (
-                      <option key={`${providerPlan.provider}|${providerPlan.code}`} value={`${providerPlan.provider}|${providerPlan.code}`}>
-                        {providerPlan.label} · {formatNaira(providerPlan.price)} · {providerPlan.provider}
-                      </option>
-                    ))}
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
                   </select>
                 </label>
 
@@ -291,9 +276,6 @@ export default function VtuServicesPage() {
                     className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-sm font-normal text-slate-800"
                     disabled={savingPlanKey === plan.key}
                   />
-                  <span className="text-[11px] font-normal text-slate-500">
-                    Provider cost: {plan.providerPrice ? formatNaira(plan.providerPrice) : "Select a bundle"}
-                  </span>
                 </label>
 
                 <div className="flex items-center gap-2 pb-2">

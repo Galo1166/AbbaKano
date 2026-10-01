@@ -23,3 +23,19 @@ test("awardReferralCommission credits the referrer balance and ledger", async ()
     assert.match(calls[0].sql, /INSERT INTO referral_commission_balances/i);
     assert.match(calls[1].sql, /INSERT INTO referral_commission_ledger/i);
 });
+
+test("awardReferralCommission defaults to the N100 referral reward", async () => {
+    const calls = [];
+    const client = {
+        async query(sql, params) {
+            calls.push({ sql, params });
+            return { rows: [{ balance_kobo: params[1] }] };
+        }
+    };
+
+    const result = await awardReferralCommission(client, 7, 9);
+
+    assert.equal(result.amountKobo, 10000);
+    assert.equal(calls[0].params[1], 10000);
+    assert.equal(calls[1].params[1], 10000);
+});
