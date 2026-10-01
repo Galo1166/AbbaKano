@@ -28,7 +28,7 @@ const KPICard = ({
   href?: string;
 }) => {
   const content = (
-    <div className="bg-white p-5 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 transition-all flex flex-col justify-between group cursor-pointer h-full min-w-0">
+    <div className="w-full min-w-0 bg-white p-5 rounded-xl shadow-xs border border-slate-200 hover:border-slate-300 transition-all flex flex-col justify-between group cursor-pointer h-full">
       <div>
         <div className="flex items-center justify-between mb-2 gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
@@ -52,7 +52,7 @@ const KPICard = ({
     </div>
   );
 
-  return href ? <Link href={href}>{content}</Link> : content;
+  return href ? <Link href={href} className="block h-full w-full min-w-0">{content}</Link> : content;
 };
 
 const resolveCarrierImage = (carrier: string) => {
@@ -146,7 +146,7 @@ export default function OverviewPage() {
       />
 
       {/* KPI Cards Grid */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           label="Today's Sales"
           value={formatNaira(overview!.totalVolumeToday)}
@@ -179,7 +179,7 @@ export default function OverviewPage() {
       </section>
 
       {/* Analytics Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <section className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Line Chart ?8 cols */}
         <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
           <div>
@@ -451,7 +451,7 @@ export default function OverviewPage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {[
             {
               carrier: "MTN",
@@ -484,7 +484,7 @@ export default function OverviewPage() {
           ].map((g) => (
             <div
               key={g.carrier}
-              className="flex flex-col gap-2.5 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80"
+              className="flex w-full min-w-0 flex-col gap-2.5 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">

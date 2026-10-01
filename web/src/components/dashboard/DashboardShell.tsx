@@ -18,7 +18,7 @@ import { ReferEarnShell } from "@/components/referral/ReferEarnShell";
 import { useThemeMode } from "@/lib/theme";
 
 type DashboardData = {
-    user: { full_name?: string; fullName?: string; email?: string; phone?: string; biometrics_enabled?: boolean; app_lock_enabled?: boolean; has_transaction_pin?: boolean; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
+    user: { full_name?: string; fullName?: string; email?: string; phone?: string; biometrics_enabled?: boolean; app_lock_enabled?: boolean; has_transaction_pin?: boolean; has_passkey?: boolean; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
     balance: number;
     transactions: Array<{ id?: string | number; type?: string; label?: string; status?: string; amount?: number; date?: string }>;
 };

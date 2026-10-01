@@ -20,7 +20,6 @@ const protectedPaths = [
   "/history",
   "/profile",
   "/refer-and-earn",
-  "/support",
   "/admin",
 ];
 
@@ -50,8 +49,6 @@ export const config = {
     "/profile/:path*",
     "/refer-and-earn",
     "/refer-and-earn/:path*",
-    "/support",
-    "/support/:path*",
     "/admin",
     "/admin/:path*",
   ],

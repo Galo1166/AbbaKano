@@ -16,7 +16,7 @@ function Icon({ name }: { name: string }) {
     lock: "M6 10h12v10H6zM8 10V7a4 4 0 0 1 8 0v3",
     help: "M4 13a8 8 0 0 1 16 0v4M4 13v4a2 2 0 0 0 2 2h2v-6H4m16 0h-4v6h2a2 2 0 0 0 2-2",
     gift: "M20 12v8H4v-8M2 8h20v4H2zM12 8v12M12 8H8.5a2.5 2.5 0 1 1 2.5-2.5V8Zm0 0h3.5a2.5 2.5 0 1 0-2.5-2.5V8Z",
-    services: "M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4",
+    logout: "M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6",
     info: "M12 16v-4M12 8h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     palette: "M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
     sun: "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
@@ -78,8 +78,10 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
         const options = await apiRequest<Record<string, unknown>>("/auth/passkey/register/options", { method: "POST", body: JSON.stringify({}) });
         const response = await startRegistration({ optionsJSON: options as never });
         await apiRequest("/auth/passkey/register/verify", { method: "POST", body: JSON.stringify(response) });
+        setUser((current) => current ? { ...current, has_passkey: true } : current);
       } else if (setting === "biometrics" && !nextValue && hasPasskey) {
         await apiRequest("/auth/passkey", { method: "DELETE" });
+        setUser((current) => current ? { ...current, has_passkey: false } : current);
       }
       const response = await apiRequest<{ biometricsEnabled: boolean; appLockEnabled: boolean }>("/me/security-settings", { method: "PATCH", body: JSON.stringify(setting === "biometrics" ? { biometricsEnabled: nextValue } : { appLockEnabled: nextValue }) });
       setBiometrics(response.biometricsEnabled);
@@ -88,7 +90,17 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
         setUser((current) => current ? { ...current, has_passkey: nextValue } : current);
       }
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Could not save this security setting.");
+      if (error instanceof ApiError) {
+        setMessage(error.message);
+      } else if (error instanceof Error && error.name === "NotAllowedError") {
+        setMessage("Passkey setup was cancelled or unavailable. Try again and complete the browser prompt.");
+      } else if (error instanceof Error && error.name === "SecurityError") {
+        setMessage("This site is not configured for passkeys. Check that it uses HTTPS and that the backend WebAuthn origin matches this web address.");
+      } else if (error instanceof Error && error.message) {
+        setMessage(error.message);
+      } else {
+        setMessage("Could not save this security setting. Please try again.");
+      }
     } finally {
       setSavingSetting("");
     }
@@ -132,11 +144,10 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       <section className="profile-content">
         <div className="profile-identity"><div className="profile-avatar">{name.slice(0, 1).toUpperCase()}</div><div><h2>{name}</h2><p>{user?.email || "Your AbbaKano wallet"}</p><p className="profile-phone">{user?.phone || "Phone number not added"}</p></div></div>
         {message && <div className="profile-message" role="status">{message}</div>}
-        <ProfileSection title="Explore"><ProfileRow icon="services" title="Services" subtitle="Airtime, data, electricity and TV" onClick={() => router.push("/services")} /></ProfileSection>
         <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle="Earn N100 for each friend's first data top-up" badge="N100 BONUS" onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
         <ProfileSection title="Security & Preferences"><ProfileRow icon="pin" title="Change Transaction PIN" subtitle="4-digit wallet security PIN" onClick={openPinModal} /><ProfileRow icon="fingerprint" title="Biometrics Login" subtitle="Face ID / Fingerprint unlock" control={<Toggle enabled={biometrics} disabled={savingSetting === "biometrics"} onChange={() => void saveSecuritySetting("biometrics", !biometrics)} />} /><ProfileRow icon="lock" title="App Lock PIN" subtitle="Screen lock security timeout" control={<Toggle enabled={appLock} disabled={savingSetting === "appLock"} onChange={() => void saveSecuritySetting("appLock", !appLock)} />} /><ProfileRow icon="palette" title="Theme & Appearance" subtitle={themePreference === "system" ? `Auto (${theme === "dark" ? "Dark" : "Light"})` : `${theme === "dark" ? "Dark" : "Light"} mode active`} badge={themePreference === "system" ? "AUTO" : theme.toUpperCase()} onClick={() => setShowThemeModal(true)} /></ProfileSection>
         <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" onClick={() => router.push("/support")} /><ProfileRow icon="info" title="About AbbaKano" subtitle="About the platform and its services" onClick={() => router.push("/about")} /></ProfileSection>
-        <button className="profile-signout" type="button" onClick={() => setShowSignOutModal(true)} aria-haspopup="dialog">Sign Out <small>Exit your wallet session safely</small></button>
+        <button className="profile-signout" type="button" onClick={() => setShowSignOutModal(true)} aria-haspopup="dialog"><span className="profile-signout-icon"><Icon name="logout" /></span><span className="profile-signout-copy"><strong>Sign Out</strong><small>Exit your wallet session safely</small></span></button>
       </section>
       {showSignOutModal && (
         <div className="data-modal-backdrop" onClick={() => !signingOut && setShowSignOutModal(false)}>
