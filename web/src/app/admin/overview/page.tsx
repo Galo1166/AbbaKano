@@ -146,7 +146,7 @@ export default function OverviewPage() {
       />
 
       {/* KPI Cards Grid */}
-      <section className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid w-full min-w-0 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           label="Today's Sales"
           value={formatNaira(overview!.totalVolumeToday)}
@@ -181,7 +181,7 @@ export default function OverviewPage() {
       {/* Analytics Section */}
       <section className="grid w-full min-w-0 grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Line Chart ?8 cols */}
-        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
+        <div className="w-full min-w-0 lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
@@ -228,7 +228,7 @@ export default function OverviewPage() {
             </div>
 
             {/* SVG Chart */}
-            <div className="relative pt-3 pb-1 overflow-x-auto">
+            <div className="relative min-w-0 pt-3 pb-1 overflow-x-auto">
               <svg className="w-full min-w-[480px] h-52 overflow-visible" viewBox="0 0 680 220" fill="none">
                 <defs>
                   <linearGradient id="depositsGrad" x1="0" x2="0" y1="0" y2="1">
@@ -326,7 +326,7 @@ export default function OverviewPage() {
         </div>
 
         {/* Carrier Share ?4 cols */}
-        <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
+        <div className="w-full min-w-0 lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
           <div>
             <div className="pb-3 border-b border-slate-100">
               <h2 className="text-sm font-bold text-slate-900 tracking-tight">
@@ -435,7 +435,7 @@ export default function OverviewPage() {
       </section>
 
       {/* Carrier Status Grid */}
-      <section className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
+      <section className="w-full min-w-0 bg-white rounded-xl border border-slate-200 shadow-xs p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-sm font-bold text-slate-900">Network Gateway Status</h2>
@@ -451,7 +451,7 @@ export default function OverviewPage() {
           </Link>
         </div>
 
-        <div className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid w-full min-w-0 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {[
             {
               carrier: "MTN",
@@ -515,7 +515,7 @@ export default function OverviewPage() {
       </section>
 
       {/* Recent Dispatches */}
-      <section className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+      <section className="w-full min-w-0 bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
             <h2 className="text-sm font-bold text-slate-900">Recent Dispatches</h2>

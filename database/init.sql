@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS vtu_transactions (
 	phone VARCHAR(20) NOT NULL,
 	plan_code VARCHAR(100),
 	amount_kobo BIGINT NOT NULL CHECK (amount_kobo > 0),
+	provider_amount_kobo BIGINT NOT NULL DEFAULT 0 CHECK (provider_amount_kobo >= 0),
 	status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed')),
 	failure_reason TEXT,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

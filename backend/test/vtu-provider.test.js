@@ -5,7 +5,7 @@ const crypto = require("crypto");
 process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-secret";
 process.env.VTU_PRIMARY_PROVIDER = "vtugate";
 process.env.VTU_GATE_API_KEY = "test-gate-key";
-const { resolvePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName, verifyVtuGateCable } = require("../vtu-provider");
+const { resolvePlanToken, encodePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName, verifyVtuGateCable } = require("../vtu-provider");
 
 test("VTU Gate-only mode is enabled when selected explicitly", () => {
     assert.equal(isVtuGateOnly(), true);
@@ -79,6 +79,22 @@ test("resolvePlanToken accepts a valid selected network even when provider paylo
     assert.equal(result.error, undefined);
     assert.equal(result.plan.provider, "vtpass");
     assert.equal(result.plan.price, 500);
+});
+
+test("signed retail plans preserve the provider fulfillment price", () => {
+    const token = encodePlanToken({
+        provider: "vtugate",
+        network: "MTN",
+        providerCode: "101:bundle-500",
+        price: 350,
+        providerPrice: 300
+    });
+    const result = resolvePlanToken(token, "MTN");
+
+    assert.equal(result.error, undefined);
+    assert.equal(result.plan.price, 350);
+    assert.equal(result.plan.providerPrice, 300);
+    assert.equal(result.plan.providerCode, "101:bundle-500");
 });
 
 test("resolvePlanToken accepts VTU Gate electricity and cable tokens", () => {

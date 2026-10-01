@@ -26,19 +26,21 @@ const categories: Array<{ id: Category; label: string }> = [
   { id: "GIFTING", label: "Gifting" },
 ];
 
-const planCache = new Map<Network, Plan[]>();
+const PLAN_CACHE_TTL_MS = 30_000;
+const planCache = new Map<Network, { plans: Plan[]; expiresAt: number }>();
 const planRequests = new Map<Network, Promise<Plan[]>>();
 
 function loadCachedPlans(network: Network, forceReload = false) {
   if (forceReload) planCache.delete(network);
   const cachedPlans = planCache.get(network);
-  if (cachedPlans) return Promise.resolve(cachedPlans);
+  if (cachedPlans && cachedPlans.expiresAt > Date.now()) return Promise.resolve(cachedPlans.plans);
+  if (cachedPlans) planCache.delete(network);
   const pendingRequest = planRequests.get(network);
   if (pendingRequest) return pendingRequest;
   const request = apiRequest<{ plans: Plan[] }>(`/vtu/plans?network=${network}`)
     .then((response) => {
       const nextPlans = response.plans || [];
-      planCache.set(network, nextPlans);
+      planCache.set(network, { plans: nextPlans, expiresAt: Date.now() + PLAN_CACHE_TTL_MS });
       return nextPlans;
     })
     .finally(() => planRequests.delete(network));
@@ -92,10 +94,6 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
   useEffect(() => {
     let cancelled = false;
     if (!validPhone) {
-      setPlans([]);
-      setSelectedPlan(null);
-      setErrorMessage("");
-      setLoading(false);
       return () => { cancelled = true; };
     }
 

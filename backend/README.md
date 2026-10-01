@@ -16,7 +16,10 @@ Run database commands from the repository root. Create the database, then apply 
 createdb myapp
 psql -d myapp -f database/init.sql
 psql -d myapp -f database/migrations/001_transaction_integrity.sql
+psql -d myapp -f database/migrations/002_mtn_general_data_plans.sql
 ```
+
+Apply each new numbered migration once to existing production databases before deploying backend changes. Migration `002` creates the admin-managed MTN General plans and preserves provider fulfillment prices separately from customer wallet prices.
 
 From `backend/`, install dependencies, configure the required secret and database connection, then start the API:
 
@@ -145,8 +148,8 @@ Set secrets in the hosting provider's secret manager. Do not commit real API key
 | `REDIS_URL` | No | Redis connection for shared rate limiting. |
 | `CORS_ORIGINS` | Production | Comma-separated browser origins allowed to call the API directly. Include the exact scheme and host. |
 | `SECURE_COOKIES` | No | Set to `true` to force secure cookies; production also enables them automatically. |
-| `WEBAUTHN_ORIGIN` | Production | Exact web app origin, such as `https://app.example.com` (no path). Required in production; local default is `http://localhost:4000`. |
-| `WEBAUTHN_RP_ID` | No | WebAuthn relying-party hostname. Defaults to the hostname in `WEBAUTHN_ORIGIN`; set a parent domain only when passkeys should be shared across its subdomains. |
+| `WEBAUTHN_ORIGIN` | Production | Exact web app origin, `https://abbakano-12.onrender.com` (no path). Required in production; local default is `http://localhost:4000`. |
+| `WEBAUTHN_RP_ID` | No | WebAuthn relying-party hostname. Set to `abbakano-12.onrender.com`; a parent domain is only needed when sharing passkeys across subdomains. |
 | `PAYSTACK_SECRET_KEY` | Payments | Enables Paystack initialization, verification, and webhooks. |
 | `PAYSTACK_CALLBACK_URL`, `PAYSTACK_FRONTEND_URL`, `PAYSTACK_APP_CALLBACK_URL` | No | Backend callback and web/mobile return destinations. Defaults target local development. |
 | `PAYSTACK_DEDICATED_BANK` | No | Preferred bank for Paystack dedicated account provisioning. |
@@ -162,14 +165,14 @@ Set secrets in the hosting provider's secret manager. Do not commit real API key
 | `VTU_GATE_PAYVESSEL_ACCOUNT`, `VTU_GATE_PAYVESSEL_ACCOUNT_NAME`, `VTU_GATE_PAYMENTPOINT_ACCOUNT`, `VTU_GATE_PAYMENTPOINT_ACCOUNT_NAME` | No | Override VTU Gate funding details shown in the admin provider-balance response. |
 | `VTU_GATE_LOW_BALANCE_THRESHOLD_NAIRA` | No | Admin low-balance threshold; defaults to `500000` naira. |
 
-For VTU provider selection and VTU Gate-only setup, see [ADMIN.md](./ADMIN.md). The runtime configuration endpoint `GET /health/config` reports whether key services are configured without returning secret values.
+For VTU provider selection and VTU Gate-only setup, see [ADMIN.md](./ADMIN.md). The runtime configuration endpoint `GET /health/config` reports whether key services are configured, plus the non-secret WebAuthn origin and RP ID, without returning API secrets.
 
 ## Production checklist
 
 - Serve the API and web app over HTTPS and set `NODE_ENV=production`.
 - Set the same canonical API origin in web `BACKEND_URL` and mobile `EXPO_PUBLIC_API_URL`.
 - Restrict `CORS_ORIGINS` to the actual browser origins when clients call the backend directly.
-- Set `WEBAUTHN_ORIGIN` to the web app's public HTTPS origin, not the backend API origin. Set `WEBAUTHN_RP_ID` to that hostname or an eligible parent domain.
+- Set backend `WEBAUTHN_ORIGIN=https://abbakano-12.onrender.com` and `WEBAUTHN_RP_ID=abbakano-12.onrender.com`. The origin must be the web app's public HTTPS origin, not the backend API origin.
 - Configure PostgreSQL, Redis if using multiple API instances, and all required payment/VTU provider credentials.
 - Run `node worker.js` as a separate service for retrying pending VTU transactions.
 - Point Paystack callback and webhook URLs at the deployed backend and configure the provider dashboard accordingly.

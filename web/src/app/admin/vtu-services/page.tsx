@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { fetchTransactions } from "@admin/services/api";
+import { fetchMtnGeneralDataPlans, fetchMtnProviderDataPlans, fetchTransactions, saveMtnGeneralDataPlan } from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge, { txStatusVariant } from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
 import Toggle from "@admin/components/ui/Toggle";
+import type { MtnGeneralDataPlan, ProviderDataPlan } from "@admin/services/api";
 import type { Transaction } from "@admin/types/telecom";
 
 const CARRIERS = ["ALL", "MTN", "AIRTEL", "GLO", "9MOBILE"] as const;
@@ -49,6 +50,11 @@ export default function VtuServicesPage() {
     { carrier: "9MOBILE", gateway: "9mobile Link 03", active: false, speed: "112ms" },
   ]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [mtnPlans, setMtnPlans] = useState<MtnGeneralDataPlan[]>([]);
+  const [mtnProviderCatalog, setMtnProviderCatalog] = useState<ProviderDataPlan[]>([]);
+  const [loadingMtnPlans, setLoadingMtnPlans] = useState(true);
+  const [savingPlanKey, setSavingPlanKey] = useState<string | null>(null);
+  const [planFeedback, setPlanFeedback] = useState<{ message: string; error: boolean } | null>(null);
 
   useEffect(() => {
     fetchTransactions(1, 25, { carrier: carrier === "ALL" ? undefined : carrier }).then((res) => {
@@ -56,6 +62,57 @@ export default function VtuServicesPage() {
       setLoading(false);
     });
   }, [carrier]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchMtnGeneralDataPlans(), fetchMtnProviderDataPlans()])
+      .then(([plans, catalog]) => {
+        if (cancelled) return;
+        setMtnPlans(plans);
+        setMtnProviderCatalog(catalog);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setPlanFeedback({
+          message: error instanceof Error ? error.message : "Could not load MTN General pricing.",
+          error: true,
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMtnPlans(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const updateMtnPlan = (planKey: string, changes: Partial<MtnGeneralDataPlan>) => {
+    setMtnPlans((current) => current.map((plan) => plan.key === planKey ? { ...plan, ...changes } : plan));
+  };
+
+  const selectMtnProviderPlan = (planKey: string, value: string) => {
+    const selected = mtnProviderCatalog.find((plan) => `${plan.provider}|${plan.code}` === value);
+    updateMtnPlan(planKey, {
+      provider: selected?.provider || null,
+      providerCode: selected?.code || null,
+      providerLabel: selected?.label || null,
+      providerPrice: selected?.price || 0,
+    });
+  };
+
+  const handleSaveMtnPlan = async (plan: MtnGeneralDataPlan) => {
+    setSavingPlanKey(plan.key);
+    setPlanFeedback(null);
+    try {
+      const savedPlan = await saveMtnGeneralDataPlan(plan);
+      setMtnPlans((current) => current.map((item) => item.key === plan.key ? savedPlan : item));
+      setPlanFeedback({ message: `${savedPlan.label} pricing saved.`, error: false });
+    } catch (error) {
+      setPlanFeedback({
+        message: error instanceof Error ? error.message : `Could not save ${plan.label}.`,
+        error: true,
+      });
+    } finally {
+      setSavingPlanKey(null);
+    }
+  };
 
   const handleToggleGateway = (carrierName: string, nextState: boolean) => {
     setGateways((prev) =>
@@ -173,6 +230,98 @@ export default function VtuServicesPage() {
           ))}
         </div>
       </div>
+
+      <section className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
+        <div className="mb-4">
+          <h2 className="text-sm font-bold text-slate-900">MTN General bundle pricing</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Map each customer bundle to a live provider plan, set the wallet price, then enable it for the web app.
+          </p>
+        </div>
+
+        {planFeedback && (
+          <p className={`mb-4 rounded-lg border px-3 py-2 text-xs ${planFeedback.error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`} role="status">
+            {planFeedback.message}
+          </p>
+        )}
+
+        {loadingMtnPlans ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          </div>
+        ) : mtnPlans.length === 0 ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            MTN General pricing could not be loaded. Check the backend database migration and provider configuration, then reload this page.
+          </p>
+        ) : (
+          <div className="grid gap-3">
+            {mtnPlans.map((plan) => (
+              <article key={plan.key} className="grid min-w-0 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-[minmax(75px,0.5fr)_minmax(180px,2fr)_minmax(120px,0.8fr)_auto_auto] sm:items-end">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{plan.label}</p>
+                  <p className="text-[11px] text-slate-500">MTN · General</p>
+                </div>
+
+                <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-slate-600">
+                  Provider bundle
+                  <select
+                    value={plan.provider && plan.providerCode ? `${plan.provider}|${plan.providerCode}` : ""}
+                    onChange={(event) => selectMtnProviderPlan(plan.key, event.target.value)}
+                    className="h-10 min-w-0 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-normal text-slate-800"
+                    disabled={savingPlanKey === plan.key}
+                  >
+                    <option value="">Choose provider bundle</option>
+                    {mtnProviderCatalog.map((providerPlan) => (
+                      <option key={`${providerPlan.provider}|${providerPlan.code}`} value={`${providerPlan.provider}|${providerPlan.code}`}>
+                        {providerPlan.label} · {formatNaira(providerPlan.price)} · {providerPlan.provider}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+                  Customer price (₦)
+                  <input
+                    type="number"
+                    min="0"
+                    max="100000"
+                    step="1"
+                    value={plan.sellingPrice || ""}
+                    onChange={(event) => updateMtnPlan(plan.key, { sellingPrice: Number(event.target.value) || 0 })}
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-sm font-normal text-slate-800"
+                    disabled={savingPlanKey === plan.key}
+                  />
+                  <span className="text-[11px] font-normal text-slate-500">
+                    Provider cost: {plan.providerPrice ? formatNaira(plan.providerPrice) : "Select a bundle"}
+                  </span>
+                </label>
+
+                <div className="flex items-center gap-2 pb-2">
+                  <Toggle
+                    checked={plan.enabled}
+                    onChange={(enabled) => updateMtnPlan(plan.key, { enabled })}
+                    id={`toggle-mtn-plan-${plan.key}`}
+                    label={`Enable ${plan.label} for customers`}
+                    disabled={savingPlanKey === plan.key}
+                  />
+                  <span className={`text-xs font-semibold ${plan.enabled ? "text-emerald-700" : "text-slate-500"}`}>
+                    {plan.enabled ? "On" : "Off"}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void handleSaveMtnPlan(plan)}
+                  disabled={savingPlanKey === plan.key}
+                  className="h-10 rounded-lg bg-primary px-4 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {savingPlanKey === plan.key ? "Saving..." : "Save plan"}
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Carrier Filter Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">

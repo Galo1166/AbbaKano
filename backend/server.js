@@ -7,7 +7,7 @@ const { RedisStore } = require("rate-limit-redis");
 const { createClient } = require("redis");
 const jwt = require("jsonwebtoken");
 const pool = require("./db");
-const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtuGateOnly } = require("./vtu-provider");
+const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, encodePlanToken, isVtuGateOnly } = require("./vtu-provider");
 const { calculateCreditAmount, isVerifiedPaystackDeposit } = require("./transaction-state");
 const { buildFallbackDedicatedAccount, createGafiapayAccount } = require("./dedicated-account");
 const { awardReferralCommission } = require("./referral");
@@ -50,6 +50,7 @@ const PHONE_PATTERN = /^\d{10,15}$/;
 const PIN_PATTERN = /^\d{4}$/;
 const VTU_NETWORKS = new Set(["MTN", "AIRTEL", "GLO", "9MOBILE"]);
 const VTU_ELECTRICITY_NETWORKS = new Set(["AEDC", "EKEDC", "EEDC", "IBEDC", "IKEDC", "JED", "KAEDCO", "KEDCO", "PHED"]);
+const MTN_GENERAL_DATA_PLAN_KEYS = new Set(["500mb", "1gb", "2gb", "3gb", "4gb", "5gb", "10gb"]);
 const VTU_RATE_LIMIT = Number(process.env.VTU_RATE_LIMIT || 10);
 const VERIFIED_AGENT_RATE_LIMIT = Number(process.env.VERIFIED_AGENT_RATE_LIMIT || 120);
 const VTU_RATE_WINDOW_SECONDS = Number(process.env.VTU_RATE_WINDOW_SECONDS || 60);
@@ -581,9 +582,17 @@ async function executeVtuPurchase(req, res, type) {
         input.provider = selection.plan.provider;
         input.planCode = selection.plan.code || selection.plan.providerCode || null;
         if (type !== "electricity") input.amount = Number(selection.plan.price);
+        input.providerAmount = type === "data"
+            ? Number(selection.plan.providerPrice ?? selection.plan.price)
+            : input.amount;
         if (!Number.isFinite(input.amount) || input.amount <= 0 || input.amount > 100000) {
             return res.status(400).json({ message: "This data plan is not available" });
         }
+        if (!Number.isFinite(input.providerAmount) || input.providerAmount <= 0 || input.providerAmount > 100000) {
+            return res.status(400).json({ message: "This provider data plan is not available" });
+        }
+    } else {
+        input.providerAmount = input.amount;
     }
     const idempotencyKey = getIdempotencyKey(req);
     if (!idempotencyKey) {
@@ -688,11 +697,11 @@ async function executeVtuPurchase(req, res, type) {
 
         const inserted = await client.query(
             `INSERT INTO vtu_transactions
-                     (user_id, reference, type, network, phone, plan_code, amount_kobo, provider, idempotency_key, request_hash)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                     (user_id, reference, type, network, phone, plan_code, amount_kobo, provider_amount_kobo, provider, idempotency_key, request_hash)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              ON CONFLICT (user_id, type, idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
              RETURNING id`,
-            [userId, reference, type, input.network, input.phone, input.planCode, Math.round(input.amount * 100), input.provider, idempotencyKey, requestHash]
+            [userId, reference, type, input.network, input.phone, input.planCode, Math.round(input.amount * 100), Math.round(input.providerAmount * 100), input.provider, idempotencyKey, requestHash]
         );
         if (inserted.rowCount !== 1) {
             const concurrent = await client.query(
@@ -738,7 +747,7 @@ async function executeVtuPurchase(req, res, type) {
         await client.query("COMMIT");
 
         try {
-            const providerResult = await purchaseVtu({ ...input, type, reference });
+            const providerResult = await purchaseVtu({ ...input, amount: input.providerAmount, type, reference });
             const response = { status: "success", reference, message: providerResult.message };
             await pool.query(
                 "UPDATE vtu_transactions SET provider = $1, provider_request_id = $2 WHERE id = $3 AND status = 'pending'",
@@ -834,6 +843,8 @@ app.get("/health/config", (req, res) => {
         redisConfigured: Boolean(process.env.REDIS_URL),
         paystackConfigured: Boolean(PAYSTACK_SECRET_KEY),
         vtugateConfigured: Boolean(process.env.VTU_GATE_API_KEY),
+        webauthnOrigin: WEBAUTHN_ORIGIN,
+        webauthnRpId: WEBAUTHN_RP_ID,
         cableVerificationProvider: isVtuGateOnly() || Boolean(process.env.VTU_GATE_API_KEY) ? "vtugate" : "vtpass",
         fallbackDisabled: !process.env.VTU_FALLBACK_PROVIDER,
         environment: process.env.NODE_ENV || "development"
@@ -1770,7 +1781,7 @@ app.get("/admin/deposits", requireSession, requireAdmin, requirePermission("tran
     const offset = (page - 1) * limit;
     const values = [];
     const filters = [];
-    const add = (value, clause) => { values.push(value); filters.push(clause.replace("$VALUE", `$${values.length}`)); };
+    const add = (value, clause) => { values.push(value); filters.push(clause.replaceAll("$VALUE", `$${values.length}`)); };
     const status = typeof req.query.status === "string" && ["pending", "success", "failed"].includes(req.query.status)
         ? req.query.status
         : null;
@@ -1820,7 +1831,7 @@ app.get("/admin/deposits", requireSession, requireAdmin, requirePermission("tran
 app.get("/admin/transactions", requireSession, requireAdmin, requirePermission("transactions.read"), async (req, res) => {
     const values = [];
     const filters = [];
-    const add = (value, clause) => { values.push(value); filters.push(clause.replace("$VALUE", `$${values.length}`)); };
+    const add = (value, clause) => { values.push(value); filters.push(clause.replaceAll("$VALUE", `$${values.length}`)); };
     if (typeof req.query.q === "string" && req.query.q.trim()) add(`%${req.query.q.trim()}%`, "(vt.reference ILIKE $VALUE OR u.username ILIKE $VALUE OR COALESCE(u.email, '') ILIKE $VALUE OR vt.network ILIKE $VALUE OR vt.phone ILIKE $VALUE)");
     if (typeof req.query.type === "string" && ["airtime", "data", "electricity", "cable_tv"].includes(req.query.type)) add(req.query.type, "vt.type = $VALUE");
     if (typeof req.query.carrier === "string" && req.query.carrier.trim()) {
@@ -2429,12 +2440,159 @@ app.get("/vtu/plans", requireSession, async (req, res) => {
     try {
         const network = typeof req.query.network === "string" ? req.query.network.trim() : undefined;
         const planType = typeof req.query.planType === "string" ? req.query.planType.trim() : undefined;
-        const plans = await getVtuPlans({ network, planType });
+        const normalizedPlanType = String(planType || "").toLowerCase();
+        const isMtnGeneral = String(network || "").toUpperCase() === "MTN"
+            && (!planType || !normalizedPlanType.includes("sme") && !normalizedPlanType.includes("gift") && !normalizedPlanType.includes("corp"));
+        let plans = [];
+        if (!isMtnGeneral || !planType) {
+            try {
+                plans = await getVtuPlans({ network, planType });
+            } catch (error) {
+                if (!isMtnGeneral) throw error;
+                console.warn("Could not load provider plans while serving saved MTN General plans:", error.message || error);
+            }
+        }
+
+        if (isMtnGeneral) {
+            const savedPlans = await pool.query(
+                `SELECT plan_key, label, provider, provider_code, provider_price_kobo, selling_price_kobo
+                 FROM admin_mtn_general_data_plans
+                 WHERE enabled = TRUE
+                 ORDER BY size_mb`
+            );
+            const adminPlans = savedPlans.rows.map((plan) => {
+                const sellingPrice = Number(plan.selling_price_kobo) / 100;
+                const providerPrice = Number(plan.provider_price_kobo) / 100;
+                return {
+                    label: plan.label,
+                    price: sellingPrice,
+                    code: plan.provider_code,
+                    category: "GENERAL",
+                    provider: plan.provider,
+                    selectionToken: encodePlanToken({
+                        provider: plan.provider,
+                        network: "MTN",
+                        providerCode: plan.provider_code,
+                        price: sellingPrice,
+                        providerPrice
+                    })
+                };
+            });
+            plans = planType
+                ? adminPlans
+                : [...plans.filter((plan) => {
+                    const category = String(plan.category || "GENERAL").toLowerCase();
+                    return category.includes("sme") || category.includes("gift") || category.includes("corp");
+                }), ...adminPlans];
+        }
+
         res.json({ plans });
     } catch (error) {
         console.error(error);
         res.status(502).json({ message: error.message || "Could not load data plans" });
     }
+});
+
+app.get("/admin/vtu-data-plans/mtn-catalog", requireSession, requireAdmin, async (req, res) => {
+    try {
+        const plans = await getVtuPlans({ network: "MTN" });
+        res.json({ plans: plans.map((plan) => ({
+            label: plan.label,
+            price: Number(plan.price),
+            code: plan.code,
+            category: plan.category || "GENERAL",
+            provider: plan.provider
+        })) });
+    } catch (error) {
+        console.error("Could not load MTN provider plan catalog", error);
+        res.status(502).json({ message: error.message || "Could not load MTN provider plans" });
+    }
+});
+
+app.get("/admin/vtu-data-plans/mtn-general", requireSession, requireAdmin, async (req, res) => {
+    const result = await pool.query(
+        `SELECT plan_key, label, size_mb, provider, provider_code, provider_label,
+                provider_price_kobo, selling_price_kobo, enabled
+         FROM admin_mtn_general_data_plans
+         ORDER BY size_mb`
+    );
+    res.json({ plans: result.rows.map((plan) => ({
+        key: plan.plan_key,
+        label: plan.label,
+        sizeMb: Number(plan.size_mb),
+        provider: plan.provider,
+        providerCode: plan.provider_code,
+        providerLabel: plan.provider_label,
+        providerPrice: Number(plan.provider_price_kobo) / 100,
+        sellingPrice: Number(plan.selling_price_kobo) / 100,
+        enabled: plan.enabled
+    })) });
+});
+
+app.patch("/admin/vtu-data-plans/mtn-general/:planKey", requireSession, requireAdmin, requireCsrf, async (req, res) => {
+    const planKey = String(req.params.planKey || "").toLowerCase();
+    const sellingPrice = Number(req.body?.sellingPrice);
+    const enabled = req.body?.enabled;
+    const provider = typeof req.body?.provider === "string" ? req.body.provider : "";
+    const providerCode = typeof req.body?.providerCode === "string" ? req.body.providerCode : "";
+    if (!MTN_GENERAL_DATA_PLAN_KEYS.has(planKey)) return res.status(404).json({ message: "MTN General plan not found" });
+    if (!Number.isSafeInteger(sellingPrice) || sellingPrice < 0 || sellingPrice > 100000 || typeof enabled !== "boolean") {
+        return res.status(400).json({ message: "Enter a whole-naira selling price and enabled state" });
+    }
+
+    let providerPlan = null;
+    if (provider || providerCode || enabled) {
+        if (!provider || !providerCode) return res.status(400).json({ message: "Select a provider bundle before saving this plan" });
+        if (isVtuGateOnly() && provider !== "vtugate") {
+            return res.status(400).json({ message: "Only VTU Gate bundles can be used by the active provider configuration" });
+        }
+        try {
+            const catalog = await getVtuPlans({ network: "MTN" });
+            providerPlan = catalog.find((plan) => plan.provider === provider && plan.code === providerCode);
+        } catch (error) {
+            console.error("Could not validate MTN provider bundle", error);
+            return res.status(502).json({ message: error.message || "Could not validate this provider bundle" });
+        }
+        if (!providerPlan) return res.status(400).json({ message: "This provider bundle is no longer available. Refresh the catalog and select it again." });
+    }
+    if (enabled && (!providerPlan || sellingPrice <= 0)) {
+        return res.status(400).json({ message: "Set a selling price and provider bundle before enabling this plan" });
+    }
+
+    const result = await pool.query(
+        `UPDATE admin_mtn_general_data_plans
+         SET provider = $1,
+             provider_code = $2,
+             provider_label = $3,
+             provider_price_kobo = $4,
+             selling_price_kobo = $5,
+             enabled = $6,
+             updated_at = NOW()
+         WHERE plan_key = $7
+         RETURNING plan_key, label, size_mb, provider, provider_code, provider_label,
+                   provider_price_kobo, selling_price_kobo, enabled`,
+        [
+            providerPlan?.provider || null,
+            providerPlan?.code || null,
+            providerPlan?.label || null,
+            Math.round(Number(providerPlan?.price || 0) * 100),
+            Math.round(sellingPrice * 100),
+            enabled,
+            planKey
+        ]
+    );
+    const plan = result.rows[0];
+    res.json({ plan: {
+        key: plan.plan_key,
+        label: plan.label,
+        sizeMb: Number(plan.size_mb),
+        provider: plan.provider,
+        providerCode: plan.provider_code,
+        providerLabel: plan.provider_label,
+        providerPrice: Number(plan.provider_price_kobo) / 100,
+        sellingPrice: Number(plan.selling_price_kobo) / 100,
+        enabled: plan.enabled
+    } });
 });
 
 app.get("/vtu/account-details", requireSession, async (req, res) => {

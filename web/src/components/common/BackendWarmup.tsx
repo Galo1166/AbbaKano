@@ -10,7 +10,7 @@ export function BackendWarmup() {
 
       // 2. Direct ping to Render backend if in production or configured
       if (typeof window !== "undefined" && window.location.hostname !== "localhost") {
-        fetch("https://abbakano-1.onrender.com/health", { mode: "no-cors", cache: "no-store" }).catch(() => {});
+        fetch("https://abbakano.onrender.com/health", { mode: "no-cors", cache: "no-store" }).catch(() => {});
       }
     }
 

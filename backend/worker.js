@@ -37,7 +37,7 @@ async function process(transaction) {
             provider: transaction.provider,
             network: transaction.network,
             phone: transaction.phone,
-            amount: Number(transaction.amount_kobo) / 100,
+            amount: Number(transaction.provider_amount_kobo || transaction.amount_kobo) / 100,
             planCode: transaction.plan_code,
             reference: transaction.reference
         });
@@ -105,7 +105,7 @@ async function tick() {
     try {
         await client.query("BEGIN");
         const result = await client.query(
-            `SELECT id, user_id, reference, type, network, phone, plan_code, provider, amount_kobo, attempt_count
+            `SELECT id, user_id, reference, type, network, phone, plan_code, provider, amount_kobo, provider_amount_kobo, attempt_count
              FROM vtu_transactions
              WHERE status = 'pending' AND next_attempt_at <= NOW()
              ORDER BY created_at

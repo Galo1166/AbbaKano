@@ -111,6 +111,7 @@ function encodePlanToken(plan) {
         code: plan.providerCode,
         serviceId: plan.serviceId,
         price: plan.price,
+        providerPrice: plan.providerPrice,
         expiresAt: Math.floor(Date.now() / 1000) + PLAN_TOKEN_TTL_SECONDS
     })).toString("base64url");
     const signature = crypto.createHmac("sha256", PLAN_TOKEN_SECRET).update(payload).digest("base64url");
@@ -136,7 +137,8 @@ function resolvePlanToken(token, network) {
             || !hasValidNetwork
             || !["vtpass", "smeplug", "vtugate"].includes(plan.provider)
             || !planCode
-            || !Number.isFinite(Number(plan.price))) {
+            || !Number.isFinite(Number(plan.price))
+            || (plan.providerPrice !== undefined && (!Number.isFinite(Number(plan.providerPrice)) || Number(plan.providerPrice) <= 0))) {
             return { error: "This data plan is no longer available" };
         }
 
@@ -889,4 +891,4 @@ function createReference(userId, type) {
     return `vtu_${type}_${userId}_${crypto.randomUUID()}`;
 }
 
-module.exports = { ProviderError, purchase, createReference, getPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName, isVtpassFallbackEligible: (code) => VTPASS_FALLBACK_CODES.has(String(code)) };
+module.exports = { ProviderError, purchase, createReference, getPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, encodePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName, isVtpassFallbackEligible: (code) => VTPASS_FALLBACK_CODES.has(String(code)) };

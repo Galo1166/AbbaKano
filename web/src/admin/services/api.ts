@@ -60,6 +60,26 @@ type Carrier =
   | "STARTIMES"
   | "VTUGATE";
 
+export type MtnGeneralDataPlan = {
+  key: string;
+  label: string;
+  sizeMb: number;
+  provider: string | null;
+  providerCode: string | null;
+  providerLabel: string | null;
+  providerPrice: number;
+  sellingPrice: number;
+  enabled: boolean;
+};
+
+export type ProviderDataPlan = {
+  label: string;
+  price: number;
+  code: string;
+  category: string;
+  provider: string;
+};
+
 function normalizeCarrierName(value: string | null | undefined): Carrier {
   const normalized = String(value || "").trim().toUpperCase();
   if (["MTN", "AIRTEL", "GLO", "9MOBILE"].includes(normalized)) return normalized as Carrier;
@@ -207,6 +227,31 @@ export async function fetchTransactions(
   );
   const results = response.transactions.map(mapTransaction);
   return paginate(results, page, pageSize);
+}
+
+export async function fetchMtnGeneralDataPlans(): Promise<MtnGeneralDataPlan[]> {
+  const response = await apiRequest<{ plans: MtnGeneralDataPlan[] }>("/admin/vtu-data-plans/mtn-general");
+  return response.plans;
+}
+
+export async function fetchMtnProviderDataPlans(): Promise<ProviderDataPlan[]> {
+  const response = await apiRequest<{ plans: ProviderDataPlan[] }>("/admin/vtu-data-plans/mtn-catalog");
+  return response.plans;
+}
+
+export async function saveMtnGeneralDataPlan(
+  plan: Pick<MtnGeneralDataPlan, "key" | "provider" | "providerCode" | "sellingPrice" | "enabled">
+): Promise<MtnGeneralDataPlan> {
+  const response = await apiRequest<{ plan: MtnGeneralDataPlan }>(`/admin/vtu-data-plans/mtn-general/${plan.key}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      provider: plan.provider,
+      providerCode: plan.providerCode,
+      sellingPrice: plan.sellingPrice,
+      enabled: plan.enabled,
+    }),
+  });
+  return response.plan;
 }
 
 export async function fetchTransactionById(id: string): Promise<ApiResponse<Transaction>> {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const backendUrl = process.env.BACKEND_URL || (process.env.NODE_ENV === "production" ? "https://abbakano-1.onrender.com" : "http://localhost:3000");
+const backendUrl = process.env.BACKEND_URL || (process.env.NODE_ENV === "production" ? "https://abbakano.onrender.com" : "http://localhost:3000");
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
