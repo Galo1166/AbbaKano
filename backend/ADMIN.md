@@ -21,4 +21,4 @@ Admin accounts are regular `users` rows with `role = 'admin'` and `admin_role = 
 
 ## Use VTU Gate only
 
-Set `VTU_PRIMARY_PROVIDER=vtugate` and `VTU_GATE_API_KEY` on the backend service. `VTU_GATE_BASE_URL` is optional and defaults to the VTU Gate API URL. In this mode data, cable TV, and electricity plans, verification, and purchases use VTU Gate only; requests with older VTPass plan tokens are rejected before reserving wallet funds. Remove `VTPASS_*`, `VTU_PROVIDER_*`, and `VTU_FALLBACK_PROVIDER` settings if you do not intend to keep those integrations configured. Redeploy the backend after changing provider settings.
+Set `VTU_PRIMARY_PROVIDER=vtugate` and `VTU_GATE_API_KEY` on the backend service. `VTU_GATE_BASE_URL` is optional and defaults to the VTU Gate API URL. In this mode data, cable TV, and electricity plans, verification, and purchases use VTU Gate only. VTPass is not an active provider in this application. Redeploy the backend after changing provider settings.

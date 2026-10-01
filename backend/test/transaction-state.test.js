@@ -1,7 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { canTransition, isTerminal, isVerifiedPaystackDeposit, calculateCreditAmount } = require("../transaction-state");
-const { isVtpassFallbackEligible } = require("../vtu-provider");
 
 test("only a pending transaction can enter a terminal state", () => {
     assert.equal(canTransition("pending", "success"), true);
@@ -11,7 +10,6 @@ test("only a pending transaction can enter a terminal state", () => {
     assert.equal(isTerminal("success"), true);
     assert.equal(isTerminal("pending"), false);
 });
-
 test("Paystack deposit verification binds payment to the intended deposit", () => {
     const deposit = { reference: "abbakano_4_ref", user_id: 4, amount_kobo: 12500 };
     const payment = {
@@ -30,8 +28,3 @@ test("dedicated account deposits keep a fee separate from the wallet credit", ()
     assert.equal(calculateCreditAmount(5000, 5000), 0);
 });
 
-test("only confirmed VTPass pre-processing rejection is fallback eligible", () => {
-    assert.equal(isVtpassFallbackEligible("028"), true);
-    assert.equal(isVtpassFallbackEligible("019"), false);
-    assert.equal(isVtpassFallbackEligible("500"), false);
-});

@@ -132,7 +132,6 @@ Provider callbacks are server-to-server endpoints and must not be called by the 
 
 - `GET /payments/paystack/callback`
 - `POST /payments/paystack/webhook`
-- `POST /vtu/vtpass/webhook`
 
 Configure provider callback URLs to the public backend origin. Paystack webhooks are verified against the raw request body and `PAYSTACK_SECRET_KEY`.
 
@@ -157,8 +156,6 @@ Set secrets in the hosting provider's secret manager. Do not commit real API key
 | `GAFIAPAY_BASE_URL`, `GAFIAPAY_API_KEY`, `GAFIAPAY_SECRET_KEY`, `GAFIAPAY_TIMEOUT_MS` | Virtual accounts | GafiaPay account provisioning configuration. |
 | `VTU_PRIMARY_PROVIDER`, `VTU_FALLBACK_PROVIDER` | VTU | Select the primary and optional fallback VTU provider. Configure only providers intended for use. |
 | `VTU_PROVIDER_URL`, `VTU_PROVIDER_API_KEY` | Optional VTU | Generic VTU provider endpoint and API key. |
-| `VTPASS_BASE_URL`, `VTPASS_API_KEY`, `VTPASS_PUBLIC_KEY`, `VTPASS_SECRET_KEY` | Optional VTU | VTPass credentials and endpoint. |
-| `VTPASS_FALLBACK_CODES` | No | Comma-separated VTPass response codes eligible for fallback. |
 | `VTU_GATE_BASE_URL`, `VTU_GATE_API_KEY`, `VTU_GATE_TIMEOUT_MS` | Optional VTU | VTU Gate endpoint, key, and request timeout. |
 | `VTU_PROVIDER_TIMEOUT_MS`, `VTU_PLAN_CACHE_TTL_MS`, `VTU_PLAN_TOKEN_SECRET` | No | Provider timeout, plan cache lifetime, and plan-token signing secret. The plan-token secret defaults to `AUTH_SECRET`. |
 | `VTU_RATE_LIMIT`, `VERIFIED_AGENT_RATE_LIMIT`, `VTU_RATE_WINDOW_SECONDS` | No | VTU request rate limits and time window. |

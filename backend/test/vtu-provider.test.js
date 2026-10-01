@@ -67,7 +67,7 @@ function makeToken(plan) {
     return `${payload}.${signature}`;
 }
 
-test("resolvePlanToken accepts a valid selected network even when provider payload omits the network field", () => {
+test("resolvePlanToken rejects unused VTPass plan tokens", () => {
     const token = makeToken({
         provider: "vtpass",
         network: null,
@@ -76,9 +76,7 @@ test("resolvePlanToken accepts a valid selected network even when provider paylo
     });
 
     const result = resolvePlanToken(token, "MTN");
-    assert.equal(result.error, undefined);
-    assert.equal(result.plan.provider, "vtpass");
-    assert.equal(result.plan.price, 500);
+    assert.equal(result.error, "This data plan is no longer available");
 });
 
 test("signed retail plans preserve the provider fulfillment price", () => {

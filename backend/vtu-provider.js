@@ -3,19 +3,14 @@ const { VtuGateProvider } = require("./vtugate-provider");
 
 const PROVIDER_URL = process.env.VTU_PROVIDER_URL;
 const PROVIDER_API_KEY = process.env.VTU_PROVIDER_API_KEY;
-const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL;
-const VTPASS_API_KEY = process.env.VTPASS_API_KEY;
-const VTPASS_PUBLIC_KEY = process.env.VTPASS_PUBLIC_KEY;
-const VTPASS_SECRET_KEY = process.env.VTPASS_SECRET_KEY;
 const VTU_GATE_BASE_URL = process.env.VTU_GATE_BASE_URL || "https://api.vtugate.com/api/v1";
 const VTU_GATE_API_KEY = process.env.VTU_GATE_API_KEY;
 const VTU_GATE_PROVIDER = new VtuGateProvider({ baseUrl: VTU_GATE_BASE_URL, apiKey: VTU_GATE_API_KEY });
-const PRIMARY_PROVIDER = (process.env.VTU_PRIMARY_PROVIDER || (VTPASS_BASE_URL ? "vtpass" : "smeplug")).toLowerCase();
+const PRIMARY_PROVIDER = (process.env.VTU_PRIMARY_PROVIDER || "smeplug").toLowerCase();
 const VTU_GATE_ONLY = PRIMARY_PROVIDER === "vtugate";
 const VTU_PLAN_CACHE_TTL_MS = Number(process.env.VTU_PLAN_CACHE_TTL_MS || 300000);
 const vtuPlanCache = new Map();
 const FALLBACK_PROVIDER = String(process.env.VTU_FALLBACK_PROVIDER || "").trim().toLowerCase();
-const VTPASS_FALLBACK_CODES = new Set((process.env.VTPASS_FALLBACK_CODES || "028").split(",").map((code) => code.trim()).filter(Boolean));
 const PROVIDER_TIMEOUT_MS = Number(process.env.VTU_PROVIDER_TIMEOUT_MS || 15000);
 const PLAN_TOKEN_SECRET = process.env.VTU_PLAN_TOKEN_SECRET || process.env.AUTH_SECRET;
 const PLAN_TOKEN_TTL_SECONDS = 15 * 60;
@@ -45,63 +40,15 @@ function assertConfigured() {
         return;
     }
     if (isVtuGateConfigured()) return;
-    if (VTPASS_BASE_URL && VTPASS_API_KEY && VTPASS_PUBLIC_KEY && VTPASS_SECRET_KEY) return;
     if (!PROVIDER_URL || !PROVIDER_API_KEY) {
         throw new Error("VTU_PROVIDER_URL and VTU_PROVIDER_API_KEY must be configured");
     }
-}
-
-function isVtpassConfigured() {
-    return Boolean(VTPASS_BASE_URL && VTPASS_API_KEY && VTPASS_PUBLIC_KEY && VTPASS_SECRET_KEY);
 }
 
 function isSmeplugConfigured() {
     return Boolean(PROVIDER_URL && PROVIDER_API_KEY);
 }
 
-function vtpassHeaders(method) {
-    return {
-        "Content-Type": "application/json",
-        "api-key": VTPASS_API_KEY,
-        ...(method === "GET" ? { "public-key": VTPASS_PUBLIC_KEY } : { "secret-key": VTPASS_SECRET_KEY })
-    };
-}
-
-function vtpassRequestId() {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Africa/Lagos",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23"
-    }).formatToParts(new Date()).reduce((result, part) => {
-        result[part.type] = part.value;
-        return result;
-    }, {});
-    return `${parts.year}${parts.month}${parts.day}${parts.hour}${parts.minute}${crypto.randomUUID().replace(/-/g, "")}`;
-}
-
-function vtpassServiceId(network, type) {
-    const normalized = String(network).toLowerCase().replace(/[^a-z0-9]/g, "");
-    const serviceNetwork = normalized === "9mobile" ? "etisalat" : normalized;
-    return type === "data" ? `${serviceNetwork}-data` : serviceNetwork;
-}
-
-function vtpassBillServiceId(service, provider) {
-    const normalized = String(provider || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (service === "cable") return { dstv: "dstv", gotv: "gotv", startimes: "startimes" }[normalized] || null;
-    if (service === "electricity") return {
-        ikejaelectric: "ikeja-electric",
-        ekoelectric: "eko-electric",
-        abujadisco: "abuja-electric",
-        portharcourtelectric: "phed",
-        kedco: "kedco",
-        jed: "jed"
-    }[normalized] || null;
-    return null;
-}
 
 function encodePlanToken(plan) {
     if (!PLAN_TOKEN_SECRET) throw new Error("AUTH_SECRET must be configured for VTU plan tokens");
@@ -135,7 +82,7 @@ function resolvePlanToken(token, network) {
 
         if (plan.expiresAt < Math.floor(Date.now() / 1000)
             || !hasValidNetwork
-            || !["vtpass", "smeplug", "vtugate"].includes(plan.provider)
+            || !["smeplug", "vtugate"].includes(plan.provider)
             || !planCode
             || !Number.isFinite(Number(plan.price))
             || (plan.providerPrice !== undefined && (!Number.isFinite(Number(plan.providerPrice)) || Number(plan.providerPrice) <= 0))) {
@@ -531,7 +478,6 @@ async function getPlans({ network, planType } = {}) {
 
     assertConfigured();
     const requests = [];
-    if (isVtpassConfigured()) requests.push(getVtpassPlans(network));
     if (isSmeplugConfigured()) requests.push(getSmeplugPlans({ network, planType }));
     const results = await Promise.allSettled(requests);
     const plans = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
@@ -544,83 +490,6 @@ async function getPlans({ network, planType } = {}) {
         provider: plan.provider,
         selectionToken: encodePlanToken(plan)
     }));
-}
-
-async function getVtpassServicePlans({ service, provider, meterType } = {}) {
-    if (service === "electricity" && (VTU_GATE_ONLY || isVtuGateConfigured())) return getVtuGateElectricityPlans({ provider, meterType });
-    if (service === "cable" && (VTU_GATE_ONLY || isVtuGateConfigured())) throw new Error("Enter a smartcard number to load cable packages");
-    if (!isVtpassConfigured()) throw new Error("VTPass is not configured");
-    const serviceId = vtpassBillServiceId(service, provider);
-    if (!serviceId) throw new Error("Choose a supported bill provider");
-    if (service === "electricity") {
-        return [{
-            label: meterType === "postpaid" ? "Postpaid electricity" : "Prepaid electricity",
-            price: 0,
-            code: meterType === "postpaid" ? "postpaid" : "prepaid",
-            category: meterType === "postpaid" ? "Postpaid" : "Prepaid",
-            selectionToken: encodePlanToken({ provider: "vtpass", network: provider, providerCode: meterType === "postpaid" ? "postpaid" : "prepaid", price: 0 })
-        }];
-    }
-    const response = await fetch(`${VTPASS_BASE_URL.replace(/\/$/, "")}/service-variations?serviceID=${encodeURIComponent(serviceId)}`, providerRequestOptions({ method: "GET", headers: vtpassHeaders("GET") }));
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.response_description !== "000") throw new Error("Could not load cable plans");
-    return normalizePlansPayload(payload?.content?.variations || payload?.content?.varations || [], { network: provider, provider: "vtpass" })
-        .filter((plan) => plan.price > 0 && !/box office/i.test(plan.label))
-        .map((plan) => ({
-        label: plan.label,
-        price: plan.price,
-        code: plan.providerCode,
-        category: plan.planType,
-        selectionToken: encodePlanToken(plan)
-        }));
-}
-
-async function verifyVtpassCableCustomer({ provider, smartcardNumber }) {
-    if (!isVtpassConfigured()) throw new Error("VTPass is not configured");
-    const serviceId = vtpassBillServiceId("cable", provider);
-    if (!serviceId) throw new Error("Choose a supported cable provider");
-
-    const response = await fetch(`${VTPASS_BASE_URL.replace(/\/$/, "")}/merchant-verify`, providerRequestOptions({
-        method: "POST",
-        headers: vtpassHeaders("POST"),
-        body: JSON.stringify({
-            billersCode: smartcardNumber,
-            serviceID: serviceId,
-            type: "smartcard"
-        })
-    }));
-    const payload = await response.json().catch(() => ({}));
-    const responseCode = String(payload?.code ?? payload?.status ?? payload?.data?.code ?? "");
-    const isSuccessful = response.ok && (responseCode === "000" || responseCode.toLowerCase() === "success");
-    if (!isSuccessful) {
-        const error = new Error(payload?.response_description || payload?.message || payload?.data?.message || "Could not verify cable customer");
-        error.code = responseCode || String(response.status);
-        throw error;
-    }
-
-    const content = payload.content || payload.data?.content || payload.data || {};
-    return {
-        customerName: String(
-            content.Customer_Name
-            || content.customer_name
-            || content.customerName
-            || content.name
-            || content.CustomerName
-            || ""
-        )
-    };
-}
-
-async function getVtpassPlans(network) {
-    if (!network) return [];
-    const serviceId = vtpassServiceId(network, "data");
-    const response = await fetch(`${VTPASS_BASE_URL.replace(/\/$/, "")}/service-variations?serviceID=${encodeURIComponent(serviceId)}`, providerRequestOptions({
-        method: "GET",
-        headers: vtpassHeaders("GET")
-    }));
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.response_description !== "000") throw new Error("Could not load VTPass data plans");
-    return normalizePlansPayload(payload?.content?.variations || payload?.content?.varations || [], { network, provider: "vtpass" });
 }
 
 async function getSmeplugPlans({ network, planType } = {}) {
@@ -690,11 +559,12 @@ async function purchase({ type, network, phone, amount, planCode, provider, refe
     if (type === "airtime" && isVtuGateConfigured()) return purchaseWithVtuGate({ type, network, phone, amount, planCode, reference });
     if (type === "airtime") return purchaseWithSmeplug({ type, network, phone, amount, planCode, reference });
     if (provider === "vtugate") return purchaseWithVtuGate({ type, network, phone, amount, planCode, reference });
-    if (provider === "vtpass") return purchaseWithVtpass({ type, network, phone, amount, planCode, reference });
     if (provider === "smeplug") return purchaseWithSmeplug({ type, network, phone, amount, planCode, reference });
 
-    const providers = [PRIMARY_PROVIDER].filter((provider) => provider === "vtpass" ? isVtpassConfigured() : provider === "smeplug" ? isSmeplugConfigured() : true);
-    if (FALLBACK_PROVIDER && FALLBACK_PROVIDER !== PRIMARY_PROVIDER && (FALLBACK_PROVIDER !== "smeplug" || isSmeplugConfigured()) && (FALLBACK_PROVIDER !== "vtpass" || isVtpassConfigured())) {
+    const providers = [PRIMARY_PROVIDER].filter((provider) => provider === "smeplug" ? isSmeplugConfigured() : provider === "vtugate" ? isVtuGateConfigured() : false);
+    if (["smeplug", "vtugate"].includes(FALLBACK_PROVIDER) && FALLBACK_PROVIDER !== PRIMARY_PROVIDER
+        && (FALLBACK_PROVIDER !== "smeplug" || isSmeplugConfigured())
+        && (FALLBACK_PROVIDER !== "vtugate" || isVtuGateConfigured())) {
         providers.push(FALLBACK_PROVIDER);
     }
     if (providers.length === 0) throw new ProviderError("No VTU provider is configured", { retryable: false });
@@ -702,9 +572,6 @@ async function purchase({ type, network, phone, amount, planCode, provider, refe
 
     for (const provider of providers) {
         try {
-            if (provider === "vtpass") {
-                return await purchaseWithVtpass({ type, network, phone, amount, planCode, reference });
-            }
             if (provider === "smeplug") {
                 return await purchaseWithSmeplug({ type, network, phone, amount, planCode, reference });
             }
@@ -788,56 +655,6 @@ async function purchaseWithVtuGate({ type, network, phone, amount, planCode, ref
     }
 }
 
-async function purchaseWithVtpass({ type, network, phone, amount, planCode, reference }) {
-    if (!isVtpassConfigured()) {
-        throw new ProviderError("VTPass is not configured", { provider: "vtpass", fallbackEligible: true });
-    }
-
-    const serviceId = ["airtime", "data"].includes(type)
-        ? vtpassServiceId(network, type)
-        : vtpassBillServiceId(type === "cable_tv" ? "cable" : "electricity", network);
-    const requestId = vtpassRequestId();
-    const body = {
-        request_id: requestId,
-        serviceID: serviceId,
-        billersCode: phone,
-        amount,
-        phone
-    };
-    if (type === "data" || type === "electricity" || type === "cable_tv") body.variation_code = planCode;
-    if (type === "cable_tv") body.subscription_type = "change";
-
-    let response;
-    try {
-        response = await fetch(`${VTPASS_BASE_URL.replace(/\/$/, "")}/pay`, providerRequestOptions({
-            method: "POST",
-            headers: vtpassHeaders("POST"),
-            body: JSON.stringify(body)
-        }));
-    } catch (error) {
-        throw new ProviderError(error.message || "VTPass request failed", { provider: "vtpass", requestId });
-    }
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.code !== "000") {
-        const code = String(payload?.code || response.status);
-        throw new ProviderError(payload?.message || payload?.response_description || "VTPass rejected the purchase", {
-            provider: "vtpass",
-            code,
-            requestId: payload?.requestId || requestId,
-            fallbackEligible: response.ok && VTPASS_FALLBACK_CODES.has(code),
-            retryable: !response.ok || !VTPASS_FALLBACK_CODES.has(code)
-        });
-    }
-
-    return {
-        provider: "vtpass",
-        providerRequestId: payload?.requestId || requestId,
-        providerReference: String(payload?.content?.transactions?.transactionId || payload?.requestId || reference),
-        message: payload?.response_description || "Transaction successful"
-    };
-}
-
 async function purchaseWithSmeplug({ type, network, phone, amount, planCode, reference }) {
     if (!PROVIDER_URL || !PROVIDER_API_KEY) {
         throw new ProviderError("SMEPlug is not configured", { provider: "smeplug", retryable: false });
@@ -891,4 +708,4 @@ function createReference(userId, type) {
     return `vtu_${type}_${userId}_${crypto.randomUUID()}`;
 }
 
-module.exports = { ProviderError, purchase, createReference, getPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, encodePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName, isVtpassFallbackEligible: (code) => VTPASS_FALLBACK_CODES.has(String(code)) };
+module.exports = { ProviderError, purchase, createReference, getPlans, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateElectricityPlans, getVtuGateAccountDetails, resolvePlanToken, encodePlanToken, isVtuGateOnly, normalizeVtuGateCustomerName };

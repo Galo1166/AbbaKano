@@ -7,7 +7,7 @@ const { RedisStore } = require("rate-limit-redis");
 const { createClient } = require("redis");
 const jwt = require("jsonwebtoken");
 const pool = require("./db");
-const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtpassServicePlans, verifyVtpassCableCustomer, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtuGateOnly } = require("./vtu-provider");
+const { purchase: purchaseVtu, createReference: createVtuReference, getPlans: getVtuPlans, getVtuGateElectricityPlans, verifyVtuGateCable, verifyVtuGateElectricity, getVtuGateAccountDetails, resolvePlanToken, isVtuGateOnly } = require("./vtu-provider");
 const { calculateCreditAmount, isVerifiedPaystackDeposit } = require("./transaction-state");
 const { buildFallbackDedicatedAccount, createGafiapayAccount } = require("./dedicated-account");
 const { awardReferralCommission } = require("./referral");
@@ -156,6 +156,25 @@ const passwordResetLimiter = rateLimit({
     message: { message: "Too many authentication attempts. Try again later." }
 });
 
+const authAttemptLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    store: createRateLimitStore("ratelimit:auth:attempts:"),
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { message: "Too many sign-in attempts. Try again later." }
+});
+
+const pinAttemptLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    keyGenerator: (req) => `user:${req.session?.sub || req.ip}`,
+    store: createRateLimitStore("ratelimit:auth:pin:"),
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { message: "Too many PIN attempts. Try again later." }
+});
+
 const vtuRateLimiter = rateLimit({
     windowMs: VTU_RATE_WINDOW_SECONDS * 1000,
     limit: async (req) => {
@@ -235,6 +254,13 @@ function hashPin(pin, salt) {
     return crypto.scryptSync(pin, salt, 64).toString("hex");
 }
 
+function pinHashMatches(pin, salt, expectedHash) {
+    if (typeof expectedHash !== "string") return false;
+    const actual = Buffer.from(hashPin(pin, salt), "hex");
+    const expected = Buffer.from(expectedHash, "hex");
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
 function hashDeviceToken(token) {
     return crypto.createHash("sha256").update(token).digest("hex");
 }
@@ -247,7 +273,7 @@ function validateTransactionPin(pin) {
     return { pin };
 }
 
-function requireSession(req, res, next) {
+async function requireSession(req, res, next) {
     const authorization = req.headers.authorization;
     const bearerToken = typeof authorization === "string" && authorization.startsWith("Bearer ")
         ? authorization.slice(7).trim()
@@ -255,11 +281,22 @@ function requireSession(req, res, next) {
     const token = bearerToken || req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
     if (!token) return res.status(401).json({ message: "Authentication required" });
 
+    let session;
     try {
-        req.session = jwt.verify(token, AUTH_SECRET);
-        next();
+        session = jwt.verify(token, AUTH_SECRET);
     } catch {
-        res.status(401).json({ message: "Authentication required" });
+        return res.status(401).json({ message: "Authentication required" });
+    }
+    if (!session?.sub) return res.status(401).json({ message: "Authentication required" });
+
+    try {
+        const user = await pool.query("SELECT status FROM users WHERE id = $1", [session.sub]);
+        if (user.rows[0]?.status !== "active") return res.status(401).json({ message: "Authentication required" });
+        req.session = session;
+        return next();
+    } catch (error) {
+        console.error("Could not validate session account status", error);
+        return res.status(503).json({ message: "Could not verify session" });
     }
 }
 
@@ -661,8 +698,7 @@ async function executeVtuPurchase(req, res, type) {
                 return res.status(400).json({ message: "Set a 4-digit transaction PIN first before making a purchase" });
             }
 
-            const expectedPinHash = hashPin(input.pin, userPinResult.rows[0].transaction_pin_salt);
-            if (expectedPinHash !== userPinResult.rows[0].transaction_pin_hash) {
+            if (!pinHashMatches(input.pin, userPinResult.rows[0].transaction_pin_salt, userPinResult.rows[0].transaction_pin_hash)) {
                 await client.query("ROLLBACK");
                 return res.status(403).json({ message: "Incorrect transaction PIN" });
             }
@@ -848,7 +884,7 @@ app.get("/health/config", (req, res) => {
         vtugateConfigured: Boolean(process.env.VTU_GATE_API_KEY),
         webauthnOrigin: WEBAUTHN_ORIGIN,
         webauthnRpId: WEBAUTHN_RP_ID,
-        cableVerificationProvider: isVtuGateOnly() || Boolean(process.env.VTU_GATE_API_KEY) ? "vtugate" : "vtpass",
+        cableVerificationProvider: isVtuGateOnly() || Boolean(process.env.VTU_GATE_API_KEY) ? "vtugate" : "unavailable",
         fallbackDisabled: !process.env.VTU_FALLBACK_PROVIDER,
         environment: process.env.NODE_ENV || "development"
     });
@@ -871,7 +907,7 @@ app.get("/test-db", async (req, res) => {
     }
 });
 
-app.post("/signup", async (req, res) => {
+app.post("/signup", authAttemptLimiter, async (req, res) => {
     const credentials = validateSignup(req.body);
     if (credentials.error) return res.status(400).json({ message: credentials.error });
     const { fullName, phone, email, password, pin, referralCode } = credentials;
@@ -958,7 +994,7 @@ app.post("/password-reset/request", passwordResetLimiter, async (req, res) => {
     }
 });
 
-app.post("/login", async (req, res) => {
+app.post("/login", authAttemptLimiter, async (req, res) => {
     const identifier = typeof req.body?.identifier === "string" ? req.body.identifier.trim() : "";
     const password = req.body?.password;
     const normalizedPhone = normalizePhone(identifier);
@@ -1129,7 +1165,7 @@ app.delete("/auth/passkey", requireSession, requireCsrf, async (req, res) => {
     res.sendStatus(204);
 });
 
-app.post("/auth/passkey/login/options", async (req, res) => {
+app.post("/auth/passkey/login/options", authAttemptLimiter, async (req, res) => {
     const userResult = await pool.query(
         "SELECT id, username, full_name, phone, email, role, status, biometrics_enabled FROM users WHERE phone = $1 OR email = $2",
         [normalizePhone(req.body?.identifier), String(req.body?.identifier || "").trim().toLowerCase()]
@@ -1156,7 +1192,7 @@ app.post("/auth/passkey/login/options", async (req, res) => {
     res.json({ ...options, userId: user.id });
 });
 
-app.post("/auth/passkey/login/verify", async (req, res) => {
+app.post("/auth/passkey/login/verify", authAttemptLimiter, async (req, res) => {
     const userResult = await pool.query(
         "SELECT id, username, full_name, phone, email, role, status, biometrics_enabled FROM users WHERE phone = $1 OR email = $2",
         [normalizePhone(req.body?.identifier), String(req.body?.identifier || "").trim().toLowerCase()]
@@ -1437,7 +1473,7 @@ app.post("/referrals/commission/withdraw", requireSession, requireCsrf, async (r
     }
 });
 
-app.post("/me/transaction-pin", requireSession, async (req, res) => {
+app.post("/me/transaction-pin", requireSession, pinAttemptLimiter, requireCsrf, async (req, res) => {
     const pinValidation = validateTransactionPin(req.body?.pin);
     if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });
 
@@ -1448,7 +1484,7 @@ app.post("/me/transaction-pin", requireSession, async (req, res) => {
     const currentPin = req.body?.currentPin;
     if (existing.rows[0]?.transaction_pin_hash) {
         const currentPinValidation = validateTransactionPin(currentPin);
-        if (currentPinValidation.error || hashPin(currentPinValidation.pin, existing.rows[0].transaction_pin_salt) !== existing.rows[0].transaction_pin_hash) {
+        if (currentPinValidation.error || !pinHashMatches(currentPinValidation.pin, existing.rows[0].transaction_pin_salt, existing.rows[0].transaction_pin_hash)) {
             return res.status(401).json({ message: "Current PIN is incorrect" });
         }
     }
@@ -1468,7 +1504,7 @@ app.post("/me/transaction-pin", requireSession, async (req, res) => {
     res.json({ message: "Transaction PIN saved successfully" });
 });
 
-app.post("/me/transaction-pin/verify-current", requireSession, async (req, res) => {
+app.post("/me/transaction-pin/verify-current", requireSession, pinAttemptLimiter, requireCsrf, async (req, res) => {
     const pinValidation = validateTransactionPin(req.body?.pin);
     if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });
 
@@ -1477,14 +1513,14 @@ app.post("/me/transaction-pin/verify-current", requireSession, async (req, res) 
         [req.session.sub]
     );
     const user = result.rows[0];
-    if (!user?.transaction_pin_hash || hashPin(pinValidation.pin, user.transaction_pin_salt) !== user.transaction_pin_hash) {
+    if (!user?.transaction_pin_hash || !pinHashMatches(pinValidation.pin, user.transaction_pin_salt, user.transaction_pin_hash)) {
         return res.status(401).json({ message: "Current PIN is incorrect" });
     }
 
     res.json({ verified: true });
 });
 
-app.post("/me/app-lock/verify", requireSession, async (req, res) => {
+app.post("/me/app-lock/verify", requireSession, pinAttemptLimiter, requireCsrf, async (req, res) => {
     const pinValidation = validateTransactionPin(req.body?.pin);
     if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });
     const result = await pool.query(
@@ -1492,13 +1528,13 @@ app.post("/me/app-lock/verify", requireSession, async (req, res) => {
         [req.session.sub]
     );
     const user = result.rows[0];
-    if (!user?.transaction_pin_hash || hashPin(pinValidation.pin, user.transaction_pin_salt) !== user.transaction_pin_hash) {
+    if (!user?.transaction_pin_hash || !pinHashMatches(pinValidation.pin, user.transaction_pin_salt, user.transaction_pin_hash)) {
         return res.status(401).json({ message: "Incorrect app lock PIN" });
     }
     res.json({ unlocked: true });
 });
 
-app.post("/me/transaction-pin/reset", requireSession, async (req, res) => {
+app.post("/me/transaction-pin/reset", requireSession, pinAttemptLimiter, requireCsrf, async (req, res) => {
     const pinValidation = validateTransactionPin(req.body?.pin);
     if (pinValidation.error) return res.status(400).json({ message: pinValidation.error });
 
@@ -1513,8 +1549,7 @@ app.post("/me/transaction-pin/reset", requireSession, async (req, res) => {
         return res.status(400).json({ message: "No transaction PIN is currently set" });
     }
 
-    const expectedPinHash = hashPin(pinValidation.pin, userResult.rows[0].transaction_pin_salt);
-    if (expectedPinHash !== userResult.rows[0].transaction_pin_hash) {
+    if (!pinHashMatches(pinValidation.pin, userResult.rows[0].transaction_pin_salt, userResult.rows[0].transaction_pin_hash)) {
         return res.status(403).json({ message: "Incorrect transaction PIN" });
     }
 
@@ -2388,56 +2423,6 @@ app.post("/payments/paystack/webhook", async (req, res) => {
     }
 });
 
-app.post("/vtu/vtpass/webhook", async (req, res) => {
-    const payload = req.body && typeof req.body === "object" ? req.body : {};
-    const data = payload.data && typeof payload.data === "object" ? payload.data : payload;
-    const providerRequestId = String(
-        data.request_id || data.requestId || data.provider_request_id || data.providerRequestId || ""
-    );
-    const providerReference = String(
-        data.reference || data.transaction_id || data.transactionId || data.provider_reference || ""
-    );
-    const status = String(
-        data.status || data.current_status || data.response_description || payload.status || ""
-    ).toLowerCase();
-    const successful = ["success", "successful", "delivered", "completed", "000"].includes(status)
-        || data.code === "000"
-        || payload.code === "000";
-
-    if (!successful || (!providerRequestId && !providerReference)) return res.sendStatus(200);
-
-    const client = await pool.connect();
-    try {
-        const result = await client.query(
-            `SELECT id, user_id, reference, status
-             FROM vtu_transactions
-             WHERE status = 'pending'
-               AND provider = 'vtpass'
-                             AND (provider_request_id = NULLIF($1, '') OR provider_reference = NULLIF($2, '') OR reference = NULLIF($1, ''))`,
-            [providerRequestId, providerReference]
-        );
-        const transaction = result.rows[0];
-        if (transaction) {
-            await finalizeVtuSuccess(transaction.id, transaction.user_id, {
-                provider: "vtpass",
-                providerRequestId: providerRequestId || transaction.reference,
-                providerReference: providerReference || providerRequestId || transaction.reference,
-                message: data.message || payload.message || "Transaction successful"
-            }, {
-                status: "success",
-                reference: transaction.reference,
-                message: data.message || payload.message || "Transaction successful"
-            });
-        }
-        return res.sendStatus(200);
-    } catch (error) {
-        console.error("VTPass webhook reconciliation failed", error);
-        return res.sendStatus(500);
-    } finally {
-        client.release();
-    }
-});
-
 app.get("/vtu/plans", requireSession, async (req, res) => {
     try {
         const network = typeof req.query.network === "string" ? req.query.network.trim() : undefined;
@@ -2556,6 +2541,9 @@ app.get("/vtu/service-plans", requireSession, async (req, res) => {
         const provider = typeof req.query.provider === "string" ? req.query.provider.trim() : "";
         const meterType = req.query.meterType === "postpaid" ? "postpaid" : "prepaid";
         if (!service || !provider) return res.status(400).json({ message: "Choose a supported service and provider" });
+        if (!isVtuGateOnly() && !process.env.VTU_GATE_API_KEY) {
+            return res.status(503).json({ message: "This service requires the configured VTU Gate provider" });
+        }
         if (service === "cable" && (isVtuGateOnly() || process.env.VTU_GATE_API_KEY)) {
             const smartcardNumber = typeof req.query.smartcardNumber === "string" ? req.query.smartcardNumber.replace(/\D/g, "") : "";
             if (!/^\d{10}$/.test(smartcardNumber)) return res.json({ plans: [] });
@@ -2563,7 +2551,10 @@ app.get("/vtu/service-plans", requireSession, async (req, res) => {
             const result = await verifyVtuGateCable({ provider, smartcardNumber, phone: user.rows[0]?.phone || "" });
             return res.json({ plans: result.plans });
         }
-        res.json({ plans: await getVtpassServicePlans({ service, provider, meterType }) });
+        if (service === "electricity") {
+            return res.json({ plans: await getVtuGateElectricityPlans({ provider, meterType }) });
+        }
+        return res.status(400).json({ message: "Unsupported VTU service" });
     } catch (error) {
         console.error(error);
         res.status(502).json({ message: error.message || "Could not load service plans" });
@@ -2594,12 +2585,12 @@ app.post("/vtu/verify-cable", requireSession, requireCsrf, async (req, res) => {
 
     try {
         const user = await pool.query("SELECT phone FROM users WHERE id = $1", [req.session.sub]);
-        const result = isVtuGateOnly() || process.env.VTU_GATE_API_KEY
-            ? await verifyVtuGateCable({ provider, smartcardNumber, phone: user.rows[0]?.phone || "" })
-            : await verifyVtpassCableCustomer({ provider, smartcardNumber });
+        if (!isVtuGateOnly() && !process.env.VTU_GATE_API_KEY) {
+            return res.status(503).json({ message: "Cable verification requires the configured VTU Gate provider" });
+        }
+        const result = await verifyVtuGateCable({ provider, smartcardNumber, phone: user.rows[0]?.phone || "" });
         if (!result.customerName) {
-            const providerName = result.provider === "vtugate" ? "VTU Gate" : "VTPass";
-            return res.status(502).json({ message: `${providerName} did not return a customer name` });
+            return res.status(502).json({ message: "VTU Gate did not return a customer name" });
         }
         res.json(result);
     } catch (error) {
