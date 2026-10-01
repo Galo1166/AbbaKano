@@ -29,15 +29,15 @@ function Toggle({ enabled, onChange, disabled = false }: { enabled: boolean; onC
   return <button className={`profile-toggle${enabled ? " enabled" : ""}`} type="button" role="switch" aria-checked={enabled} onClick={onChange} disabled={disabled}><span /></button>;
 }
 
-type ProfileUser = { full_name?: string; fullName?: string; email?: string; phone?: string; biometrics_enabled?: boolean; app_lock_enabled?: boolean; has_transaction_pin?: boolean; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
+type ProfileUser = { full_name?: string; fullName?: string; email?: string; phone?: string; biometrics_enabled?: boolean; app_lock_enabled?: boolean; has_transaction_pin?: boolean; has_passkey?: boolean; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
 
 export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
   const router = useRouter();
   const [user, setUser] = useState<ProfileUser | null>(initialUser || null);
   const [loading, setLoading] = useState(!initialUser);
   const [message, setMessage] = useState("");
-  const [biometrics, setBiometrics] = useState(false);
-  const [appLock, setAppLock] = useState(false);
+  const [biometrics, setBiometrics] = useState(initialUser?.biometrics_enabled !== false && initialUser?.has_passkey === true);
+  const [appLock, setAppLock] = useState(initialUser?.app_lock_enabled === true);
   const [savingSetting, setSavingSetting] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -58,7 +58,7 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       if (cancelled) return;
       if (!response.user) throw new Error("Profile data was not returned.");
       setUser(response.user);
-      setBiometrics(response.user.biometrics_enabled !== false);
+      setBiometrics(response.user.biometrics_enabled !== false && response.user.has_passkey === true);
       setAppLock(response.user.app_lock_enabled === true);
       setPinStep(response.user.has_transaction_pin ? "current" : "new");
     }).catch((error) => {
@@ -73,16 +73,20 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
     setSavingSetting(setting);
     setMessage("");
     try {
-      if (setting === "biometrics" && nextValue) {
+      const hasPasskey = user?.has_passkey === true;
+      if (setting === "biometrics" && nextValue && !hasPasskey) {
         const options = await apiRequest<Record<string, unknown>>("/auth/passkey/register/options", { method: "POST", body: JSON.stringify({}) });
         const response = await startRegistration({ optionsJSON: options as never });
         await apiRequest("/auth/passkey/register/verify", { method: "POST", body: JSON.stringify(response) });
-      } else if (setting === "biometrics" && !nextValue) {
+      } else if (setting === "biometrics" && !nextValue && hasPasskey) {
         await apiRequest("/auth/passkey", { method: "DELETE" });
       }
       const response = await apiRequest<{ biometricsEnabled: boolean; appLockEnabled: boolean }>("/me/security-settings", { method: "PATCH", body: JSON.stringify(setting === "biometrics" ? { biometricsEnabled: nextValue } : { appLockEnabled: nextValue }) });
       setBiometrics(response.biometricsEnabled);
       setAppLock(response.appLockEnabled);
+      if (setting === "biometrics") {
+        setUser((current) => current ? { ...current, has_passkey: nextValue } : current);
+      }
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Could not save this security setting.");
     } finally {

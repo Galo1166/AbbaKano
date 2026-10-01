@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { startAuthentication } from "@simplewebauthn/browser";
 import { apiRequest, ApiError } from "@/lib/api";
 
 export function LoginForm() {
@@ -33,6 +34,37 @@ export function LoginForm() {
     }
   }
 
+  async function handleBiometricSignIn() {
+    setErrorMessage("");
+    const accountIdentifier = identifier.trim();
+    if (!accountIdentifier) {
+      setErrorMessage("Enter the phone number or email for your passkey account first.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const options = await apiRequest<Record<string, unknown>>("/auth/passkey/login/options", {
+        method: "POST",
+        body: JSON.stringify({ identifier: accountIdentifier }),
+      });
+      const response = await startAuthentication({ optionsJSON: options as never });
+      await apiRequest("/auth/passkey/login/verify", {
+        method: "POST",
+        body: JSON.stringify({ identifier: accountIdentifier, response }),
+      });
+      router.push("/app");
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : "Could not complete biometric sign-in.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <form className="auth-form" onSubmit={handleSubmit}>
       {errorMessage && <div className="auth-error" role="alert">{errorMessage}</div>}
@@ -41,7 +73,7 @@ export function LoginForm() {
       <div className="auth-options"><label className="check-label"><input type="checkbox" checked={rememberDevice} onChange={(event) => setRememberDevice(event.target.checked)} /> Remember this device</label><Link href="/forgot-password">Forgot Password?</Link></div>
       <button className="auth-primary" type="submit" disabled={loading}>{loading ? "Signing in..." : "Secured Sign In to Wallet"}</button>
       <div className="auth-divider"><span>Or continue with</span></div>
-      <button className="auth-secondary" type="button" onClick={() => setErrorMessage("Passkey sign-in will be available after WebAuthn setup.")}>Sign In with Biometrics</button>
+      <button className="auth-secondary" type="button" onClick={() => void handleBiometricSignIn()} disabled={loading}>{loading ? "Verifying..." : "Sign In with Biometrics"}</button>
       <p className="auth-help">Need help? <Link href="/support">Contact WhatsApp Support</Link></p>
     </form>
   );

@@ -30,10 +30,12 @@ async function proxy(request: NextRequest, context: RouteContext) {
   }
   const responseHeaders = new Headers();
   const contentType = response.headers.get("content-type");
-  const setCookie = response.headers.get("set-cookie");
+  const setCookies = typeof response.headers.getSetCookie === "function"
+    ? response.headers.getSetCookie()
+    : [response.headers.get("set-cookie")].filter((cookie): cookie is string => Boolean(cookie));
 
   if (contentType) responseHeaders.set("content-type", contentType);
-  if (setCookie) responseHeaders.set("set-cookie", setCookie);
+  for (const cookie of setCookies) responseHeaders.append("set-cookie", cookie);
 
   if (response.status === 204) return new NextResponse(null, { status: 204, headers: responseHeaders });
   return new NextResponse(await response.text(), { status: response.status, headers: responseHeaders });

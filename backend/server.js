@@ -26,8 +26,22 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || "http://localhost:3000/payments/paystack/callback";
 const PAYSTACK_FRONTEND_URL = process.env.PAYSTACK_FRONTEND_URL || "http://localhost:5173/";
 const PAYSTACK_APP_CALLBACK_URL = process.env.PAYSTACK_APP_CALLBACK_URL || "abbakanodatasubapp://payment";
-const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || (process.env.NODE_ENV === "production" ? "abbakano-1.onrender.com" : "localhost");
-const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || (process.env.NODE_ENV === "production" ? "https://abbakano-1.onrender.com" : "http://localhost:5173");
+const configuredWebAuthnOrigin = process.env.WEBAUTHN_ORIGIN || (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
+if (!configuredWebAuthnOrigin) {
+    throw new Error("WEBAUTHN_ORIGIN must be configured in production with the web app origin");
+}
+const parsedWebAuthnOrigin = new URL(configuredWebAuthnOrigin);
+if (parsedWebAuthnOrigin.pathname !== "/" || parsedWebAuthnOrigin.search || parsedWebAuthnOrigin.hash) {
+    throw new Error("WEBAUTHN_ORIGIN must be an origin without a path, query, or fragment");
+}
+if (process.env.NODE_ENV === "production" && parsedWebAuthnOrigin.protocol !== "https:") {
+    throw new Error("WEBAUTHN_ORIGIN must use HTTPS in production");
+}
+const WEBAUTHN_ORIGIN = parsedWebAuthnOrigin.origin;
+const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || parsedWebAuthnOrigin.hostname;
+if (parsedWebAuthnOrigin.hostname !== WEBAUTHN_RP_ID && !parsedWebAuthnOrigin.hostname.endsWith(`.${WEBAUTHN_RP_ID}`)) {
+    throw new Error("WEBAUTHN_RP_ID must match the web app hostname or a parent domain");
+}
 const SESSION_COOKIE = "session";
 const SECURE_COOKIES = process.env.SECURE_COOKIES === "true" || process.env.NODE_ENV === "production";
 const COOKIE_SAME_SITE = SECURE_COOKIES ? "None" : "Lax";
@@ -1245,6 +1259,7 @@ app.get("/me", requireSession, async (req, res) => {
             u.virtual_account_name, u.virtual_account_status,
             u.virtual_account_error, u.virtual_account_created_at,
             u.transaction_pin_hash IS NOT NULL AS has_transaction_pin,
+            EXISTS (SELECT 1 FROM passkey_credentials pc WHERE pc.user_id = u.id) AS has_passkey,
             ap.status AS agent_status, ap.daily_limit_kobo
          FROM users u
          JOIN wallets w ON w.user_id = u.id
