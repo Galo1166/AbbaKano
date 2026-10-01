@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useThemeMode } from "@/lib/theme";
 
 const services = [
   ["signal", "Airtime", "All networks, instant recharge, and no service fee on wallet funding."],
@@ -43,7 +43,7 @@ function StoreIcon({ store }: { store: "apple" | "play" }) {
 }
 
 export default function Home() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const { theme, toggleTheme } = useThemeMode();
 
   return (
     <main className={`landing ${theme === "light" ? "light" : ""}`}>
@@ -52,8 +52,8 @@ export default function Home() {
           <span className="brand-mark"><Image src="/branding/logo.png" alt="AbbaKano" width={40} height={40} /></span>
           <span>AbbaKano DataSub</span>
         </Link>
-        <button className="theme-toggle" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
-          <ThemeIcon light={theme === "dark"} />
+        <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+          <ThemeIcon light={theme === "light"} />
         </button>
       </header>
 
@@ -140,7 +140,7 @@ export default function Home() {
             <h2 className="footer-heading">Contact</h2>
             <div className="footer-links">
               <a href="mailto:support@abbakano.com">support@abbakano.com</a>
-              <a href="tel:+2348000000000">+234 800 000 0000</a>
+              <a href="tel:+2348166774566">+234 816 677 4566</a>
               <a href="/support">WhatsApp support</a>
               <span>Kano, Nigeria</span>
             </div>
@@ -152,7 +152,7 @@ export default function Home() {
         </div>
         <div className="footer-bottom">
           <span>© 2026 AbbaKano DataSub. All rights reserved.</span>
-          <div className="footer-legal"><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/status">System status</Link></div>
+          <div className="footer-legal"><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/support">Support Desk</Link></div>
         </div>
       </footer>
     </main>

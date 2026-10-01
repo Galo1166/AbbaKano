@@ -44,8 +44,17 @@ export function WebDesktopSidebar({
     router.push(href);
   };
 
+  const handleFundWallet = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (typeof window !== "undefined" && window.location.pathname === "/app") {
+      window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "funding" }));
+      return;
+    }
+    router.push("/fund-wallet");
+  };
+
   return <aside className="web-desktop-sidebar"><Link className="web-sidebar-brand" href="/app"><span><Image src="/branding/logo.png" alt="AbbaKano" width={38} height={38} /></span><strong>ABBAKANO<small>DATA SUB</small></strong></Link><nav aria-label="Desktop navigation">{tabs.map(([icon, label, href]) => {
     const tab = icon === "data" ? "data" : icon;
     return <Link className={active === icon ? "active" : ""} href={href} key={label} onClick={(event) => handleNavigate(event, href, tab)}><Icon name={icon === "data" ? "spark" : icon} /><span>{label}</span></Link>;
-  })}</nav><div className="web-sidebar-secondary"><Link className="web-sidebar-fund" href="/fund-wallet" onClick={(event) => { event.preventDefault(); router.push("/fund-wallet"); }}><Icon name="wallet" /><span>Fund Wallet</span></Link><Link href="/support" onClick={(event) => { event.preventDefault(); router.push("/support"); }}><span className="web-sidebar-dot" />Support</Link>{onLogout && <button type="button" className="web-sidebar-logout" onClick={onLogout}><Icon name="logout" /><span>Log Out</span></button>}</div></aside>;
+  })}</nav><div className="web-sidebar-secondary"><Link className="web-sidebar-fund" href="/fund-wallet" onClick={handleFundWallet}><Icon name="wallet" /><span>Fund Wallet</span></Link><Link href="/support" onClick={(event) => { event.preventDefault(); router.push("/support"); }}><span className="web-sidebar-dot" />Support</Link>{onLogout && <button type="button" className="web-sidebar-logout" onClick={onLogout}><Icon name="logout" /><span>Log Out</span></button>}</div></aside>;
 }

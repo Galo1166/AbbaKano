@@ -9,6 +9,9 @@ import { DataPurchaseShell } from "@/components/data/DataPurchaseShell";
 import { AirtimeShell } from "@/components/airtime/AirtimeShell";
 import { HistoryShell } from "@/components/history/HistoryShell";
 import { ProfileShell } from "@/components/profile/ProfileShell";
+import { CableTVShell } from "@/components/cable/CableTVShell";
+import { ElectricityShell } from "@/components/electricity/ElectricityShell";
+import { FundWalletShell } from "@/components/funding/FundWalletShell";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { ReferEarnShell } from "@/components/referral/ReferEarnShell";
@@ -115,7 +118,11 @@ export function DashboardShell() {
     useEffect(() => {
         function handleTabChange(event: Event) {
             const tab = (event as CustomEvent<string>).detail;
-            setActiveTab(tab === "data" ? "bolt" : tab);
+            if (tab === "data") setActiveTab("bolt");
+            else if (tab === "electricity") setActiveTab("power");
+            else if (tab === "cable-tv") setActiveTab("tv");
+            else if (tab === "fund-wallet") setActiveTab("funding");
+            else setActiveTab(tab);
         }
         window.addEventListener("app-tab-change", handleTabChange);
         return () => window.removeEventListener("app-tab-change", handleTabChange);
@@ -141,6 +148,9 @@ export function DashboardShell() {
 
     if (activeTab === "bolt") return <DataPurchaseShell />;
     if (activeTab === "airtime") return <AirtimeShell />;
+    if (activeTab === "power" || activeTab === "electricity") return <ElectricityShell />;
+    if (activeTab === "tv" || activeTab === "cable-tv") return <CableTVShell />;
+    if (activeTab === "funding" || activeTab === "fund-wallet") return <FundWalletShell />;
     if (activeTab === "history") return <HistoryShell initialTransactions={data.transactions} />;
     if (activeTab === "profile") return <ProfileShell initialUser={data.user} />;
     if (activeTab === "referral") return <ReferEarnShell initialUser={data.user} />;
@@ -153,9 +163,9 @@ export function DashboardShell() {
                 <div className="dashboard-header-actions"><button className="dashboard-icon-button" type="button" onClick={toggleTheme} aria-label={`Switch to ${lightMode ? "dark" : "light"} mode`}><ThemeIcon light={lightMode} /></button><Link href="/support" className="dashboard-icon-button" aria-label="Contact Support"><Icon name="support" /></Link><button className="dashboard-avatar" type="button" onClick={() => setActiveTab("profile")} aria-label="Open profile">{firstName.slice(0, 1).toUpperCase()}</button></div></header>
 
                 <div className="dashboard-content">
-                    <section className="balance-card"><div className="balance-card-top"><div><span className="balance-label">Wallet Balance</span><span className="balance-status"><i />Instant Active</span></div><button className="balance-visibility" type="button" onClick={() => setHiddenBalance((current) => !current)} aria-label={hiddenBalance ? "Show wallet balance" : "Hide wallet balance"}><Icon name="eye" /></button></div><strong className="balance-value">{hiddenBalance ? "••••••••" : formatNaira(data.balance)}</strong><div className="balance-actions"><Link href="/fund-wallet" className="dashboard-primary"><Icon name="wallet" />Fund Wallet</Link><Link href="/data" className="balance-link">Instant Sub</Link></div></section>
+                    <section className="balance-card"><div className="balance-card-top"><div><span className="balance-label">Wallet Balance</span><span className="balance-status"><i />Instant Active</span></div><button className="balance-visibility" type="button" onClick={() => setHiddenBalance((current) => !current)} aria-label={hiddenBalance ? "Show wallet balance" : "Hide wallet balance"}><Icon name="eye" /></button></div><strong className="balance-value">{hiddenBalance ? "••••••••" : formatNaira(data.balance)}</strong><div className="balance-actions"><button type="button" onClick={() => setActiveTab("funding")} className="dashboard-primary"><Icon name="wallet" />Fund Wallet</button><button type="button" onClick={() => setActiveTab("bolt")} className="balance-link">Instant Sub</button></div></section>
 
-                    <section className="dashboard-section"><div className="dashboard-section-heading"><div><span className="dashboard-kicker">Services</span><h2>VTU Hub</h2></div><button className="dashboard-section-link" type="button" onClick={() => setActiveTab("bolt")}>View all</button></div><div className="service-grid">{services.map(([icon, title, description, href, badge]) => <button className="dashboard-service" type="button" onClick={() => title === "Data Bundles" ? setActiveTab("bolt") : title === "Airtime Topup" ? setActiveTab("airtime") : router.push(href)} key={title}><span className={`service-icon ${icon}`}><Icon name={icon} /></span><span className="service-copy"><strong>{title}</strong><small>{description}</small></span><span className="service-badge">{badge}</span></button>)}</div></section>
+                    <section className="dashboard-section"><div className="dashboard-section-heading"><div><span className="dashboard-kicker">Services</span><h2>VTU Hub</h2></div><button className="dashboard-section-link" type="button" onClick={() => setActiveTab("bolt")}>View all</button></div><div className="service-grid">{services.map(([icon, title, description, href, badge]) => <button className="dashboard-service" type="button" onClick={() => { if (title === "Data Bundles") setActiveTab("bolt"); else if (title === "Airtime Topup") setActiveTab("airtime"); else if (title === "Electricity") setActiveTab("power"); else if (title === "Cable TV") setActiveTab("tv"); else router.push(href); }} key={title}><span className={`service-icon ${icon}`}><Icon name={icon} /></span><span className="service-copy"><strong>{title}</strong><small>{description}</small></span><span className="service-badge">{badge}</span></button>)}</div></section>
 
                     <section className="support-card"><div className="support-card-icon"><Icon name="support" /></div><div><span className="dashboard-kicker">Need a hand?</span><h2>24/7 Resolution Desk</h2><p>WhatsApp, Phone Calls &amp; Email Support</p></div><Link href="/support" className="support-link">Help <span aria-hidden="true">-&gt;</span></Link></section>
 

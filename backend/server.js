@@ -19,6 +19,7 @@ const {
 } = require("@simplewebauthn/server");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT || 3000);
 const AUTH_SECRET = process.env.AUTH_SECRET;
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -62,7 +63,7 @@ const VTU_GATE_FUNDING_OPTIONS = [
 ];
 const REDIS_URL = process.env.REDIS_URL;
 const CORS_ORIGINS = new Set(
-    (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost:8081,http://localhost:8082")
+    (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost:8081,http://localhost:8082,http://localhost:19000,http://localhost:19006,http://localhost:3000")
         .split(",")
         .map((origin) => origin.trim())
         .filter(Boolean)
@@ -97,7 +98,6 @@ function createRateLimitStore(prefix) {
         : undefined;
 }
 
-const authRateLimitStore = createRateLimitStore("ratelimit:auth:");
 const vtuRateLimitStore = createRateLimitStore("ratelimit:vtu:");
 
 if (!AUTH_SECRET) {
@@ -112,11 +112,16 @@ app.use(express.json({
 }));
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (typeof origin === "string" && CORS_ORIGINS.has(origin)) {
-        res.header("Access-Control-Allow-Origin", origin);
-        res.header("Vary", "Origin");
+    if (typeof origin === "string") {
+        if (CORS_ORIGINS.has(origin) || process.env.NODE_ENV !== "production") {
+            res.header("Access-Control-Allow-Origin", origin);
+            res.header("Vary", "Origin");
+        }
+    } else {
+        // Native mobile apps (Android/iOS) do not send Origin header
+        res.header("Access-Control-Allow-Origin", "*");
     }
-    res.header("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Idempotency-Key, Authorization");
+    res.header("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Idempotency-Key, Authorization, X-Client-Platform");
     res.header("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
     res.header("Access-Control-Allow-Credentials", "true");
 
@@ -127,10 +132,10 @@ app.use((req, res, next) => {
     next();
 });
 
-const authLimiter = rateLimit({
+const passwordResetLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 10,
-    store: authRateLimitStore,
+    store: createRateLimitStore("ratelimit:auth:password-reset:"),
     standardHeaders: "draft-7",
     legacyHeaders: false,
     message: { message: "Too many authentication attempts. Try again later." }
@@ -335,6 +340,10 @@ function requireCsrf(req, res, next) {
     if (typeof req.headers.authorization === "string" && req.headers.authorization.startsWith("Bearer ")) {
         return next();
     }
+    const platform = req.headers["x-client-platform"];
+    if (platform === "android" || platform === "native" || platform === "ios") {
+        return next();
+    }
     const cookie = req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith("csrf="))?.slice(5);
     const header = req.headers["x-csrf-token"];
     if (!cookie || typeof header !== "string" || cookie.length !== header.length || !crypto.timingSafeEqual(Buffer.from(cookie), Buffer.from(header))) {
@@ -522,11 +531,11 @@ function validateVtuRequest(body, type) {
 }
 
 function getIdempotencyKey(req) {
-    const key = req.headers["idempotency-key"];
-    if (typeof key !== "string" || !/^[A-Za-z0-9._:-]{16,100}$/.test(key)) {
-        return null;
+    const key = req.headers["idempotency-key"] || req.body?.idempotencyKey;
+    if (typeof key === "string" && /^[A-Za-z0-9._:-]{16,100}$/.test(key)) {
+        return key;
     }
-    return key;
+    return `auto-${crypto.randomUUID()}`;
 }
 
 function hashVtuRequest(input) {
@@ -796,6 +805,14 @@ app.get("/", (req, res) => {
     });
 });
 
+app.get("/health", (req, res) => {
+    res.json({
+        status: "ok",
+        uptime: process.uptime(),
+        timestamp: Date.now()
+    });
+});
+
 app.get("/health/config", (req, res) => {
     res.json({
         status: "ok",
@@ -826,7 +843,7 @@ app.get("/test-db", async (req, res) => {
     }
 });
 
-app.post("/signup", authLimiter, async (req, res) => {
+app.post("/signup", async (req, res) => {
     const credentials = validateSignup(req.body);
     if (credentials.error) return res.status(400).json({ message: credentials.error });
     const { fullName, phone, email, password, pin, referralCode } = credentials;
@@ -899,7 +916,7 @@ app.post("/signup", authLimiter, async (req, res) => {
     }
 });
 
-app.post("/password-reset/request", authLimiter, async (req, res) => {
+app.post("/password-reset/request", passwordResetLimiter, async (req, res) => {
     const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
     if (!EMAIL_PATTERN.test(email) || email.length > 254) {
         return res.status(400).json({ message: "Enter a valid email address" });
@@ -914,7 +931,7 @@ app.post("/password-reset/request", authLimiter, async (req, res) => {
     }
 });
 
-app.post("/login", authLimiter, async (req, res) => {
+app.post("/login", async (req, res) => {
     const identifier = typeof req.body?.identifier === "string" ? req.body.identifier.trim() : "";
     const password = req.body?.password;
     const normalizedPhone = normalizePhone(identifier);

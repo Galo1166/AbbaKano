@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { BackendWarmup } from "@/components/common/BackendWarmup";
 
 export const metadata: Metadata = {
   title: "AbbaKano DataSub",
@@ -34,7 +35,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
       </head>
-      <body><a className="skip-link" href="#main-content">Skip to main content</a>{children}</body>
+      <body>
+        <BackendWarmup />
+        <a className="skip-link" href="#main-content">Skip to main content</a>
+        {children}
+      </body>
     </html>
   );
 }

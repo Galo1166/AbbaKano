@@ -169,7 +169,7 @@ export function CableTVShell() {
     <main className="airtime-page">
       <WebDesktopSidebar active="data" />
       <header className="airtime-header">
-        <button className="airtime-back" type="button" onClick={goHome}>Dashboard</button>
+        <button className="data-back" type="button" onClick={goHome}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7" /></svg><span>Dashboard</span></button>
         <p className="data-kicker">VTU Hub</p>
         <h1>Cable TV</h1>
         <p>Pay DStv, GOtv and Startimes renewals</p>
@@ -250,7 +250,7 @@ export function CableTVShell() {
               <div><span>Smartcard</span><strong>{receipt.smartcardNumber}</strong></div>
               <div><span>Status</span><strong className="receipt-complete">{receipt.status === 'pending' ? 'PENDING' : 'COMPLETED'}</strong></div>
             </div>
-            <button className="receipt-done-button" type="button" onClick={() => setReceipt(null)}>Done</button>
+            <button className="receipt-done-button" type="button" onClick={() => { setReceipt(null); goHome(); }}>Back to Dashboard</button>
           </section>
         </div>
       )}

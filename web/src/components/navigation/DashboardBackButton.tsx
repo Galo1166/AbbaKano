@@ -14,9 +14,9 @@ export function DashboardBackButton() {
   }
 
   return (
-    <button className="dashboard-back-button" type="button" onClick={goToDashboard}>
+    <button className="data-back" type="button" onClick={goToDashboard}>
       <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-      <span>Back to Dashboard</span>
+      <span>Dashboard</span>
     </button>
   );
 }
