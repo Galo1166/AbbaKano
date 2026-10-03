@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyTransactionAuthorization } from "../_shared/transaction-authorization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,8 +97,12 @@ Deno.serve(async (req) => {
     const body = await req.json();
 
     const pin = typeof body.pin === "string" ? body.pin : "";
+    const transactionAuthorization =
+      typeof body.transactionAuthorization === "string"
+        ? body.transactionAuthorization
+        : "";
 
-    if (!/^\d{4}$/.test(pin)) {
+    if (!transactionAuthorization && !/^\d{4}$/.test(pin)) {
       return jsonResponse(
         {
           message: "Enter a valid 4-digit transaction PIN",
@@ -182,48 +187,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: profile, error: profileError } =
-      await supabaseAdmin
-        .from("profiles")
-        .select("transaction_pin_hash, transaction_pin_salt")
-        .eq("id", user.id)
-        .maybeSingle();
+    if (!transactionAuthorization) {
+      const { data: profile, error: profileError } =
+        await supabaseAdmin
+          .from("profiles")
+          .select("transaction_pin_hash, transaction_pin_salt")
+          .eq("id", user.id)
+          .maybeSingle();
 
-    if (profileError) {
-      console.error("PIN lookup failed:", profileError);
-      return jsonResponse(
-        {
-          message: "Could not verify transaction PIN.",
-        },
-        500,
-      );
-    }
+      if (profileError) {
+        console.error("PIN lookup failed:", profileError);
+        return jsonResponse({ message: "Could not verify transaction PIN." }, 500);
+      }
 
-    if (
-      !profile?.transaction_pin_hash ||
-      !profile?.transaction_pin_salt
-    ) {
-      return jsonResponse(
-        {
-          message: "Set a 4-digit transaction PIN first before buying airtime.",
-        },
-        400,
-      );
-    }
+      if (!profile?.transaction_pin_hash || !profile?.transaction_pin_salt) {
+        return jsonResponse({ message: "Set a 4-digit transaction PIN first before buying airtime." }, 400);
+      }
 
-    if (
-      !(await verifyPinHash(
-        pin,
-        profile.transaction_pin_salt,
-        profile.transaction_pin_hash,
-      ))
-    ) {
-      return jsonResponse(
-        {
-          message: "Incorrect transaction PIN",
-        },
-        401,
+      if (!(await verifyPinHash(pin, profile.transaction_pin_salt, profile.transaction_pin_hash))) {
+        return jsonResponse({ message: "Incorrect transaction PIN" }, 401);
+      }
+    } else {
+      const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
+      const authorization = await verifyTransactionAuthorization(
+        transactionAuthorization,
+        user.id,
+        secretKeys.default,
+        { network, phone, selectionToken: "", purchaseType: "AIRTIME", amount },
       );
+      if (!authorization) {
+        return jsonResponse({ message: "Biometric authorization failed. Please try again." }, 401);
+      }
     }
 
     /*

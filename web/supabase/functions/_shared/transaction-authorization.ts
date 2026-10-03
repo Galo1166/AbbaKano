@@ -6,6 +6,7 @@ export type TransactionAuthorization = {
     network: string;
     phone: string;
     selectionToken: string;
+    purchaseType?: string;
     amount?: number;
   };
 };
@@ -83,6 +84,8 @@ export async function verifyTransactionAuthorization(
       authorization.purchase?.network !== expectedPurchase.network ||
       authorization.purchase?.phone !== expectedPurchase.phone ||
       authorization.purchase?.selectionToken !== expectedPurchase.selectionToken ||
+        (expectedPurchase.purchaseType !== undefined &&
+          authorization.purchase?.purchaseType !== expectedPurchase.purchaseType) ||
       (expectedPurchase.amount !== undefined &&
         authorization.purchase?.amount !== expectedPurchase.amount) ||
       authorization.expiresAt < Math.floor(Date.now() / 1000)

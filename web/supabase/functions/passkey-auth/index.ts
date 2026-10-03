@@ -491,6 +491,7 @@ Deno.serve(async (req) => {
             network: purchase.network,
             phone: purchase.phone,
             selectionToken: purchase.selectionToken,
+            ...(purchase.purchaseType === "AIRTIME" ? { purchaseType: "AIRTIME" } : {}),
             ...(electricityPurchase ? { amount: Number(purchase.amount) } : {}),
           },
         },
