@@ -1,71 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AbbaKano Web
 
-## Render backend connection
+The AbbaKano web application is a Next.js customer wallet, VTU purchase portal, and Supabase-backed admin console.
 
-In the Render dashboard, set `BACKEND_URL` on the web service to `https://abbakano.onrender.com` (the backend service URL, without an endpoint path), then redeploy the web service. The web app proxies `/api/auth/*` requests server-side, so `NEXT_PUBLIC_API_BASE_URL` is not used for customer API requests. Local development defaults to `http://localhost:3000`.
+## Features
 
-## Supabase Admin Portal access
+- Email and Nigerian phone-number authentication
+- Wallet balance, funding, transaction history, referrals, and support
+- Data, airtime, electricity, and cable-TV purchases
+- Transaction PIN authorization
+- WebAuthn/passkey login and biometric transaction authorization
+- Responsive customer experience for desktop and mobile browsers
+- Supabase-authenticated admin portal for users, transactions, deposits, audit logs, VTU plans, provider balances, and settings
 
-The Admin Portal login uses Supabase Auth and does not expose public administrator registration.
+## Requirements
 
-1. In Supabase Dashboard, create the administrator account under **Authentication → Users**.
-2. Edit that user's **app metadata** and set `admin_role` to `super_admin`, for example:
+- Node.js 18 or newer
+- npm
+- A Supabase project with the repository migrations applied
+- Supabase CLI for deploying Edge Functions
 
-   ```json
-   { "admin_role": "super_admin" }
-   ```
+## Local setup
 
-3. Sign in at `/admin/login` with that account's email and password.
+```bash
+cd web
+npm install
+```
 
-Do not put the role in user metadata; users can edit their own user metadata. Only trusted app metadata is accepted by the admin gate.
+Create `web/.env.local`:
 
-The Admin Overview, Transaction Ledger, Users, Deposits, Audit Logs, and VTU Services pages read data through protected Supabase Edge Functions. Apply the corresponding SQL migrations in `supabase/migrations` before deploying their functions. The Audit Logs migration records new deposit and VTU transaction status events; it does not backfill audit history from the legacy database. The Provider Balances and VTU Services pages use live VTUGATE provider data; set its VTUGATE provider key as a Supabase Edge Function secret first. Optional funding-account and threshold secrets are listed below:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<supabase-publishable-or-anon-key>
+```
+
+Only public Supabase client values belong in `.env.local`. Never put a service-role key, provider API key, payment secret, or WebAuthn signing secret in browser-exposed variables.
+
+## Development and validation
+
+```bash
+npm run dev       # http://localhost:4000
+npm run lint
+npm run build
+npm run start
+```
+
+The app uses the Supabase client in `src/lib/supabase.ts`. Customer and admin backend operations are implemented in `supabase/functions`.
+
+## Supabase deployment
+
+From the `web` directory, deploy the functions required by the feature being changed:
+
+```bash
+npx supabase functions deploy register-user
+npx supabase functions deploy verify-transaction-pin
+npx supabase functions deploy update-transaction-pin
+npx supabase functions deploy data-services
+npx supabase functions deploy data-purchase
+npx supabase functions deploy purchase-airtime
+npx supabase functions deploy electricity-services
+npx supabase functions deploy electricity-purchase
+npx supabase functions deploy cable-services
+npx supabase functions deploy cable-purchase
+```
+
+Admin functions include:
 
 ```bash
 npx supabase functions deploy admin-overview
 npx supabase functions deploy admin-transactions
-npx supabase functions deploy admin-provider-balances
 npx supabase functions deploy admin-users
 npx supabase functions deploy admin-deposits
 npx supabase functions deploy admin-audit-logs
+npx supabase functions deploy admin-provider-balances
 npx supabase functions deploy admin-vtu-services
 npx supabase functions deploy admin-vtu-plans
 ```
 
-Set `VTUGATE_API_KEY` (or `VTU_GATE_API_KEY`) in Supabase Edge Function secrets. Optionally set `VTUGATE_BASE_URL` (or `VTU_GATE_BASE_URL`), `VTUGATE_LOW_BALANCE_THRESHOLD_NAIRA` (default `500000`), `VTU_GATE_PAYVESSEL_ACCOUNT`, `VTU_GATE_PAYVESSEL_ACCOUNT_NAME`, `VTU_GATE_PAYMENTPOINT_ACCOUNT`, and `VTU_GATE_PAYMENTPOINT_ACCOUNT_NAME`. Funding-account details are only returned when both the account number and name for that option are configured.
-
-Other admin pages and administrative actions are still being migrated separately.
-On the Users page, blocking/unblocking accounts and wallet adjustments remain unavailable until their audited Supabase mutations are migrated; do not use the legacy API for these actions from the Supabase-authenticated admin portal.
-
-## Getting Started
-
-First, run the development server:
+Apply migrations before using the related functions:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npx supabase db push
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Required server-side secrets vary by function. Provider and payment credentials must be configured as Supabase Edge Function secrets, not committed to Git. Provider funding-account details are returned by `admin-provider-balances` only when both the account number and account name secrets are configured.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Admin access
 
-## Learn More
+Create an administrator in Supabase Authentication, then set trusted app metadata:
 
-To learn more about Next.js, take a look at the following resources:
+```json
+{ "admin_role": "super_admin" }
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open `/admin/login`. The admin portal rejects accounts without the `super_admin` app-metadata role. Do not store this role in editable user metadata.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Authentication and passkeys
 
-## Deploy on Vercel
+- Browser sessions are managed by Supabase Auth.
+- Passkey registration and login require HTTPS and a supported authenticator.
+- Production WebAuthn origin and relying-party ID must match the deployed domain.
+- Transaction PIN hashes and salts remain server-side in `profiles`.
+- The browser must never receive PIN hashes, salts, service-role keys, or provider credentials.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The web app can be deployed to Vercel using the `web` directory as the project root. Configure the public Supabase variables in the Vercel project settings and deploy the same Git branch used for production.
