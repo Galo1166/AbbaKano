@@ -55,7 +55,13 @@ Deno.serve(async (req) => {
         headers: { Authorization: authHeader, apikey: anonKey, "Content-Type": "application/json" },
         body: JSON.stringify({ pin: currentPin }),
       });
-      if (!verification.ok) return response({ message: "Your current transaction PIN is incorrect." }, 401);
+      if (!verification.ok) {
+        const verificationBody = await verification.json().catch(() => null) as { message?: unknown } | null;
+        const message = typeof verificationBody?.message === "string"
+          ? verificationBody.message
+          : "Could not verify your current transaction PIN.";
+        return response({ message }, verification.status === 401 ? 401 : 502);
+      }
     }
 
     const hashed = await hashPin(newPin);

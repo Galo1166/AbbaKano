@@ -255,9 +255,7 @@ async function verifyPinHash(
     );
   }
 
-  if (expectedHash.length !== 128 || !/^(?:[0-9a-fA-F]{2})+$/.test(salt)) {
-    return false;
-  }
+  if (expectedHash.length !== 128 || !salt) return false;
 
   const legacyHash = await scryptHash(pin, salt);
   if (timingSafeEqualHex(legacyHash, expectedHash)) return true;
@@ -281,10 +279,6 @@ function hexToBytes(value: string): Uint8Array {
 }
 
 function saltToBytes(value: string): Uint8Array {
-  if (!/^(?:[0-9a-fA-F]{2})+$/.test(value)) {
-    throw new Error("Invalid hex salt value");
-  }
-
   return new TextEncoder().encode(value);
 }
 
