@@ -7,13 +7,24 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const secretKeysRaw = Deno.env.get("SUPABASE_SECRET_KEYS");
 
-const supabaseSecretKeys = JSON.parse(
-  Deno.env.get("SUPABASE_SECRET_KEYS")!,
-);
+if (!supabaseUrl || !secretKeysRaw) {
+  throw new Error("Transaction PIN verification is not configured.");
+}
+
+let supabaseSecretKeys: { default?: string };
+try {
+  supabaseSecretKeys = JSON.parse(secretKeysRaw);
+} catch {
+  throw new Error("Transaction PIN verification is not configured.");
+}
 
 const supabaseSecretKey = supabaseSecretKeys.default;
+if (!supabaseSecretKey) {
+  throw new Error("Transaction PIN verification is not configured.");
+}
 
 const supabaseAdmin = createClient(
   supabaseUrl,
@@ -223,6 +234,7 @@ async function verifyPinHash(
   if (!/^[0-9a-fA-F]+$/.test(expectedHash)) return false;
 
   if (expectedHash.length === 64) {
+    if (!/^(?:[0-9a-fA-F]{2})+$/.test(salt)) return false;
     const passwordBytes = new TextEncoder().encode(pin);
     const saltBytes = hexToBytes(salt);
     const digestInput = new Uint8Array(
@@ -243,7 +255,9 @@ async function verifyPinHash(
     );
   }
 
-  if (expectedHash.length !== 128) return false;
+  if (expectedHash.length !== 128 || !/^(?:[0-9a-fA-F]{2})+$/.test(salt)) {
+    return false;
+  }
 
   const legacyHash = await scryptHash(pin, salt);
   if (timingSafeEqualHex(legacyHash, expectedHash)) return true;
