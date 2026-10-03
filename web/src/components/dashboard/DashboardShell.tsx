@@ -71,7 +71,6 @@ function transactionLabel(transaction: DashboardData["transactions"][number]) {
 export function DashboardLoadingSkeleton() {
     return (
         <main className="dashboard-shell dashboard-loading-shell" aria-busy="true">
-            <span className="visually-hidden" role="status">Loading your dashboard</span>
             <aside className="dashboard-sidebar dashboard-loading-sidebar" aria-hidden="true">
                 <div className="dashboard-loading-brand">
                     <span className="dashboard-skeleton-block dashboard-loading-logo" />
