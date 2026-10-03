@@ -693,7 +693,7 @@ a { color: inherit; text-decoration: none; }
 }
 @keyframes dashboard-spin { to { transform: rotate(360deg); } }
 
-.data-page { min-height: 100vh; background: var(--canvas); color: var(--text); font-family: "Plus Jakarta Sans", "IBM Plex Sans", "Segoe UI", sans-serif; padding-bottom: 64px; }
+.data-page { min-height: 100vh; overflow-x: hidden; background: var(--canvas); color: var(--text); font-family: "Plus Jakarta Sans", "IBM Plex Sans", "Segoe UI", sans-serif; padding-bottom: 64px; }
 .data-header, .data-content { width: min(780px, calc(100% - 40px)); margin-inline: auto; }
 .data-header { padding: 34px 0 30px; }
 .data-back, .fund-back, .airtime-back, .history-back, .profile-back, .dashboard-back-button {
@@ -1005,8 +1005,8 @@ a { color: inherit; text-decoration: none; }
 .airtime-amount-label input { height: 52px; border: 1px solid var(--border); border-radius: 16px; outline: none; background: var(--surface); color: var(--text); padding: 0 16px; font: inherit; font-size: 0.88rem; }
 .airtime-amount-label input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16); }
 .airtime-presets-heading { margin-top: 26px; color: var(--text-subtle); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; }
-.airtime-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
-.airtime-presets button { min-height: 40px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text-muted); cursor: pointer; font: inherit; font-size: 0.7rem; font-weight: 800; }
+.airtime-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; min-width: 0; margin-top: 12px; }
+.airtime-presets button { display: grid; width: 100%; min-width: 0; height: 68px; min-height: 68px; align-content: center; justify-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text-muted); cursor: pointer; padding: 6px 4px; text-align: center; font: inherit; font-size: 0.7rem; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
 .airtime-presets button.active, .airtime-presets button:hover { border-color: var(--primary); background: rgba(37, 99, 235, 0.12); color: var(--primary); }
 .airtime-submit { width: 100%; min-height: 52px; margin-top: 26px; border: 0; border-radius: 14px; background: var(--primary-container); color: white; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 800; }
 .airtime-submit:disabled { cursor: not-allowed; opacity: 0.55; }
@@ -1027,7 +1027,7 @@ a { color: inherit; text-decoration: none; }
 .receipt-done-button { width: 100%; min-height: 50px; border: 0; border-radius: 12px; background: var(--primary-container); color: white; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 800; transition: opacity 180ms ease, box-shadow 180ms ease; }
 .receipt-done-button:hover { opacity: 0.88; box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22); }
 .receipt-done-button:focus-visible { outline: 3px solid var(--secondary); outline-offset: 3px; }
-@media (max-width: 520px) { .airtime-header, .airtime-content { width: min(100% - 28px, 780px); } .airtime-presets { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px) { .airtime-header, .airtime-content { width: min(100% - 28px, 780px); } .airtime-presets { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; } .airtime-presets button { height: 72px; min-height: 72px; padding-inline: 3px; font-size: 0.64rem; } }
 
 @media (prefers-reduced-motion: reduce) {
 	html { scroll-behavior: auto; }
