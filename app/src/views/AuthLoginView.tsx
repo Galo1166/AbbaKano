@@ -31,7 +31,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
   onForgotPasswordPress,
 }) => {
   const { theme: Palette } = useApp();
-  const { login } = useAuth();
+  const { login, biometricLogin } = useAuth();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -68,6 +68,19 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
         'Unable to open WhatsApp. Please contact +2348166774566 directly.'
       );
     });
+  };
+
+  const handleBiometricLogin = async () => {
+    setErrorMessage(null);
+    setLoading(true);
+    try {
+      await biometricLogin();
+      onLoginSuccess();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Biometric sign-in could not be completed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -207,7 +220,7 @@ export const AuthLoginView: React.FC<AuthLoginViewProps> = ({
           </View>
 
           {/* Biometrics */}
-          <Pressable style={styles.biometricBtn}>
+          <Pressable style={styles.biometricBtn} onPress={() => void handleBiometricLogin()} disabled={loading}>
             <MaterialIcons name="fingerprint" size={24} color={Palette.primary} />
             <Text style={styles.biometricBtnText}>Sign In with Biometrics</Text>
           </Pressable>

@@ -14,7 +14,7 @@ import { useApp } from '@/context/AppContext';
 import { Numpad } from '@/components/common/Numpad';
 
 export const PinAuthModal: React.FC = () => {
-  const { isPinModalOpen, cancelPin, verifyPinAndExecute, draft } = useCheckout();
+  const { isPinModalOpen, cancelPin, verifyPinAndExecute, verifyBiometricAndExecute, draft } = useCheckout();
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [pin, setPin] = useState('');
@@ -53,12 +53,11 @@ export const PinAuthModal: React.FC = () => {
     setErrorMsg(null);
   };
 
-  const handleBiometric = () => {
-    // Biometric instant authentication simulation
-    setPin('••••');
-    setTimeout(() => {
-      verifyPinAndExecute('1234');
-    }, 300);
+  const handleBiometric = async () => {
+    setErrorMsg(null);
+    const success = await verifyBiometricAndExecute();
+    if (success) cancelPin();
+    else setErrorMsg('Biometric authorization was not completed.');
   };
 
   return (

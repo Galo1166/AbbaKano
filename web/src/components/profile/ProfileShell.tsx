@@ -166,13 +166,13 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
     if (pinStep === "current") {
       if (!/^\d{4}$/.test(pin)) { setPinMessage("Enter your current 4-digit PIN."); return; }
       setSavingPin(true);
-      try { await apiRequest("/me/transaction-pin/verify-current", { method: "POST", body: JSON.stringify({ pin }) }); setPinStep("new"); } catch (error) { setPinMessage(error instanceof ApiError ? error.message : "Could not verify your current PIN."); } finally { setSavingPin(false); }
+      try { await invokeSupabaseFunction("verify-transaction-pin", { pin }); setPinStep("new"); } catch (error) { setPinMessage(error instanceof Error ? error.message : "Could not verify your current PIN."); } finally { setSavingPin(false); }
       return;
     }
     if (pinStep === "new") { if (!/^\d{4}$/.test(newPin)) { setPinMessage("Enter a new 4-digit PIN."); return; } setPinStep("confirm"); return; }
     if (newPin !== confirmPin) { setPinMessage("PINs do not match. Please try again."); return; }
     setSavingPin(true);
-    try { await apiRequest("/me/transaction-pin", { method: "POST", body: JSON.stringify({ pin: newPin, ...(pin ? { currentPin: pin } : {}) }) }); setShowPinModal(false); setUser((current) => current ? { ...current, has_transaction_pin: true } : current); setMessage("Transaction PIN changed successfully."); } catch (error) { setPinMessage(error instanceof ApiError ? error.message : "Could not save your transaction PIN."); } finally { setSavingPin(false); }
+    try { await invokeSupabaseFunction("update-transaction-pin", { newPin, ...(pin ? { currentPin: pin } : {}) }); setShowPinModal(false); setUser((current) => current ? { ...current, has_transaction_pin: true } : current); setMessage("Transaction PIN changed successfully."); } catch (error) { setPinMessage(error instanceof Error ? error.message : "Could not save your transaction PIN."); } finally { setSavingPin(false); }
   }
 
   async function handleLogout() {

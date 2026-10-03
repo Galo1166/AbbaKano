@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
-import { getWalletBalance, supabase } from "@/lib/supabase";
+import { getWalletBalance, invokeSupabaseFunction, supabase } from "@/lib/supabase";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
@@ -99,11 +99,24 @@ export function AirtimeShell() {
       let result: { status?: string; message?: string; reference?: string };
 
       if (transactionAuthorization) {
-        result = await apiRequest<{ status?: string; message?: string; reference?: string }>("/vtu/airtime", {
-          method: "POST",
-          headers: { "Idempotency-Key": idempotencyKey || crypto.randomUUID() },
-          body: JSON.stringify({ network: selectedNetwork, phone, amount: numericAmount, transactionAuthorization }),
+        const { data, error } = await supabase.functions.invoke<{
+          status?: string;
+          message?: string;
+          reference?: string;
+          balance_kobo?: number;
+        }>("purchase-airtime", {
+          body: {
+            network: selectedNetwork,
+            phone,
+            amount: numericAmount,
+            transactionAuthorization,
+            idempotencyKey: idempotencyKey || crypto.randomUUID(),
+          },
         });
+        if (error) throw error;
+        if (!data) throw new Error("Could not complete airtime recharge.");
+        result = data;
+        if (typeof data.balance_kobo === "number") setBalance(data.balance_kobo / 100);
       } else {
         const requestKey = idempotencyKey || crypto.randomUUID();
         setIdempotencyKey(requestKey);
@@ -179,9 +192,15 @@ export function AirtimeShell() {
   async function authorizeBiometric() {
     setPurchasing(true); setMessage("");
     try {
-      const options = await apiRequest<Record<string, unknown>>("/auth/passkey/transaction/options", { method: "POST", body: JSON.stringify({}) });
+      const options = await invokeSupabaseFunction<Record<string, unknown>>("passkey-auth", {
+        action: "transaction-options",
+        purchase: { network: selectedNetwork, phone, amount: numericAmount, purchaseType: "AIRTIME" },
+      });
       const response = await startAuthentication({ optionsJSON: options as never });
-      const authorization = await apiRequest<{ transactionAuthorization: string }>("/auth/passkey/transaction/verify", { method: "POST", body: JSON.stringify({ response }) });
+      const authorization = await invokeSupabaseFunction<{ transactionAuthorization: string }>("passkey-auth", {
+        action: "transaction-verify",
+        response,
+      });
       await purchase(authorization.transactionAuthorization);
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : "Biometric authorization was not completed.");

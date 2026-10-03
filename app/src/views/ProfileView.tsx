@@ -6,6 +6,7 @@ import { useApp, useTheme } from '@/context/AppContext';
 import { ThemeSwitchModal } from '@/components/common/ThemeSwitchModal';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { SignOutModal } from '@/components/common/SignOutModal';
+import { authenticateBiometric } from '@/services/biometricService';
 
 interface ProfileViewProps {
   onNavigateToReferEarn?: () => void;
@@ -55,8 +56,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     return false;
   };
 
-  const handleToggle = (id: string) => {
-    if (id === 'biometrics') setBiometrics((v) => !v);
+  const handleToggle = async (id: string) => {
+    if (id === 'biometrics') {
+      try {
+        await authenticateBiometric('Enable biometric security');
+        setBiometrics((v) => !v);
+      } catch {
+        // The system biometric prompt already explains why the action was not completed.
+      }
+    }
     else if (id === 'app_lock') setAppLock((v) => !v);
   };
 

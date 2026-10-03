@@ -25,6 +25,8 @@ import { ForgotPasswordView } from '@/views/ForgotPasswordView';
 // Global Transaction Overlays
 import { CheckoutSheet } from '@/components/modals/CheckoutSheet';
 import { PinAuthModal } from '@/components/modals/PinAuthModal';
+import { saveBiometricTransactionPin } from '@/services/biometricService';
+import { supabase } from '@/lib/supabase';
 import { ReceiptModal } from '@/components/modals/ReceiptModal';
 
 type AuthState = 'authenticated' | 'welcome' | 'login' | 'register' | 'pin_setup' | 'forgot_password';
@@ -34,6 +36,7 @@ export default function App() {
   const { user, isLoading: authLoading, isPasswordRecovery, logout } = useAuth();
   // Derive initial auth screen from token hydration
   const [authState, setAuthState] = useState<AuthState>('welcome');
+  const [changingPin, setChangingPin] = useState(false);
   const [activeTab, setActiveTab] = useState<AppTabKey>('home');
   const [activeDedicatedService, setActiveDedicatedService] = useState<DedicatedService>(null);
   const [showFundWallet, setShowFundWallet] = useState(false);
@@ -134,7 +137,16 @@ export default function App() {
     return (
       <SafeAreaView key={effectiveTheme} style={[styles.fill, bg]}>
         <AuthPinSetupView
-          onPinCompleted={() => {
+          requireCurrentPin={changingPin}
+          onPinCompleted={async (pin, currentPin) => {
+            if (changingPin) {
+              const { error } = await supabase.functions.invoke('update-transaction-pin', {
+                body: { newPin: pin, currentPin },
+              });
+              if (error) throw error;
+            }
+            await saveBiometricTransactionPin(pin);
+            setChangingPin(false);
             setActiveTab('home');
             setAuthState('authenticated');
           }}
@@ -188,7 +200,10 @@ export default function App() {
                 onNavigateToReferEarn={() => setShowReferEarn(true)}
                 onNavigateToFundWallet={() => setShowFundWallet(true)}
                 onNavigateToSupport={() => setShowSupport(true)}
-                onNavigateToPinSetup={() => setAuthState('pin_setup')}
+                onNavigateToPinSetup={() => {
+                  setChangingPin(true);
+                  setAuthState('pin_setup');
+                }}
                 onSignOut={async () => {
                   await logout();
                   setActiveTab('home');

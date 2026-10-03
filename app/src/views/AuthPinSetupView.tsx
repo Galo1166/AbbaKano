@@ -11,7 +11,8 @@ import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 
 interface AuthPinSetupViewProps {
-  onPinCompleted: (pin: string) => void;
+  onPinCompleted: (pin: string, currentPin?: string) => void | Promise<void>;
+  requireCurrentPin?: boolean;
 }
 
 const NUMPAD = [
@@ -30,22 +31,31 @@ const NUMPAD_LABELS: Record<string, string> = {
 
 export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
   onPinCompleted,
+  requireCurrentPin = false,
 }) => {
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
+  const [currentPin, setCurrentPin] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [stage, setStage] = useState<'setup' | 'confirm'>('setup');
+  const [stage, setStage] = useState<'current' | 'setup' | 'confirm'>(requireCurrentPin ? 'current' : 'setup');
 
   const handleKeyPress = (key: string) => {
     if (key === 'fingerprint') return;
     if (key === 'backspace') {
-      if (stage === 'setup') setPin(p => p.slice(0, -1));
+      if (stage === 'current') setCurrentPin(p => p.slice(0, -1));
+      else if (stage === 'setup') setPin(p => p.slice(0, -1));
       else setConfirmPin(p => p.slice(0, -1));
       return;
     }
 
-    if (stage === 'setup') {
+    if (stage === 'current') {
+      if (currentPin.length < 4) {
+        const nextPin = currentPin + key;
+        setCurrentPin(nextPin);
+        if (nextPin.length === 4) setTimeout(() => setStage('setup'), 300);
+      }
+    } else if (stage === 'setup') {
       if (pin.length < 4) {
         const newPin = pin + key;
         setPin(newPin);
@@ -60,7 +70,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
         if (newConfirmPin.length === 4) {
           setTimeout(() => {
             if (newConfirmPin === pin) {
-              onPinCompleted(pin);
+              void               void onPinCompleted(pin, requireCurrentPin ? currentPin : undefined);
             } else {
               Alert.alert('PIN Mismatch', 'PINs do not match. Please try again.');
               setPin('');
@@ -73,7 +83,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
     }
   };
 
-  const currentPin = stage === 'setup' ? pin : confirmPin;
+  const enteredPin = stage === 'current' ? currentPin : stage === 'setup' ? pin : confirmPin;
 
   return (
     <View style={styles.container}>
@@ -83,10 +93,12 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
           <MaterialIcons name="lock" size={32} color={Palette.primary} />
         </View>
         <Text style={styles.headerTitle}>
-          {stage === 'setup' ? 'Create Security PIN' : 'Confirm Your PIN'}
+          {stage === 'current' ? 'Verify Current PIN' : stage === 'setup' ? 'Create Security PIN' : 'Confirm Your PIN'}
         </Text>
         <Text style={styles.headerSubtitle}>
-          {stage === 'setup'
+          {stage === 'current'
+            ? 'Enter your current 4-digit PIN to continue'
+            : stage === 'setup'
             ? 'Set up a 4-digit PIN to secure your AbbaKano wallet'
             : 'Re-enter your 4-digit PIN to confirm'}
         </Text>
@@ -99,7 +111,7 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
             key={i}
             style={[
               styles.pinDot,
-              currentPin.length > i && styles.pinDotFilled,
+              enteredPin.length > i && styles.pinDotFilled,
             ]}
           />
         ))}

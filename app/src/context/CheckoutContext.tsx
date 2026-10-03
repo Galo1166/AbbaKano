@@ -4,6 +4,7 @@ import { TelcoNetworkId } from '@/constants/telco';
 import { ApiError, createIdempotencyKey } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useApp } from './AppContext';
+import { authenticateBiometric, getBiometricTransactionPin } from '@/services/biometricService';
 
 export interface CheckoutDraft {
   type: TransactionType;
@@ -38,6 +39,7 @@ interface CheckoutContextType {
   proceedToPin: () => void;
   cancelPin: () => void;
   verifyPinAndExecute: (pin: string) => Promise<boolean>;
+  verifyBiometricAndExecute: () => Promise<boolean>;
   closeReceipt: () => void;
   quickRepeatLast: () => void;
 }
@@ -158,6 +160,21 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [draft, refreshData]);
 
+  const verifyBiometricAndExecute = useCallback(async (): Promise<boolean> => {
+    try {
+      await authenticateBiometric('Authorize this transaction');
+      const pin = await getBiometricTransactionPin();
+      if (!pin) {
+        setPurchaseError('Set up your transaction PIN before using biometric authorization.');
+        return false;
+      }
+      return await verifyPinAndExecute(pin);
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : 'Biometric authorization was not completed.');
+      return false;
+    }
+  }, [verifyPinAndExecute]);
+
   const closeReceipt = () => {
     setIsReceiptOpen(false);
     setDraft(null);
@@ -195,6 +212,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         proceedToPin,
         cancelPin,
         verifyPinAndExecute,
+        verifyBiometricAndExecute,
         closeReceipt,
         quickRepeatLast,
       }}

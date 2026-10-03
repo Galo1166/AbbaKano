@@ -240,6 +240,7 @@ Deno.serve(async (req) => {
         typeof body?.purchase?.selectionToken === "string"
           ? body.purchase.selectionToken
           : "";
+      const purchaseType = String(body?.purchase?.purchaseType || "DATA").toUpperCase();
       const amount = body?.purchase?.amount;
       const electricityPurchase = ["AEDC", "IKEDC", "KEDCO", "PHED", "JED"]
         .includes(network);
@@ -252,7 +253,7 @@ Deno.serve(async (req) => {
       if (!/^0\d{10}$/.test(phone)) {
         return jsonResponse({ message: "Enter a valid 11-digit phone number." }, 400);
       }
-      if (!(await verifyDataPlanToken(selectionToken, serviceKey, network))) {
+      if (purchaseType !== "AIRTIME" && !(await verifyDataPlanToken(selectionToken, serviceKey, network))) {
         return jsonResponse({ message: "This data plan is no longer available. Reload plans." }, 400);
       }
       if (
@@ -268,6 +269,7 @@ Deno.serve(async (req) => {
         network,
         phone,
         selectionToken,
+        purchaseType,
         ...(electricityPurchase ? { amount } : {}),
       };
 
@@ -326,6 +328,7 @@ Deno.serve(async (req) => {
         phone?: unknown;
         selectionToken?: unknown;
         amount?: unknown;
+        purchaseType?: unknown;
       } | null;
       const electricityPurchase = typeof purchase?.network === "string" &&
         ["AEDC", "IKEDC", "KEDCO", "PHED", "JED"].includes(purchase.network);
@@ -339,11 +342,11 @@ Deno.serve(async (req) => {
             !Number.isInteger(purchase.amount) ||
             Number(purchase.amount) < 50 ||
             Number(purchase.amount) > 100000)) ||
-        !(await verifyDataPlanToken(
+        (purchase.purchaseType !== "AIRTIME" && !(await verifyDataPlanToken(
           purchase.selectionToken,
           serviceKey,
           purchase.network,
-        ))
+        )))
       ) {
         return jsonResponse({ message: "The authorized data purchase is invalid. Try again." }, 400);
       }

@@ -1,6 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
+import {
+  authenticateBiometric,
+  getBiometricLogin,
+  saveBiometricLogin,
+  clearBiometricLogin,
+} from '@/services/biometricService';
 
 export interface AuthUser {
   id: string;
@@ -23,6 +29,7 @@ interface AuthContextType {
   isPasswordRecovery: boolean;
   hydrate: () => Promise<void>;
   login: (identifier: string, password: string) => Promise<void>;
+  biometricLogin: () => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<string>;
@@ -133,6 +140,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : { phone: normalizePhone(normalizedIdentifier), password };
     const { data, error } = await supabase.auth.signInWithPassword(credentials);
     if (error || !data.user) throw error || new Error('Sign in failed.');
+    await saveBiometricLogin(normalizedIdentifier, password);
+    setUser(mapUser(data.user));
+  }, []);
+
+  const biometricLogin = useCallback(async () => {
+    await authenticateBiometric('Sign in to AbbaKano');
+    const credentials = await getBiometricLogin();
+    if (!credentials) throw new Error('Sign in with your email and password once before using biometrics.');
+    const normalizedIdentifier = credentials.identifier.trim();
+    const signInCredentials = normalizedIdentifier.includes('@')
+      ? { email: normalizedIdentifier.toLowerCase(), password: credentials.password }
+      : { phone: normalizePhone(normalizedIdentifier), password: credentials.password };
+    const { data, error } = await supabase.auth.signInWithPassword(signInCredentials);
+    if (error || !data.user) {
+      await clearBiometricLogin();
+      throw error || new Error('Biometric sign-in could not be completed.');
+    }
     setUser(mapUser(data.user));
   }, []);
 
@@ -157,6 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: payload.password,
     });
     if (error || !data.user) throw error || new Error('Account created, but sign in failed.');
+    await saveBiometricLogin(email, payload.password);
     setUser(mapUser(data.user));
   }, []);
 
@@ -186,7 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isPasswordRecovery, hydrate, login, register, logout, requestPasswordReset, updatePassword }}>
+    <AuthContext.Provider value={{ user, isLoading, isPasswordRecovery, hydrate, login, biometricLogin, register, logout, requestPasswordReset, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
