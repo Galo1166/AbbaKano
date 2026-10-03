@@ -179,12 +179,30 @@ export function DashboardShell() {
     async function hydrateDashboard() {
         try {
             const {
+                data: { session },
+                error: sessionError,
+            } = await supabase.auth.getSession();
+
+            if (sessionError) {
+                throw sessionError;
+            }
+
+            if (!session) {
+                setErrorMessage("Your login session has expired. Please sign in again.");
+                return;
+            }
+
+            const {
                 data: { user },
                 error: authError,
             } = await supabase.auth.getUser();
 
-            if (authError || !user) {
-                router.push("/login");
+            if (authError) {
+                throw authError;
+            }
+
+            if (!user) {
+                setErrorMessage("Your login session is not available. Please sign in again.");
                 return;
             }
 
