@@ -1,5 +1,3 @@
-/// <reference lib="deno.ns" />
-
 // @ts-expect-error Deno resolves this remote module at runtime.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -54,7 +52,7 @@ function normalizePhone(phone: string) {
 
 async function hashPin(pin: string) {
   const { scrypt } = await import(
-    "npm:@noble/hashes@2.4.0/scrypt.js"
+    "https://esm.sh/@noble/hashes@1.8.0/scrypt"
   );
 
   const passwordBytes = new TextEncoder().encode(pin);

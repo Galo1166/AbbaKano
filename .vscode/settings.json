@@ -1,7 +1,0 @@
-{
-  "deno.enable": true,
-  "deno.enablePaths": [
-    "${workspaceFolder}/web/supabase/functions"
-  ],
-  "deno.lint": true
-}

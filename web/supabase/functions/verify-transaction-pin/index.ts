@@ -1,4 +1,14 @@
+// @ts-expect-error Supabase Edge Functions resolve remote URL imports at runtime.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+declare const Deno: {
+  env: {
+    get(name: string): string | undefined;
+  };
+  serve(
+    handler: (req: Request) => Response | Promise<Response>,
+  ): unknown;
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,7 +54,7 @@ function jsonResponse(
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: corsHeaders,
@@ -207,9 +217,10 @@ async function scryptHash(
   salt: string,
   saltIsHexBytes = false,
 ): Promise<string> {
-  const { scrypt } = await import(
-    "npm:@noble/hashes@2.4.0/scrypt.js"
-  );
+  // Supabase Edge Functions resolve remote URL imports reliably in Deno.
+  const scryptModuleUrl =
+    "https://esm.sh/@noble/hashes@2.4.0/scrypt.js";
+  const { scrypt } = await import(scryptModuleUrl);
 
   const passwordBytes = new TextEncoder().encode(pin);
   const saltBytes = saltIsHexBytes
