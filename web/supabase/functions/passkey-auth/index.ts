@@ -44,6 +44,10 @@ function decodeBase64Url(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
+function decodeJsonBase64Url(value: string): Record<string, unknown> {
+  return JSON.parse(new TextDecoder().decode(decodeBase64Url(value)));
+}
+
 function normalizePhone(value: unknown): string {
   const digits = String(value || "").replace(/\D/g, "");
   return digits.replace(/^234/, "0");
@@ -90,8 +94,6 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return jsonResponse({ message: "Missing authorization" }, 401);
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -107,15 +109,89 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Passkey authorization is unavailable." }, 500);
     }
 
+    const body = await req.json();
+    const action = body?.action;
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+
+    if (action === "login-options") {
+      const { data: credentials, error } = await supabaseAdmin
+        .from("passkey_credentials")
+        .select("id, transports");
+      if (error) throw error;
+      if (!credentials?.length) {
+        return jsonResponse({ message: "No passkey is registered for this account." }, 404);
+      }
+      const options = await generateAuthenticationOptions({
+        rpID: webAuthnConfig().rpId,
+        userVerification: "required",
+        allowCredentials: credentials.map((credential) => ({
+          id: credential.id,
+          transports: credential.transports || [],
+        })),
+      });
+      return jsonResponse(options);
+    }
+
+    if (action === "login-verify") {
+      const response = body?.response;
+      if (!response || typeof response.id !== "string" || typeof response.response?.clientDataJSON !== "string") {
+        return jsonResponse({ message: "Invalid biometric sign-in response." }, 400);
+      }
+      const clientData = decodeJsonBase64Url(response.response.clientDataJSON);
+      const challenge = clientData.challenge;
+      if (typeof challenge !== "string") {
+        return jsonResponse({ message: "Biometric sign-in could not be verified." }, 400);
+      }
+      const { origin, rpId } = webAuthnConfig();
+      const { data: credential, error: credentialError } = await supabaseAdmin
+        .from("passkey_credentials")
+        .select("id, user_id, public_key, counter, transports")
+        .eq("id", response.id)
+        .maybeSingle();
+      if (credentialError) throw credentialError;
+      if (!credential) return jsonResponse({ message: "Passkey is not registered." }, 401);
+
+      const verification = await verifyAuthenticationResponse({
+        response,
+        expectedChallenge: challenge,
+        expectedOrigin: origin,
+        expectedRPID: rpId,
+        requireUserVerification: true,
+        credential: {
+          id: credential.id,
+          publicKey: decodeBase64Url(credential.public_key),
+          counter: Number(credential.counter),
+          transports: credential.transports || [],
+        },
+      });
+      if (!verification.verified) return jsonResponse({ message: "Biometric sign-in failed." }, 401);
+
+      const { data: updatedCredential, error: updateError } = await supabaseAdmin
+        .from("passkey_credentials")
+        .update({ counter: verification.authenticationInfo.newCounter })
+        .eq("id", credential.id)
+        .eq("counter", credential.counter)
+        .select("id")
+        .maybeSingle();
+      if (updateError) throw updateError;
+      if (!updatedCredential) return jsonResponse({ message: "Passkey was used concurrently. Try again." }, 409);
+
+      const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(credential.user_id);
+      if (userError || !authUser.user?.email) return jsonResponse({ message: "Your account could not be loaded." }, 500);
+      const { data: link, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: "magiclink",
+        email: authUser.user.email,
+      });
+      if (linkError || !link.properties?.hashed_token) throw linkError || new Error("Could not create a sign-in session.");
+      return jsonResponse({ email: authUser.user.email, tokenHash: link.properties.hashed_token });
+    }
+
+    if (!authHeader) return jsonResponse({ message: "Missing authorization" }, 401);
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return jsonResponse({ message: "Unauthorized" }, 401);
-
-    const body = await req.json();
-    const action = body?.action;
-    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
     if (action === "status") {
       const { count, error } = await supabaseAdmin

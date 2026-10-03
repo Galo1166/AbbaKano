@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { invokeSupabaseFunction, supabase } from "@/lib/supabase";
 
 function normalizePhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
@@ -81,9 +82,35 @@ export function LoginForm() {
   }
 
   async function handleBiometricSignIn() {
-    setErrorMessage(
-      "Passkey sign-in is temporarily unavailable. Please sign in with your email and password."
-    );
+    setErrorMessage("");
+    setLoading(true);
+    try {
+      const options = await invokeSupabaseFunction<Record<string, unknown>>(
+        "passkey-auth",
+        { action: "login-options" },
+      );
+      const response = await startAuthentication({ optionsJSON: options as never });
+      const result = await invokeSupabaseFunction<{ email: string; tokenHash: string }>(
+        "passkey-auth",
+        { action: "login-verify", response },
+      );
+      const { error } = await supabase.auth.verifyOtp({
+        email: result.email,
+        token_hash: result.tokenHash,
+        type: "magiclink",
+      });
+      if (error) throw error;
+      window.location.assign("/app");
+    } catch (error) {
+      console.error("Passkey sign-in error:", error);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Biometric sign-in could not be completed.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
