@@ -1,3 +1,6 @@
+/// <reference lib="deno.ns" />
+
+// @ts-expect-error Deno resolves this remote module at runtime.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -8,19 +11,25 @@ const corsHeaders = {
     "POST, OPTIONS",
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const secretKeysRaw = Deno.env.get("SUPABASE_SECRET_KEYS");
 
-if (!secretKeysRaw) {
-  throw new Error("SUPABASE_SECRET_KEYS is missing");
+if (!supabaseUrl || !secretKeysRaw) {
+  throw new Error("Registration service is not configured.");
 }
 
-const secretKeys = JSON.parse(secretKeysRaw);
+let secretKeys: { default?: string };
+try {
+  secretKeys = JSON.parse(secretKeysRaw);
+} catch {
+  throw new Error("Registration service is not configured.");
+}
 
-const supabaseAdmin = createClient(
-  supabaseUrl,
-  secretKeys.default
-);
+if (typeof secretKeys.default !== "string" || !secretKeys.default) {
+  throw new Error("Registration service is not configured.");
+}
+
+const supabaseAdmin = createClient(supabaseUrl, secretKeys.default);
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -94,7 +103,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body) {
+      return json({ message: "Invalid registration request." }, 400);
+    }
 
     const fullName =
       typeof body.fullName === "string"
