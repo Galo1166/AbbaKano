@@ -90,12 +90,11 @@ export function LoginForm() {
         { action: "login-options" },
       );
       const response = await startAuthentication({ optionsJSON: options as never });
-      const result = await invokeSupabaseFunction<{ email: string; tokenHash: string }>(
+      const result = await invokeSupabaseFunction<{ tokenHash: string }>(
         "passkey-auth",
         { action: "login-verify", response },
       );
       const { error } = await supabase.auth.verifyOtp({
-        email: result.email,
         token_hash: result.tokenHash,
         type: "magiclink",
       });
