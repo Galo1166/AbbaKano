@@ -1,0 +1,312 @@
+=== HEADER ===
+<header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.25)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center"><span class="material-symbols-outlined text-primary text-[22px]">bolt</span></div><div class="flex flex-col"><span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">VTU Portal</span><h1 class="font-headline-sm text-headline-sm text-on-surface tracking-tight leading-none">Home</h1></div></div><div class="flex items-center gap-space-xs"><button aria-label="Notifications" class="w-11 h-11 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:text-on-surface relative transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-secondary ring-2 ring-surface"></span></button><a class="w-11 h-11 min-h-[44px] min-w-[44px] flex items-center justify-center" data-path="profile" href="#"><img alt="Profile" class="w-8 h-8 rounded-full object-cover ring-2 ring-primary/30" src="https://lh3.googleusercontent.com/aida/AEtjO1U-L8H3B--tTCl8jbe_oZEnFk35OyRHx-qZdxo7hhAxg0YLC1ePpKDeX1jzH1V8HEuHsq9XrBdApsq-cVkdxbHvONIK_Mv2dbs4YEkBVWFXRkRqUkpuuY7F1uQuBWnwq-nKkd_3bZYlotd9dO-Phrip6u1cEgV3i7J0sB3Ub9SBtWc0p8LDfpNC3yylVMTnT44stnRpxRl-9FhduYKhni0_DuU2or3ZJG__mhdm4ZOWJnt7Ys3MaPt8QM6p7EmK2GUj0sfHYwiQ8w"></a></div></div></header>
+
+=== MAIN ===
+<main class="flex-1 flex flex-col relative w-full pt-16 pb-28 px-margin bg-background"><div class="flex flex-col w-full space-y-space-lg">
+<!-- Welcome Greeting & Membership Status Pill -->
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Welcome back</span>
+<div class="flex items-center gap-space-xs mt-0.5">
+<h2 class="font-headline-md text-headline-md text-on-surface font-bold tracking-tight">Hello, Usman</h2>
+<span class="text-lg">👋</span>
+</div>
+</div>
+<!-- VIP Reseller Badge inspired by logo gold accents -->
+<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-container/20 shadow-sm">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-secondary font-bold tracking-wider">VIP RESELLER</span>
+</div>
+</div>
+<!-- Master Wallet Card (Indigo-Navy Glow Elevation) -->
+<div class="relative overflow-hidden rounded-xl bg-surface-container-high p-space-lg shadow-xl shadow-primary/5">
+<!-- Ambient Blue & Amber Energy Glow Overlays -->
+<div class="absolute -top-16 -right-16 w-44 h-44 rounded-full bg-primary-container/20 blur-3xl pointer-events-none"></div>
+<div class="absolute -bottom-16 -left-16 w-36 h-36 rounded-full bg-secondary/10 blur-2xl pointer-events-none"></div>
+<div class="relative z-10 flex flex-col space-y-space-md">
+<!-- Balance Header & Status -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant tracking-wider font-semibold uppercase">Wallet Balance</span>
+<button aria-label="Toggle Balance Visibility" class="p-1 text-on-surface-variant hover:text-on-surface transition-colors flex items-center justify-center" id="balanceToggleBtn">
+<span class="material-symbols-outlined text-[18px]" id="eyeIcon">visibility</span>
+</button>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary-container/30">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span class="font-label-sm text-label-sm text-tertiary font-medium">Instant Active</span>
+</div>
+</div>
+<!-- Main Balance Figure with Dynamic Currency Typography -->
+<div class="flex items-baseline gap-1">
+<span class="font-headline-md text-headline-md text-secondary font-bold">₦</span>
+<span class="font-currency-display text-currency-display text-on-surface font-extrabold tracking-tight" id="walletBalance">14,850.00</span>
+</div>
+<!-- Primary & Secondary Instant Actions -->
+<div class="grid grid-cols-2 gap-space-sm pt-space-xs">
+<button class="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-primary text-on-primary font-label-lg text-label-lg font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+<span>Fund Wallet</span>
+</button>
+<button class="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-surface-container-highest text-primary font-label-lg text-label-lg font-semibold active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined text-[20px] text-secondary">bolt</span>
+<span>Instant Sub</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Quick Buy Instant Cheap Data Launcher -->
+<div class="flex flex-col space-y-space-sm p-space-md rounded-xl bg-surface-container shadow-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[22px]">auto_awesome</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">Quick Data Dispenser</h3>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-label-sm text-label-sm font-bold">Save up to 40%</span>
+</div>
+<!-- Telecom Network Selector -->
+<div class="grid grid-cols-4 gap-gutter-sm pt-space-2xs" id="networkSelector">
+<!-- MTN (Selected Active) -->
+<button class="network-pill active flex flex-col items-center justify-center py-2.5 px-1 rounded-xl bg-surface-container-high transition-all" data-network="MTN">
+<div class="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center font-black text-[11px] text-zinc-950 shadow-sm">
+          MTN
+        </div>
+<span class="font-label-sm text-label-sm text-on-surface mt-1.5 font-semibold">MTN</span>
+<span class="w-1.5 h-1.5 rounded-full bg-primary mt-1"></span>
+</button>
+<!-- Airtel -->
+<button class="network-pill flex flex-col items-center justify-center py-2.5 px-1 rounded-xl bg-surface-container-low transition-all" data-network="Airtel">
+<div class="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center font-black text-[11px] text-white shadow-sm">
+          airtel
+        </div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5">Airtel</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+<!-- Glo -->
+<button class="network-pill flex flex-col items-center justify-center py-2.5 px-1 rounded-xl bg-surface-container-low transition-all" data-network="Glo">
+<div class="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center font-black text-[11px] text-white shadow-sm">
+          glo
+        </div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5">Glo</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+<!-- 9mobile -->
+<button class="network-pill flex flex-col items-center justify-center py-2.5 px-1 rounded-xl bg-surface-container-low transition-all" data-network="9mobile">
+<div class="w-8 h-8 rounded-full bg-teal-800 flex items-center justify-center font-black text-[9px] text-lime-300 shadow-sm">
+          9mob
+        </div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1.5">9mobile</span>
+<span class="w-1.5 h-1.5 rounded-full bg-transparent mt-1"></span>
+</button>
+</div>
+<!-- Active Plan Highlight Box -->
+<div class="mt-space-xs p-space-sm rounded-xl bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[22px]">wifi_tethering</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate">MTN SME • 2.5 GB</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Validity: 30 Days</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="font-label-lg text-label-lg text-secondary font-bold"></span>
+<span class="block font-label-sm text-label-sm text-outline line-through"><br></span>
+</div>
+</div>
+<!-- Recipient Phone Input Preview -->
+<div class="flex items-center px-space-sm h-12 rounded-xl bg-surface-container-high">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px] mr-2">phone_iphone</span>
+<input class="w-full bg-transparent text-on-surface font-body-md text-body-md focus:outline-none placeholder:text-outline font-medium" placeholder="0803 123 4567" type="tel" value="0814 892 0142">
+<button class="p-1 text-primary hover:text-on-surface transition-colors" title="Select Beneficiary">
+<span class="material-symbols-outlined text-[20px]">contacts</span>
+</button>
+</div>
+<!-- Purchase Action CTA -->
+<button class="w-full py-3.5 px-4 rounded-xl bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary-container/20 active:scale-[0.98] transition-transform">
+<span>Purchase Bundle</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+<!-- Quick Services Grid (2x2) -->
+<div class="flex flex-col space-y-space-sm">
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">VTU Hub</h3>
+<div class="grid grid-cols-2 gap-space-sm">
+<!-- 1. Data Bundles -->
+<a class="flex flex-col p-space-sm rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors relative group" data-path="buy-data" href="#">
+<div class="flex items-start justify-between">
+<div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[22px]">cell_tower</span>
+</div>
+<span class="w-2.5 h-2.5 rounded-full bg-secondary ring-2 ring-surface-container"></span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold mt-3">Data Bundles</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">SME, Gifting &amp; Corp</span>
+</a>
+<!-- 2. Airtime Topup -->
+<div class="flex flex-col p-space-sm rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors group cursor-pointer">
+<div class="flex items-start justify-between">
+<div class="w-10 h-10 rounded-xl bg-tertiary/15 flex items-center justify-center text-tertiary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[22px]">phone_in_talk</span>
+</div>
+<span class="px-1.5 py-0.5 rounded-full bg-tertiary/20 text-tertiary font-label-sm text-label-sm font-bold">2% OFF</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold mt-3">Airtime Topup</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Cash Discount</span>
+</div>
+<!-- 3. Electricity -->
+<div class="flex flex-col p-space-sm rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors group cursor-pointer">
+<div class="flex items-start justify-between">
+<div class="w-10 h-10 rounded-xl bg-secondary/15 flex items-center justify-center text-secondary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[22px]">electric_meter</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">AEDC/IKEDC</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold mt-3">Electricity</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Instant Token Gen</span>
+</div>
+<!-- 4. Cable TV -->
+<div class="flex flex-col p-space-sm rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors group cursor-pointer">
+<div class="flex items-start justify-between">
+<div class="w-10 h-10 rounded-xl bg-primary-container/20 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-[22px]">live_tv</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline">Auto-renew</span>
+</div>
+<span class="font-label-lg text-label-lg text-on-surface font-semibold mt-3">Cable TV</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">DSTV, GOTV &amp; Star</span>
+</div>
+</div>
+</div>
+<!-- Recent Activity Feed -->
+<div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-bold">Recent Activity</h3>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm font-semibold">Latest 3</span>
+</div>
+<a class="font-label-md text-label-md text-primary hover:underline font-semibold" data-path="transactions" href="#">View All</a>
+</div>
+<div class="flex flex-col space-y-space-xs">
+<!-- Item 1: MTN SME -->
+<div class="flex items-center justify-between p-space-sm rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">cell_tower</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate">MTN 2GB SME Data</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">08148920142 • Today, 11:24</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="font-label-lg text-label-lg text-on-surface font-bold">-₦590.00</span>
+<span class="block font-label-sm text-label-sm text-tertiary font-semibold">Successful</span>
+</div>
+</div>
+<!-- Item 2: Wallet Funding -->
+<div class="flex items-center justify-between p-space-sm rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-xl bg-tertiary/20 text-tertiary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">account_balance_wallet</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate">Wallet Funding</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Moniepoint Bank • Yesterday</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="font-label-lg text-label-lg text-tertiary font-bold">+₦5,000.00</span>
+<span class="block font-label-sm text-label-sm text-tertiary font-semibold">Completed</span>
+</div>
+</div>
+<!-- Item 3: Airtel Data -->
+<div class="flex items-center justify-between p-space-sm rounded-xl bg-surface-container">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">signal_cellular_alt</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-semibold truncate">Airtel 1GB Direct Data</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">09023418899 • 24 May</span>
+</div>
+</div>
+<div class="text-right shrink-0">
+<span class="font-label-lg text-label-lg text-on-surface font-bold">-₦300.00</span>
+<span class="block font-label-sm text-label-sm text-tertiary font-semibold">Successful</span>
+</div>
+</div>
+</div>
+</div>
+<!-- WhatsApp 24/7 Resolution Desk -->
+<div class="flex items-center justify-between p-space-md rounded-xl bg-surface-container-high">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-11 h-11 rounded-xl bg-tertiary-container/30 text-tertiary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[24px]">support_agent</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-bold truncate">24/7 Resolution Desk</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Instant WhatsApp Agent Response</span>
+</div>
+</div>
+<a class="px-4 py-2 rounded-xl bg-tertiary text-on-tertiary font-label-md text-label-md font-bold flex items-center gap-1 shrink-0 active:scale-95 transition-transform" href="https://wa.me/" rel="noopener noreferrer" target="_blank">
+<span>Chat</span>
+<span class="material-symbols-outlined text-[16px]">chat</span>
+</a>
+</div>
+</div>
+<script>
+  (function() {
+    // Balance Toggle Logic
+    const toggleBtn = document.getElementById('balanceToggleBtn');
+    const balanceEl = document.getElementById('walletBalance');
+    const eyeIcon = document.getElementById('eyeIcon');
+    let isHidden = false;
+    const actualBalance = '14,850.00';
+
+    if (toggleBtn && balanceEl && eyeIcon) {
+      toggleBtn.addEventListener('click', function() {
+        isHidden = !isHidden;
+        if (isHidden) {
+          balanceEl.textContent = '••••••••';
+          eyeIcon.textContent = 'visibility_off';
+        } else {
+          balanceEl.textContent = actualBalance;
+          eyeIcon.textContent = 'visibility';
+        }
+      });
+    }
+
+    // Network Selector Interactive Feedback
+    const networkPills = document.querySelectorAll('#networkSelector .network-pill');
+    networkPills.forEach(pill => {
+      pill.addEventListener('click', function() {
+        networkPills.forEach(p => {
+          p.classList.remove('bg-surface-container-high');
+          p.classList.add('bg-surface-container-low');
+          const indicator = p.querySelector('span:last-child');
+          if (indicator) indicator.className = 'w-1.5 h-1.5 rounded-full bg-transparent mt-1';
+          const label = p.querySelector('.font-label-sm');
+          if (label) {
+            label.classList.remove('text-on-surface', 'font-semibold');
+            label.classList.add('text-on-surface-variant');
+          }
+        });
+
+        this.classList.remove('bg-surface-container-low');
+        this.classList.add('bg-surface-container-high');
+        const activeIndicator = this.querySelector('span:last-child');
+        if (activeIndicator) activeIndicator.className = 'w-1.5 h-1.5 rounded-full bg-primary mt-1';
+        const activeLabel = this.querySelector('.font-label-sm');
+        if (activeLabel) {
+          activeLabel.classList.remove('text-on-surface-variant');
+          activeLabel.classList.add('text-on-surface', 'font-semibold');
+        }
+      });
+    });
+  })();
+</script></main>
+
+=== NAV ===
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/85 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.35)]" data-active-classes="text-primary"><div class="h-20 px-space-xs flex items-center justify-around relative"><a aria-current="page" class="flex flex-col items-center justify-center gap-space-2xs min-w-[56px] min-h-[48px] py-space-xs transition-colors text-primary" data-path="home" href="#"><span class="material-symbols-outlined text-[24px]">home</span><span class="font-label-sm text-label-sm">Home</span></a><a class="relative -top-3 flex flex-col items-center justify-center" data-path="buy-data" href="#"><div class="w-14 h-14 min-w-[56px] min-h-[56px] rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_8px_20px_-2px_rgba(77,142,255,0.45)] active:scale-95 transition-all"><span class="material-symbols-outlined text-[28px]">bolt</span></div><span class="font-label-sm text-label-sm text-primary mt-1 font-bold">Buy Data</span></a><a class="flex flex-col items-center justify-center gap-space-2xs min-w-[56px] min-h-[48px] py-space-xs text-on-surface-variant transition-colors" data-path="transactions" href="#"><span class="material-symbols-outlined text-[24px]">receipt_long</span><span class="font-label-sm text-label-sm">History</span></a><a class="flex flex-col items-center justify-center gap-space-2xs min-w-[56px] min-h-[48px] py-space-xs text-on-surface-variant transition-colors" data-path="profile" href="#"><span class="material-symbols-outlined text-[24px]">person</span><span class="font-label-sm text-label-sm">Profile</span></a></div></nav>

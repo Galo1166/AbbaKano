@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "on-surface": "#dfe2ef", "on-tertiary-container": "#00311f", "primary-container": "#4d8eff", "error": "#ffb4ab", "surface-container-lowest": "#0a0e17", "secondary": "#ffb95f", "surface-container-low": "#181b25", "surface-bright": "#353943", "tertiary-container": "#00a572", "on-primary-container": "#00285d", "surface-container": "#1c1f29", "surface-tint": "#adc6ff", "secondary-fixed-dim": "#ffb95f", "on-tertiary-fixed-variant": "#005236", "on-secondary": "#472a00", "surface": "#0f131c", "outline-variant": "#424754", "surface-dim": "#0f131c", "background": "#0f131c", "inverse-primary": "#005ac2", "primary-fixed-dim": "#adc6ff", "secondary-container": "#ee9800", "surface-container-high": "#262a34", "on-secondary-fixed": "#2a1700", "on-primary": "#002e6a", "on-error": "#690005", "on-primary-fixed-variant": "#004395", "tertiary-fixed-dim": "#4edea3", "tertiary": "#4edea3", "on-background": "#dfe2ef", "surface-container-highest": "#31353f", "inverse-on-surface": "#2c303a", "error-container": "#93000a", "on-tertiary-fixed": "#002113", "tertiary-fixed": "#6ffbbe", "inverse-surface": "#dfe2ef", "on-error-container": "#ffdad6", "on-secondary-fixed-variant": "#653e00", "secondary-fixed": "#ffddb8", "on-secondary-container": "#5b3800", "outline": "#8c909f", "on-tertiary": "#003824", "on-primary-fixed": "#001a42", "primary-fixed": "#d8e2ff", "on-surface-variant": "#c2c6d6", "surface-variant": "#31353f", "primary": "#adc6ff" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-xs": "0.5rem", "margin": "1rem", "space-xl": "2rem", "space-2xl": "3rem", "margin-desktop": "2rem", "margin-tablet": "1.5rem", "gutter": "1rem", "space-2xs": "0.25rem", "space-sm": "0.75rem", "space-lg": "1.5rem", "space-md": "1rem", "gutter-sm": "0.75rem" }, fontFamily: { "headline-xl": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "currency-display": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "label-sm": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"] }, fontSize: { "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "currency-display": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.03em", "fontWeight": "800" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }], "headline-lg": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.015em", "fontWeight": "700" }], "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.005em", "fontWeight": "600" }], "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }], "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600" }] } } } }</script><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#0f131c;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background text-on-surface font-body-md text-body-md flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.25)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center"><span class="material-symbols-outlined text-primary text-[22px]">bolt</span></div><div class="flex flex-col"><span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">VTU Portal</span><h1 class="font-headline-sm text-headline-sm text-on-surface tracking-tight leading-none">Buy Data</h1></div></div><div class="flex items-center gap-space-xs"><button aria-label="Notifications" class="w-11 h-11 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:text-on-surface relative transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-secondary ring-2 ring-surface"></span></button><a class="w-11 h-11 min-h-[44px] min-w-[44px] flex items-center justify-center" data-path="profile" href="#"><img alt="Profile" class="w-8 h-8 rounded-full object-cover ring-2 ring-primary/30" src="https://lh3.googleusercontent.com/aida/AEtjO1U-L8H3B--tTCl8jbe_oZEnFk35OyRHx-qZdxo7hhAxg0YLC1ePpKDeX1jzH1V8HEuHsq9XrBdApsq-cVkdxbHvONIK_Mv2dbs4YEkBVWFXRkRqUkpuuY7F1uQuBWnwq-nKkd_3bZYlotd9dO-Phrip6u1cEgV3i7J0sB3Ub9SBtWc0p8LDfpNC3yylVMTnT44stnRpxRl-9FhduYKhni0_DuU2or3ZJG__mhdm4ZOWJnt7Ys3MaPt8QM6p7EmK2GUj0sfHYwiQ8w"/></a></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-28 px-margin bg-background"><div class="flex flex-col w-full space-y-space-lg">
+<!-- Wallet Header Summary Card -->
+<div class="relative w-full rounded-xl bg-surface-container-high p-space-md shadow-md overflow-hidden">
+<div class="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-primary/10 blur-2xl pointer-events-none"></div>
+<div class="relative flex items-center justify-between z-10">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-primary shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[22px]">account_balance_wallet</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-space-2xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Source Wallet</span>
+<span class="material-symbols-outlined text-[15px] text-tertiary" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<div class="font-headline-sm text-headline-sm text-on-surface font-bold truncate">₦14,850<span class="text-on-surface-variant font-normal">.00</span></div>
+</div>
+</div>
+<button class="flex items-center gap-space-2xs px-space-sm py-space-xs rounded-lg bg-secondary text-on-secondary font-label-md text-label-md shadow-sm active:scale-95 transition-transform shrink-0">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>Top Up</span>
+</button>
+</div>
+</div>
+<!-- Carrier Selection Section -->
+<div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-lg text-label-lg text-on-surface">Select Network</span>
+<span class="text-secondary font-label-sm text-label-sm font-semibold">4G / 5G Ready</span>
+</div>
+<div class="flex items-center gap-space-2xs px-space-xs py-0.5 rounded-full bg-surface-container-high text-tertiary font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+<span>99.9% Online</span>
+</div>
+</div>
+<!-- 4 Telecom Network Grids -->
+<div class="grid grid-cols-4 gap-gutter-sm carrier-group">
+<!-- MTN (Selected) -->
+<button class="carrier-btn active flex flex-col items-center justify-center p-space-xs rounded-xl bg-surface-container-high text-on-surface shadow-md relative transition-all active:scale-95 text-center min-h-[72px]" data-carrier="MTN">
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-tertiary"></span>
+<div class="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-on-secondary font-bold font-label-md text-label-md shadow-inner">
+          MTN
+        </div>
+<span class="font-label-sm text-label-sm mt-1.5 font-bold text-on-surface">MTN</span>
+</button>
+<!-- Airtel -->
+<button class="carrier-btn flex flex-col items-center justify-center p-space-xs rounded-xl bg-surface-container text-on-surface-variant shadow-sm relative transition-all active:scale-95 text-center min-h-[72px]" data-carrier="Airtel">
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-tertiary"></span>
+<div class="w-9 h-9 rounded-full bg-error flex items-center justify-center text-on-error font-bold font-label-md text-label-md shadow-inner">
+          airtel
+        </div>
+<span class="font-label-sm text-label-sm mt-1.5 text-on-surface-variant font-medium">Airtel</span>
+</button>
+<!-- Glo -->
+<button class="carrier-btn flex flex-col items-center justify-center p-space-xs rounded-xl bg-surface-container text-on-surface-variant shadow-sm relative transition-all active:scale-95 text-center min-h-[72px]" data-carrier="Glo">
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-tertiary"></span>
+<div class="w-9 h-9 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container font-bold font-label-md text-label-md shadow-inner">
+          glo
+        </div>
+<span class="font-label-sm text-label-sm mt-1.5 text-on-surface-variant font-medium">Glo</span>
+</button>
+<!-- 9mobile -->
+<button class="carrier-btn flex flex-col items-center justify-center p-space-xs rounded-xl bg-surface-container text-on-surface-variant shadow-sm relative transition-all active:scale-95 text-center min-h-[72px]" data-carrier="9mobile">
+<span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-secondary-container"></span>
+<div class="w-9 h-9 rounded-full bg-surface-bright flex items-center justify-center text-secondary font-bold font-label-md text-label-md shadow-inner">
+          9mob
+        </div>
+<span class="font-label-sm text-label-sm mt-1.5 text-on-surface-variant font-medium">9mobile</span>
+</button>
+</div>
+</div>
+<!-- Segmented Bundle Mode Tabs -->
+<div class="p-1 rounded-xl bg-surface-container flex items-center gap-1 shadow-inner">
+<button class="plan-type-btn flex-1 py-space-xs rounded-lg bg-primary-container text-on-primary-container font-label-md text-label-md shadow-sm transition-all text-center">
+      SME Data
+    </button>
+<button class="plan-type-btn flex-1 py-space-xs rounded-lg text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-all text-center">
+      Gifting
+    </button>
+<button class="plan-type-btn flex-1 py-space-xs rounded-lg text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-all text-center">
+      Corporate
+    </button>
+</div>
+<!-- Recipient Phone Number Input Group -->
+<div class="flex flex-col space-y-space-xs">
+<div class="flex items-center justify-between px-space-2xs">
+<label class="font-label-md text-label-md text-on-surface font-semibold" for="phone-input">Recipient Mobile Number</label>
+<button class="flex items-center gap-space-2xs text-primary hover:text-surface-tint font-label-sm text-label-sm transition-colors">
+<span class="material-symbols-outlined text-[16px]">history</span>
+<span>Recent Beneficiaries</span>
+</button>
+</div>
+<div class="relative flex items-center rounded-xl bg-surface-container px-space-sm h-14 shadow-inner focus-within:bg-surface-container-high transition-colors">
+<!-- National Code Badge -->
+<div class="flex items-center gap-1 pr-space-sm text-on-surface shrink-0">
+<div class="w-5 h-3.5 rounded-sm bg-tertiary-container flex items-center justify-center text-[8px] font-bold text-on-tertiary-container">
+          NG
+        </div>
+<span class="font-label-md text-label-md text-on-surface font-bold">+234</span>
+</div>
+<!-- Input Field -->
+<input class="w-full bg-transparent text-on-surface font-headline-sm text-headline-sm tracking-wide focus:outline-none placeholder:text-outline placeholder:font-normal placeholder:text-body-md" id="phone-input" placeholder="Enter 11-digit phone number" type="tel" value="0803 459 2811"/>
+<!-- Network Auto-Detected Chip & Contact Picker -->
+<div class="flex items-center gap-space-xs pl-space-xs shrink-0">
+<div class="flex items-center gap-1 px-space-xs py-1 rounded-md bg-secondary/15 text-secondary font-label-sm text-label-sm font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>MTN</span>
+</div>
+<button aria-label="Open Contacts" class="w-9 h-9 flex items-center justify-center rounded-lg bg-surface-container-high text-primary hover:text-on-surface active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[20px]">contacts</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Plan Bundles Grid -->
+<div class="flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between px-space-2xs">
+<div class="flex items-center gap-space-xs">
+<span class="font-label-lg text-label-lg text-on-surface">Select Data Bundle</span>
+<span class="px-space-xs py-0.5 rounded-md bg-tertiary-container text-on-tertiary-container font-label-sm text-label-sm font-bold uppercase tracking-wider">Instant API</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">30 Days Validity</span>
+</div>
+<div class="grid grid-cols-1 gap-space-sm">
+<!-- Plan 1 -->
+<div class="bundle-card flex items-center justify-between p-space-md rounded-xl bg-surface-container text-on-surface shadow-sm cursor-pointer active:scale-[0.99] transition-all" data-name="MTN 1.0 GB SME" data-price="260">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[24px]">signal_cellular_alt</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">1.0 GB</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">SME</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Valid 30 Days • ₦0.25/MB</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline-sm text-headline-sm font-bold text-secondary">₦260</div>
+<span class="font-label-sm text-label-sm text-tertiary font-medium">Save 12%</span>
+</div>
+</div>
+<!-- Plan 2 -->
+<div class="bundle-card flex items-center justify-between p-space-md rounded-xl bg-surface-container text-on-surface shadow-sm cursor-pointer active:scale-[0.99] transition-all" data-name="MTN 2.0 GB SME" data-price="520">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[24px]">wifi</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">2.0 GB</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">SME</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Valid 30 Days • Fast Server</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline-sm text-headline-sm font-bold text-secondary">₦520</div>
+<span class="font-label-sm text-label-sm text-tertiary font-medium">Save 15%</span>
+</div>
+</div>
+<!-- Plan 3 (Active / Popular Selected) -->
+<div class="bundle-card active flex items-center justify-between p-space-md rounded-xl bg-surface-container-high text-on-surface shadow-md cursor-pointer relative overflow-hidden transition-all" data-name="MTN 5.0 GB SME" data-price="1300">
+<div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-primary/10 blur-xl pointer-events-none"></div>
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[24px]">rocket_launch</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">5.0 GB</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary text-on-secondary font-label-sm text-label-sm font-bold tracking-wide">POPULAR</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Valid 30 Days • Best Deal</span>
+</div>
+</div>
+<div class="text-right flex flex-col items-end">
+<div class="font-headline-sm text-headline-sm font-bold text-secondary">₦1,300</div>
+<div class="flex items-center gap-1 text-primary font-label-sm text-label-sm font-bold mt-0.5">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span>Selected</span>
+</div>
+</div>
+</div>
+<!-- Plan 4 -->
+<div class="bundle-card flex items-center justify-between p-space-md rounded-xl bg-surface-container text-on-surface shadow-sm cursor-pointer active:scale-[0.99] transition-all" data-name="MTN 10.0 GB SME" data-price="2600">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[24px]">stream</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface">10.0 GB</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">High Vol</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Valid 30 Days • Ultra-speed</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-headline-sm text-headline-sm font-bold text-secondary">₦2,600</div>
+<span class="font-label-sm text-label-sm text-tertiary font-medium">Bulk rate</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Trust Guarantee Banner -->
+<div class="rounded-xl bg-surface-container-low p-space-md flex items-start gap-space-sm shadow-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-tertiary shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]">shield</span>
+</div>
+<div class="flex flex-col space-y-0.5">
+<span class="font-label-md text-label-md text-on-surface font-semibold">Instant Automated Dispensation</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+        Processed directly via multi-channel VTU gateway. Auto-refunds instantly credit back to wallet on carrier failure.
+      </p>
+</div>
+</div>
+<!-- Sticky Order Checkout Bar -->
+<div class="sticky bottom-20 z-30 rounded-xl bg-surface-container-high p-space-md shadow-xl flex flex-col space-y-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Total Payable</span>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-headline-lg text-headline-lg font-bold text-secondary" id="checkout-price">₦1,300</span>
+<span class="font-label-sm text-label-sm text-tertiary">0% Convenience Fee</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Package</span>
+<div class="font-label-md text-label-md text-on-surface font-bold" id="checkout-plan-label">MTN • 5.0 GB SME</div>
+</div>
+</div>
+<!-- Primary Purchase CTA -->
+<button class="w-full h-13 min-h-[52px] rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-headline-sm font-bold flex items-center justify-center gap-space-xs shadow-lg active:scale-[0.98] transition-all" id="purchase-button">
+<span class="material-symbols-outlined text-[22px]">shopping_bag</span>
+<span>Purchase Data Bundle</span>
+</button>
+</div>
+</div>
+<script>
+  // Carrier selection state handling
+  const carrierButtons = document.querySelectorAll('.carrier-btn');
+  carrierButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      carrierButtons.forEach(b => {
+        b.classList.remove('active', 'bg-surface-container-high', 'text-on-surface');
+        b.classList.add('bg-surface-container', 'text-on-surface-variant');
+      });
+      btn.classList.add('active', 'bg-surface-container-high', 'text-on-surface');
+      btn.classList.remove('bg-surface-container', 'text-on-surface-variant');
+      updateSummary();
+    });
+  });
+
+  // Bundle card selection state handling
+  const bundleCards = document.querySelectorAll('.bundle-card');
+  const priceDisplay = document.getElementById('checkout-price');
+  const planDisplay = document.getElementById('checkout-plan-label');
+
+  bundleCards.forEach(card => {
+    card.addEventListener('click', () => {
+      bundleCards.forEach(c => {
+        c.classList.remove('active', 'bg-surface-container-high');
+        c.classList.add('bg-surface-container');
+      });
+      card.classList.add('active', 'bg-surface-container-high');
+      card.classList.remove('bg-surface-container');
+      
+      const price = card.getAttribute('data-price');
+      const plan = card.getAttribute('data-name');
+      priceDisplay.textContent = '₦' + Number(price).toLocaleString();
+      planDisplay.textContent = plan;
+    });
+  });
+
+  // Segmented Type Tabs
+  const typeButtons = document.querySelectorAll('.plan-type-btn');
+  typeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      typeButtons.forEach(b => {
+        b.classList.remove('bg-primary-container', 'text-on-primary-container', 'shadow-sm');
+        b.classList.add('text-on-surface-variant');
+      });
+      btn.classList.add('bg-primary-container', 'text-on-primary-container', 'shadow-sm');
+      btn.classList.remove('text-on-surface-variant');
+    });
+  });
+
+  // Purchase button micro-interaction
+  const purchaseBtn = document.getElementById('purchase-button');
+  purchaseBtn.addEventListener('click', () => {
+    purchaseBtn.innerHTML = '<span class="material-symbols-outlined text-[22px] animate-spin">progress_activity</span><span>Processing Dispense...</span>';
+    setTimeout(() => {
+      purchaseBtn.innerHTML = '<span class="material-symbols-outlined text-[22px] text-tertiary">check_circle</span><span>Dispensed Successfully!</span>';
+      setTimeout(() => {
+        purchaseBtn.innerHTML = '<span class="material-symbols-outlined text-[22px]">shopping_bag</span><span>Purchase Data Bundle</span>';
+      }, 2500);
+    }, 1200);
+  });
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/85 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.35)]" data-active-classes="text-primary"><div class="h-20 px-space-xs flex items-center justify-around relative"><a class="flex flex-col items-center justify-center gap-space-2xs min-w-[56px] min-h-[48px] py-space-xs text-on-surface-variant transition-colors" data-path="home" href="#"><span class="material-symbols-outlined text-[24px]">home</span><span class="font-label-sm text-label-sm">Home</span></a><a aria-current="page" class="relative -top-3 flex flex-col items-center justify-center text-primary" data-path="buy-data" href="#"><div class="w-14 h-14 min-w-[56px] min-h-[56px] rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_8px_20px_-2px_rgba(77,142,255,0.45)] active:scale-95 transition-all"><span class="material-symbols-outlined text-[28px]">bolt</span></div><span class="font-label-sm text-label-sm text-primary mt-1 font-bold">Buy Data</span></a><a class="flex flex-col items-center justify-center gap-space-2xs min-w-[56px] min-h-[48px] py-space-xs text-on-surface-variant transition-colors" data-path="transactions" href="#"><span class="material-symbols-outlined text-[24px]">receipt_long</span><span class="font-label-sm text-label-sm">History</span></a><a class="flex flex-col items-center justify-center gap-space-2xs min-w-[56px] min-h-[48px] py-space-xs text-on-surface-variant transition-colors" data-path="profile" href="#"><span class="material-symbols-outlined text-[24px]">person</span><span class="font-label-sm text-label-sm">Profile</span></a></div></nav></body></html>

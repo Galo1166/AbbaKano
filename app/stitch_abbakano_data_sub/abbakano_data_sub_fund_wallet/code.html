@@ -1,0 +1,238 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "on-secondary-fixed": "#291800", "on-secondary-container": "#6b4500", "outline": "#747683", "surface-container-lowest": "#ffffff", "on-tertiary-fixed": "#00174a", "on-primary-fixed-variant": "#14419a", "surface-dim": "#d8dadc", "inverse-on-surface": "#eff1f3", "surface-bright": "#f7f9fb", "surface-tint": "#345ab3", "on-tertiary": "#ffffff", "on-primary-container": "#8facff", "on-secondary": "#ffffff", "on-surface-variant": "#434652", "primary-fixed-dim": "#b3c5ff", "tertiary-fixed": "#dbe1ff", "tertiary": "#00266d", "secondary-fixed": "#ffddb4", "background": "#f7f9fb", "on-primary-fixed": "#001849", "error": "#ba1a1a", "on-primary": "#ffffff", "surface-container": "#eceef0", "tertiary-fixed-dim": "#b3c5ff", "primary": "#00276c", "on-tertiary-fixed-variant": "#003ea6", "secondary-fixed-dim": "#ffb955", "primary-container": "#0b3c95", "surface": "#f7f9fb", "on-background": "#191c1e", "secondary": "#835500", "on-tertiary-container": "#90acff", "on-secondary-fixed-variant": "#633f00", "secondary-container": "#feae2c", "surface-container-low": "#f2f4f6", "on-error": "#ffffff", "tertiary-container": "#003a9c", "error-container": "#ffdad6", "on-surface": "#191c1e", "inverse-surface": "#2d3133", "surface-variant": "#e0e3e5", "surface-container-high": "#e6e8ea", "on-error-container": "#93000a", "outline-variant": "#c4c6d4", "surface-container-highest": "#e0e3e5", "inverse-primary": "#b3c5ff", "primary-fixed": "#dae1ff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "margin-mobile": "1rem", "margin": "1.5rem", "space-xs": "0.25rem", "gutter-mobile": "0.75rem", "space-xl": "2rem", "space-sm": "0.5rem", "space-lg": "1.5rem", "gutter": "1rem", "space-2xl": "3rem", "space-md": "1rem" }, "fontFamily": { "label-sm": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "title-lg": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "display-lg": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "display-sm": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "title-md": ["Plus Jakarta Sans"], "label-lg": ["Plus Jakarta Sans"] }, "fontSize": { "label-sm": ["10px", {"lineHeight": "14px", "letterSpacing": "0.05em", "fontWeight": "700"}], "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}], "title-lg": ["18px", {"lineHeight": "24px", "fontWeight": "600"}], "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "600"}], "body-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}], "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}], "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}], "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}], "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}], "display-sm": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}], "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}], "title-md": ["16px", {"lineHeight": "22px", "fontWeight": "600"}], "label-lg": ["14px", {"lineHeight": "20px", "fontWeight": "600"}] } } } }</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.03)] pt-safe"><div class="h-16 px-margin-mobile flex items-center justify-between max-w-lg mx-auto w-full"><div class="flex items-center gap-space-xs"><button aria-label="Back" class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface hover:bg-surface-container transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-[22px]">arrow_back</span></button><h1 class="font-title-lg text-title-lg text-on-surface leading-tight">Fund Wallet</h1></div><div class="flex items-center"><img alt="AbbaKano Logo" class="w-9 h-9 rounded-full object-cover ring-2 ring-secondary/20 shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA8UorP-GTxpDdLbc0N_7oP47smyngGAbd96OGpWdOV5uNamV_HNmcTVPuCw05qjVPOGzH5KAopfzv5Gx4ZQgiLKtmKxgAf6uEnyNbIRGCEyzkoWE6cwv8rAtQpmtcSMHRTXdBYlB7FhzKwYBeq-OYmscY3MjprjxbkyoWBab77mX7fZfkl18xiploxbsSN_bStplOzAD9yrH1aXbSc-gc8oiRzrdAR8W2QgsgAvkbQtxEC4QkJSksdxTlGMCCCPnKaS9k"></div></div></header><main class="flex flex-col relative w-full pt-16 pb-safe bg-surface max-w-lg mx-auto min-h-screen"><div class="flex flex-col w-full px-margin-mobile pb-space-2xl gap-space-lg">
+<!-- Toast Feedback (Hidden by default) -->
+<div class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-primary text-on-primary px-space-md py-space-sm rounded-full shadow-xl flex items-center gap-space-xs transition-all duration-300 opacity-0 pointer-events-none translate-y-2" id="copy-toast">
+<span class="material-symbols-outlined text-[18px] text-secondary-container" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-md text-label-md">Account number copied!</span>
+</div>
+<!-- Wallet Header Information -->
+<div class="flex flex-col gap-space-xs mt-space-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+        VTU Top-Up Desk
+      </span>
+<div class="flex items-center gap-1 bg-surface-container px-2.5 py-1 rounded-full"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="font-label-sm text-label-sm text-emerald-700 font-semibold">Gateways 100% Operational</span></div>
+</div>
+<h2 class="font-headline-md text-headline-md text-primary tracking-tight">Fund Your Wallet</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">
+      Transfer directly to either dedicated virtual account. Your balance updates automatically in seconds.
+    </p>
+</div>
+<!-- Live Notice Banner -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-start gap-space-sm"><div class="w-9 h-9 rounded-full bg-secondary-container/20 flex items-center justify-center shrink-0 mt-0.5 text-on-secondary-container"><span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">bolt</span></div><div class="flex flex-col gap-0.5"><div class="flex items-center gap-1.5"><span class="font-label-md text-label-md text-on-surface font-bold">Instant Automated Credit</span><span class="font-label-sm text-label-sm bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded">0% FEE &gt; ₦2,000</span></div><p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Transfers reflect in your wallet within 30 seconds automatically. Transfer above ₦2,000 to enjoy 100% free funding.</p></div></div>
+<!-- Dedicated Virtual Accounts List -->
+<div class="flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface">Dedicated Transfer Accounts</span>
+<span class="font-label-sm text-label-sm text-primary font-bold bg-primary-fixed px-2 py-0.5 rounded">AUTO-SYNC</span>
+</div>
+<!-- Moniepoint Account Card -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-md flex flex-col gap-space-md relative overflow-hidden transition-all">
+<div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-primary/5 to-transparent rounded-bl-full pointer-events-none"></div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 rounded-xl bg-primary-container flex items-center justify-center text-on-primary font-headline-sm text-headline-sm shadow-sm">
+            M
+          </div>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Moniepoint MFB</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Automated Virtual Bank</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm bg-secondary-fixed text-on-secondary-fixed px-2.5 py-1 rounded-full font-bold flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">electric_bolt</span>Recommended / Fast</span>
+</div>
+<div class="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Account Number</span>
+<span class="font-label-sm text-label-sm text-secondary font-bold flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[13px]">flash_on</span> Instant
+          </span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-display-sm text-display-sm text-primary tracking-wider select-all font-bold" id="acc-moniepoint">8034 991 240</span>
+<button class="h-10 px-space-md bg-primary hover:bg-primary-container active:scale-[0.97] transition-all text-on-primary rounded-lg flex items-center gap-1.5 font-label-md text-label-md shadow-sm" onclick="copyToClipboard('8034991240', 'Moniepoint')"><span class="material-symbols-outlined text-[18px]">content_copy</span><span class="">Copy Account</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between pt-0.5">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Account Name</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">AbbaKano - Usman Bello</span>
+</div>
+<div class="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+<span class="font-label-sm text-label-sm font-bold">Verified</span>
+</div>
+</div>
+</div>
+<!-- Wema Bank / ALAT Account Card -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-md flex flex-col gap-space-md relative overflow-hidden transition-all">
+<div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-secondary-container/10 to-transparent rounded-bl-full pointer-events-none"></div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 rounded-xl bg-tertiary-container flex items-center justify-center text-on-tertiary font-headline-sm text-headline-sm shadow-sm">
+            W
+          </div>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Wema Bank / ALAT</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Backup Virtual Desk</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm bg-surface-container-high text-on-surface-variant px-2 py-1 rounded-md font-medium">Alternative</span>
+</div>
+<div class="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Account Number</span>
+<span class="font-label-sm text-label-sm text-secondary font-bold flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[13px]">flash_on</span> Instant
+          </span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-display-sm text-display-sm text-primary tracking-wider select-all font-bold" id="acc-wema">0284 119 552</span>
+<button class="h-10 px-space-md bg-primary hover:bg-primary-container active:scale-[0.97] transition-all text-on-primary rounded-lg flex items-center gap-1.5 font-label-md text-label-md shadow-sm" onclick="copyToClipboard('0284119552', 'Wema Bank')"><span class="material-symbols-outlined text-[18px]">content_copy</span><span class="">Copy Account</span></button>
+</div>
+</div>
+<div class="flex items-center justify-between pt-0.5">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Account Name</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">AbbaKano - Usman Bello</span>
+</div>
+<div class="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+<span class="font-label-sm text-label-sm font-bold">Verified</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Alternative Payment Option (Paystack Card / USSD) -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between cursor-pointer" onclick="togglePaystackAccordion()">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed">
+<span class="material-symbols-outlined text-[22px]">credit_card</span>
+</div>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Card &amp; USSD Payment</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Powered securely by Paystack</span>
+</div>
+</div>
+<button aria-label="Toggle Online Topup" class="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px] transition-transform duration-200" id="paystack-toggle-icon">expand_more</span>
+</button>
+</div>
+<!-- Expandable Area -->
+<div class="flex flex-col gap-space-md pt-space-xs hidden" id="paystack-drawer">
+<div class="flex flex-col gap-1.5">
+<label class="font-label-md text-label-md text-on-surface-variant" for="topup-amount">Amount to Top Up (₦)</label>
+<div class="relative flex items-center">
+<span class="absolute left-4 font-headline-sm text-headline-sm text-on-surface-variant">₦</span>
+<input class="w-full h-[52px] pl-10 pr-4 rounded-xl bg-surface-container-low text-on-surface font-title-lg text-title-lg placeholder:text-outline focus:bg-surface-container-lowest focus:outline-none transition-all" id="topup-amount" placeholder="e.g. 5,000" type="number">
+</div>
+</div>
+<!-- Quick Preset Amounts -->
+<div class="grid grid-cols-4 gap-2">
+<button class="h-10 rounded-lg bg-surface-container-low hover:bg-primary-fixed text-primary font-label-md text-label-md transition-colors" onclick="setAmount(1000)">₦1,000</button>
+<button class="h-10 rounded-lg bg-surface-container-low hover:bg-primary-fixed text-primary font-label-md text-label-md transition-colors" onclick="setAmount(2000)">₦2,000</button>
+<button class="h-10 rounded-lg bg-surface-container-low hover:bg-primary-fixed text-primary font-label-md text-label-md transition-colors" onclick="setAmount(5000)">₦5,000</button>
+<button class="h-10 rounded-lg bg-surface-container-low hover:bg-primary-fixed text-primary font-label-md text-label-md transition-colors" onclick="setAmount(10000)">₦10,000</button>
+</div>
+<button class="w-full h-[54px] rounded-xl bg-primary hover:bg-primary-container active:scale-[0.98] text-on-primary font-label-lg text-label-lg flex items-center justify-center gap-2 shadow-md transition-all" onclick="proceedOnlinePayment()">
+<span class="">Proceed to Paystack Checkout</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Trust Notice Card -->
+<div class="bg-surface-container-low rounded-xl p-space-md flex items-center gap-space-sm"><div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary"><span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">verified_user</span></div><div class="flex flex-col gap-0.5"><div class="flex items-center gap-2"><span class="font-label-md text-label-md text-on-surface font-bold">NDPR Compliant &amp; Bank Grade Security</span><span class="font-label-sm text-label-sm text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Secured</span></div><p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">AbbaKano Data Sub uses automated CBN-licensed merchant pools. Your virtual accounts are encrypted and reserved exclusively for your instant top-up wallet.</p></div></div>
+<!-- Need Help / WhatsApp Support Banner -->
+<div class="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-11 h-11 rounded-full bg-[#25D366]/15 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[24px] text-[#075E54]">support_agent</span>
+</div>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Payment not reflecting?</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Instant WhatsApp resolution desk</span>
+</div>
+</div>
+<a class="h-10 px-space-md bg-secondary-container hover:bg-secondary-fixed active:scale-95 text-on-secondary-container rounded-lg flex items-center gap-1.5 font-label-md text-label-md transition-all shadow-sm shrink-0" href="https://wa.me/2348034991240?text=Hello%20AbbaKano%20Support,%20I%20have%20an%20issue%20with%20my%20wallet%20funding" rel="noopener noreferrer" target="_blank">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+<span class="">24/7 Help</span>
+</a>
+</div>
+</div>
+<script>
+  function copyToClipboard(text, bankName) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      textArea.remove();
+    }
+
+    const toast = document.getElementById('copy-toast');
+    if (toast) {
+      toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      
+      setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+      }, 2200);
+    }
+  }
+
+  function togglePaystackAccordion() {
+    const drawer = document.getElementById('paystack-drawer');
+    const icon = document.getElementById('paystack-toggle-icon');
+    if (drawer.classList.contains('hidden')) {
+      drawer.classList.remove('hidden');
+      icon.style.transform = 'rotate(180deg)';
+    } else {
+      drawer.classList.add('hidden');
+      icon.style.transform = 'rotate(0deg)';
+    }
+  }
+
+  function setAmount(val) {
+    const input = document.getElementById('topup-amount');
+    if (input) {
+      input.value = val;
+      input.focus();
+    }
+  }
+
+  function proceedOnlinePayment() {
+    const input = document.getElementById('topup-amount');
+    const amount = input ? input.value : 0;
+    if (!amount || amount < 100) {
+      alert('Please enter an amount of at least ₦100 to proceed.');
+      return;
+    }
+    const toast = document.getElementById('copy-toast');
+    if (toast) {
+      toast.querySelector('span:last-child').textContent = 'Connecting to Paystack Gateway...';
+      toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-2');
+      }, 2500);
+    }
+  }
+</script></main>
+
+</body></html>
