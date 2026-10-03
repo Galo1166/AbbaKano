@@ -53,10 +53,13 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
       if (error) throw error;
       const paystackResponse = response as PaystackResponse | null;
       const authorizationUrl = paystackResponse?.authorization_url || paystackResponse?.authorizationUrl;
-      if (!authorizationUrl) throw new Error('Payment service returned no authorization URL.');
+      if (!authorizationUrl) throw new Error('We could not start your payment. Please try again.');
       await WebBrowser.openBrowserAsync(authorizationUrl);
     } catch (error) {
-      setPaymentError(error instanceof Error ? error.message : 'Could not start payment.');
+      console.error('Could not start wallet funding:', error);
+      setPaymentError(error instanceof Error && error.message.startsWith('We could not')
+        ? error.message
+        : 'Could not start payment. Please try again.');
     } finally {
       setIsStartingPayment(false);
     }

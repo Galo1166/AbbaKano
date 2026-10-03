@@ -82,7 +82,7 @@ export function LoginForm() {
 
   async function handleBiometricSignIn() {
     setErrorMessage(
-      "Passkey/biometric login will be migrated to Supabase in the next step."
+      "Passkey sign-in is temporarily unavailable. Please sign in with your email and password."
     );
   }
 

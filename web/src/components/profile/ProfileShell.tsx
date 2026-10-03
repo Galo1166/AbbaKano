@@ -145,7 +145,7 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       } else if (error instanceof Error && error.name === "NotAllowedError") {
         setMessage("Passkey setup was cancelled or unavailable. Try again and complete the browser prompt.");
       } else if (error instanceof Error && error.name === "SecurityError") {
-        setMessage("This site is not configured for passkeys. Check that it uses HTTPS and that the backend WebAuthn origin matches this web address.");
+        setMessage("Passkey setup is temporarily unavailable. Please try again later or contact support.");
       } else if (error instanceof Error && error.message) {
         setMessage(error.message);
       } else {

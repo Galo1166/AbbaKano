@@ -113,7 +113,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         message?: string;
       }>(functionName, { body });
       if (error) throw error;
-      if (!result) throw new Error('Purchase service returned no response.');
+      if (!result) throw new Error('We could not confirm your purchase. Please check your transaction history.');
 
       const txStatusMap: Record<string, 'SUCCESSFUL' | 'PENDING' | 'FAILED'> = {
         success: 'SUCCESSFUL',

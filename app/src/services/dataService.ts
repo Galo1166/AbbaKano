@@ -46,7 +46,7 @@ export const fetchDataPlans = async (
       body: { network },
     });
     if (error) throw error;
-    if (!data) throw new Error('Data plans service returned no response.');
+    if (!data) throw new Error('We could not load data plans right now. Please try again.');
     const plans = (data.plans || []).map((plan) => ({
       id: `${network}-${plan.code}`,
       network,

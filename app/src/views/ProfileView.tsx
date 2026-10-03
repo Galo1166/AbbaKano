@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp, useTheme } from '@/context/AppContext';
@@ -30,7 +30,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [appLock, setAppLock] = useState(true);
 
   const menuItems = useMemo(() => [
-    { id: 'beneficiaries', icon: 'contacts', title: 'Saved Beneficiaries', subtitle: 'Manage frequent numbers for MTN, Airtel, Glo, 9mobile', section: 'Account' },
     { id: 'refer', icon: 'card-giftcard', title: 'Refer & Earn', subtitle: "Earn ₦100 for each friend's first data top-up", badge: '₦100 BONUS', section: 'Referral & Rewards' },
     { id: 'change_pin', icon: 'pin', title: 'Change Transaction PIN', subtitle: '4-digit wallet security PIN', section: 'Security & Preferences' },
     { id: 'biometrics', icon: 'fingerprint', title: 'Biometrics Login', subtitle: 'Face ID / Fingerprint unlock', section: 'Security & Preferences', hasToggle: true },
@@ -47,7 +46,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       hasToggle: false,
     },
     { id: 'support', icon: 'support-agent', title: 'Contact Support', subtitle: '24/7 WhatsApp & in-app chat', section: 'Help & Support' },
-    { id: 'about', icon: 'info', title: 'About AbbaKano', subtitle: 'Version 1.0.0 • Build 2025.02.25', section: 'Help & Support' },
     { id: 'logout', icon: 'logout', title: 'Sign Out', subtitle: 'Exit your wallet session safely', section: 'Account Actions', danger: true },
   ], [themePreference, effectiveTheme]);
 
@@ -71,8 +69,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
     else if (id === 'logout') {
       setShowSignOutModal(true);
-    } else {
-      Alert.alert('Coming Soon', 'This feature will be available in the next update.');
     }
   };
 
