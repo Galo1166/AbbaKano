@@ -53,6 +53,24 @@ function formatNaira(amount: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
 }
 
+function planCapacity(label: string) {
+  const match = label.match(/(\d+(?:\.\d+)?)\s*(KB|MB|GB|TB)/i);
+  if (!match) return Number.POSITIVE_INFINITY;
+  const amount = Number(match[1]);
+  const unit = match[2].toUpperCase();
+  return amount * (unit === "KB" ? 1 / 1024 : unit === "GB" ? 1024 : unit === "TB" ? 1024 * 1024 : 1);
+}
+
+function sortPlans(items: Plan[]) {
+  return [...items].sort((a, b) => {
+    const capacityDifference = planCapacity(a.label) - planCapacity(b.label);
+    if (capacityDifference !== 0) return capacityDifference;
+    const priceDifference = a.price - b.price;
+    if (priceDifference !== 0) return priceDifference;
+    return a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+  });
+}
+
 function detectNetwork(value: string): Network | null {
   const digits = value.replace(/\D/g, "").replace(/^234/, "0");
   const prefixes: Record<Network, string[]> = {
@@ -102,7 +120,7 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
       try {
         const nextPlans = await loadCachedPlans(network, reloadKey > 0);
         if (cancelled) return;
-        setPlans(nextPlans);
+        setPlans(sortPlans(nextPlans));
       } catch (error) {
         if (cancelled) return;
         setPlans([]);

@@ -32,6 +32,52 @@ function normalizeCategory(value: unknown): "GENERAL" | "SME" | "GIFTING" | "DIR
   return "GENERAL";
 }
 
+function capacityInMb(label: string): number {
+  const match = label.match(/(\d+(?:\.\d+)?)\s*(KB|MB|GB|TB)/i);
+  if (!match) return Number.POSITIVE_INFINITY;
+  const amount = Number(match[1]);
+  const unit = match[2].toUpperCase();
+  const multiplier = unit === "KB"
+    ? 1 / 1024
+    : unit === "GB"
+      ? 1024
+      : unit === "TB"
+        ? 1024 * 1024
+        : 1;
+  return amount * multiplier;
+}
+
+function durationRank(label: string): number {
+  const value = label.toLowerCase();
+  if (/\b(hour|hourly)\b/.test(value)) return 1;
+  if (/\b(day|daily)\b/.test(value)) return 2;
+  if (/\b(week|weekly)\b/.test(value)) return 3;
+  if (/\b(month|monthly|30\s*days?)\b/.test(value)) return 4;
+  if (/\b(quarter|quarterly|90\s*days?)\b/.test(value)) return 5;
+  if (/\b(year|yearly|annual)\b/.test(value)) return 6;
+  return 99;
+}
+
+function sortPlans(plans: Record<string, unknown>[]) {
+  return [...plans].sort((left, right) => {
+    const capacityDifference =
+      capacityInMb(String(left.label || "")) - capacityInMb(String(right.label || ""));
+    if (capacityDifference !== 0) return capacityDifference;
+
+    const durationDifference =
+      durationRank(String(left.label || "")) - durationRank(String(right.label || ""));
+    if (durationDifference !== 0) return durationDifference;
+
+    const priceDifference = Number(left.price || 0) - Number(right.price || 0);
+    if (priceDifference !== 0) return priceDifference;
+
+    return String(left.label || "").localeCompare(String(right.label || ""), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+}
+
 async function fetchVtuGate(
   baseUrl: string,
   apiKey: string,
@@ -205,7 +251,7 @@ Deno.serve(async (req) => {
       provider: "admin-catalog",
       purchaseAvailable: false,
     }));
-    const allPlans = [...plans, ...adminPlans];
+    const allPlans = sortPlans([...plans, ...adminPlans]);
     if (allPlans.length === 0) {
       return jsonResponse({
         plans: [],
@@ -214,7 +260,7 @@ Deno.serve(async (req) => {
     }
 
     const filteredPlans = category
-      ? allPlans.filter((plan) => String(plan.category).toUpperCase() === category)
+      ? sortPlans(allPlans.filter((plan) => String(plan.category).toUpperCase() === category))
       : allPlans;
     planCache.set(cacheKey, { plans: filteredPlans, expiresAt: Date.now() + 30000 });
     return jsonResponse({ plans: filteredPlans });
