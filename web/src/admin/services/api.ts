@@ -1,7 +1,6 @@
 // ============================================================
 // AbbaKano Admin Console — Data Fetching Service Layer
-// Connects to live backend via NEXT_PUBLIC_API_BASE_URL
-// Falls back gracefully to mock models if live server is offline.
+// Connects to live backend via NEXT_PUBLIC_API_BASE_URL and Supabase Edge Functions.
 // ============================================================
 
 import type {
@@ -21,15 +20,6 @@ import type {
 import { apiRequest } from "@/lib/api";
 import { invokeSupabaseFunction } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
-
-import {
-  mockTransactions,
-  mockStaffMembers,
-  mockMarginSettings,
-  mockCustomers,
-  mockSupportCases,
-  mockSystemSettings,
-} from "@admin/mock/data";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
@@ -204,9 +194,6 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-// Simulate async network latency for mock data
-const delay = (ms = 250) => new Promise<void>((res) => setTimeout(res, ms));
-
 function paginate<T>(arr: T[], page: number, pageSize: number): PaginatedResponse<T> {
   const start = (page - 1) * pageSize;
   return {
@@ -344,19 +331,23 @@ export async function saveMtnGeneralDataPlan(
 }
 
 export async function fetchTransactionById(id: string): Promise<ApiResponse<Transaction>> {
-  await delay(100);
-  const tx = mockTransactions.find((t) => t.id === id);
+  const response = await invokeSupabaseFunction<{ transactions: BackendTransaction[] }>(
+    "admin-transactions",
+    { page: 1, pageSize: 1, search: id },
+  );
+  const tx = response.transactions.find((transaction) => transaction.id === id);
   return {
     success: !!tx,
-    data: tx,
+    data: tx ? mapTransaction(tx) : undefined,
     error: tx ? undefined : "Transaction not found",
     timestamp: new Date().toISOString(),
   };
 }
 
 export async function retryTransaction(id: string): Promise<ApiResponse<{ queued: boolean }>> {
-  await delay(500);
-  return { success: true, data: { queued: true }, timestamp: new Date().toISOString() };
+  return apiRequest<ApiResponse<{ queued: boolean }>>(`/admin/transactions/${id}/retry`, {
+    method: "POST",
+  });
 }
 
 // ─── Inflows ──────────────────────────────────────────────────
@@ -446,12 +437,10 @@ export async function initiateProviderRefill(
   providerId: string,
   amount: number
 ): Promise<ApiResponse<{ transferRef: string }>> {
-  await delay(700);
-  return {
-    success: true,
-    data: { transferRef: `TRF${Date.now().toString().slice(-8)}` },
-    timestamp: new Date().toISOString(),
-  };
+  return apiRequest<ApiResponse<{ transferRef: string }>>(`/admin/providers/${providerId}/refill`, {
+    method: "POST",
+    body: JSON.stringify({ amount }),
+  });
 }
 
 // ─── Audit Logs ───────────────────────────────────────────────
@@ -546,34 +535,34 @@ export async function fetchAuditLogs(
 
 // ─── Staff / Roles ────────────────────────────────────────────
 export async function fetchStaffMembers(): Promise<StaffMember[]> {
-  await delay(200);
-  return mockStaffMembers;
+  const response = await apiRequest<{ staff: StaffMember[] }>("/admin/staff");
+  return response.staff;
 }
 
 export async function updateStaffMember(
   id: string,
   update: Partial<StaffMember>
 ): Promise<ApiResponse<StaffMember>> {
-  await delay(500);
-  const member = mockStaffMembers.find((s) => s.id === id);
-  if (!member) return { success: false, error: "Staff not found", timestamp: new Date().toISOString() };
-  return { success: true, data: { ...member, ...update }, timestamp: new Date().toISOString() };
+  return apiRequest<ApiResponse<StaffMember>>(`/admin/staff/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
 }
 
 // ─── Margin Settings ──────────────────────────────────────────
 export async function fetchMarginSettings(): Promise<MarginSetting[]> {
-  await delay(200);
-  return mockMarginSettings;
+  const response = await apiRequest<{ margins: MarginSetting[] }>("/admin/settings/margins");
+  return response.margins;
 }
 
 export async function updateMargins(
   carrier: string,
   update: Partial<MarginSetting>
 ): Promise<ApiResponse<MarginSetting>> {
-  await delay(500);
-  const setting = mockMarginSettings.find((m) => m.carrier === carrier);
-  if (!setting) return { success: false, error: "Carrier not found", timestamp: new Date().toISOString() };
-  return { success: true, data: { ...setting, ...update }, timestamp: new Date().toISOString() };
+  return apiRequest<ApiResponse<MarginSetting>>(`/admin/settings/margins/${carrier}`, {
+    method: "PATCH",
+    body: JSON.stringify(update),
+  });
 }
 
 // ─── Customers ────────────────────────────────────────────────
@@ -672,25 +661,22 @@ export async function adjustCustomerWallet(
 
 // ─── Support Cases ────────────────────────────────────────────
 export async function fetchSupportCases(): Promise<SupportCase[]> {
-  await delay(200);
-  return mockSupportCases;
+  const response = await apiRequest<{ cases: SupportCase[] }>("/admin/support/cases");
+  return response.cases;
 }
 
 // ─── System Settings ──────────────────────────────────────────
 export async function fetchSystemSettings(): Promise<SystemSettings> {
-  await delay(150);
-  return mockSystemSettings;
+  return apiRequest<SystemSettings>("/admin/settings");
 }
 
 export async function updateSystemSettings(
   updates: Partial<SystemSettings>
 ): Promise<ApiResponse<SystemSettings>> {
-  await delay(500);
-  return {
-    success: true,
-    data: { ...mockSystemSettings, ...updates },
-    timestamp: new Date().toISOString(),
-  };
+  return apiRequest<ApiResponse<SystemSettings>>("/admin/settings", {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
 }
 
 // ─── Dashboard Overview ───────────────────────────────────────

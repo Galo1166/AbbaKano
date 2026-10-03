@@ -1,7 +1,6 @@
 // ============================================================
 // AbbaKano Admin Console — TypeScript Domain Models
-// Designed for zero-refactor backend API integration.
-// Replace mock service returns with fetch('/api/...') calls.
+// Shared domain models for the live admin API.
 // ============================================================
 
 export type Carrier =
