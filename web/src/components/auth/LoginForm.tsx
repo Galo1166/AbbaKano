@@ -63,7 +63,6 @@ export function LoginForm() {
         throw sessionError || new Error("Login succeeded, but the session could not be restored.");
       }
 
-      setErrorMessage("Login successful. Opening your dashboard...");
       window.location.assign("/app");
 
     } catch (error) {
