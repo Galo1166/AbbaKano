@@ -308,8 +308,8 @@ export function ElectricityShell() {
               <div><span>Service</span><strong>{provider} Electricity</strong></div>
               <div><span>Meter Number</span><strong>{meterNumber.replace(/\D/g, '')}</strong></div>
               <div><span>Customer</span><strong>{customerName || 'Verified customer'}</strong></div>
-              <div><span>Current Wallet Balance</span><strong>{balance === null ? 'Loading...' : formatNaira(balance)}</strong></div>
-              <div><span>Balance After Transaction</span><strong>{balance === null ? 'Loading...' : formatNaira(balance - numericAmount)}</strong></div>
+              <div><span>Current Wallet Balance</span><strong>{balance === null ? '—' : formatNaira(balance)}</strong></div>
+              <div><span>Balance After Transaction</span><strong>{balance === null ? '—' : formatNaira(balance - numericAmount)}</strong></div>
             </div>
             <form className="data-pin-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void purchase(); }}>
               <label>

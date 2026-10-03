@@ -247,8 +247,8 @@ export function AirtimeShell() {
               <div><span>Service</span><strong>{selectedNetwork} Airtime Recharge</strong></div>
               <div><span>Beneficiary / Recipient</span><strong>{phone}</strong></div>
               <div><span>Payment Method</span><strong>AbbaKano Main Wallet</strong></div>
-              <div><span>Current Wallet Balance</span><strong>{balance === null ? "Loading..." : formatNaira(balance)}</strong></div>
-              <div><span>Balance After Transaction</span><strong>{balance === null ? "Loading..." : formatNaira(balance - numericAmount)}</strong></div>
+              <div><span>Current Wallet Balance</span><strong>{balance === null ? "—" : formatNaira(balance)}</strong></div>
+              <div><span>Balance After Transaction</span><strong>{balance === null ? "—" : formatNaira(balance - numericAmount)}</strong></div>
             </div>
             {message && <div className="data-message error" role="alert">{message}</div>}
             <form
