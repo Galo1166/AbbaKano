@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
+import { getWalletBalance, supabase } from "@/lib/supabase";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
@@ -42,6 +43,7 @@ export function AirtimeShell() {
   const [network, setNetwork] = useState<Network | null>(null);
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("500");
+  const [idempotencyKey, setIdempotencyKey] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
   const [pin, setPin] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
@@ -50,8 +52,27 @@ export function AirtimeShell() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   useEffect(() => {
-    void apiRequest<{ balance: number }>("/wallet").then((response) => setBalance(response.balance)).catch(() => {});
-  }, []);
+    let cancelled = false;
+
+    async function loadWalletBalance() {
+      const walletBalance = await getWalletBalance();
+      if (!cancelled) setBalance(walletBalance);
+    }
+
+    void loadWalletBalance().catch((error: unknown) => {
+      if (cancelled) return;
+      console.error("Airtime wallet balance load failed:", error);
+      if (error instanceof Error && error.message === "Authentication required.") {
+        router.replace("/login");
+        return;
+      }
+      setMessage("Could not load your wallet balance. Please try again.");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const numericAmount = Number(amount);
   const detected = detectNetwork(phone);
@@ -65,8 +86,9 @@ export function AirtimeShell() {
   }
 
   function updatePhone(value: string) {
-    setPhone(value);
-    const next = detectNetwork(value);
+    const normalized = value.replace(/\D/g, "").slice(0, 11);
+    setPhone(normalized);
+    const next = detectNetwork(normalized);
     if (next) setNetwork(next);
   }
 
@@ -74,9 +96,83 @@ export function AirtimeShell() {
     if (!selectedNetwork || !validPhone || !validAmount || (!transactionAuthorization && !/^\d{4}$/.test(pin))) { setMessage("Select a network, enter an 11-digit phone number, and authorize the payment."); return; }
     setPurchasing(true); setMessage("");
     try {
-      const result = await apiRequest<{ status?: string; message?: string; reference?: string }>("/vtu/airtime", { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ network: selectedNetwork, phone, amount: numericAmount, ...(transactionAuthorization ? { transactionAuthorization } : { pin }) }) });
-      setShowCheckout(false); setReceipt({ status: result.status === "pending" ? "pending" : "success", message: result.message || "Airtime recharge submitted successfully.", reference: result.reference, network: selectedNetwork, phone, amount: numericAmount }); setPin(""); window.dispatchEvent(new Event("dashboard-refresh"));
-    } catch (error) { setMessage(error instanceof ApiError ? error.message : "Could not complete airtime recharge."); }
+      let result: { status?: string; message?: string; reference?: string };
+
+      if (transactionAuthorization) {
+        result = await apiRequest<{ status?: string; message?: string; reference?: string }>("/vtu/airtime", {
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey || crypto.randomUUID() },
+          body: JSON.stringify({ network: selectedNetwork, phone, amount: numericAmount, transactionAuthorization }),
+        });
+      } else {
+        const requestKey = idempotencyKey || crypto.randomUUID();
+        setIdempotencyKey(requestKey);
+
+        const { data, error } = await supabase.functions.invoke<{
+          status?: string;
+          message?: string;
+          reference?: string;
+          balance_kobo?: number;
+        }>("purchase-airtime", {
+          body: {
+            network: selectedNetwork,
+            phone,
+            amount: numericAmount,
+            pin,
+            idempotencyKey: requestKey,
+          },
+        });
+
+        if (error) {
+          let message = error.message;
+          if (error.context instanceof Response) {
+            const response = error.context;
+            const payload = await response.clone().json().catch(() => null) as { message?: string } | null;
+            const responseMessage = payload?.message?.trim();
+
+            if (responseMessage) {
+              message = responseMessage;
+            } else if (response.status === 401) {
+              message = "Incorrect transaction PIN.";
+            }
+          }
+
+          if (/incorrect.*pin|pin.*incorrect/i.test(message)) {
+            message = "Incorrect PIN. Please try again.";
+          }
+
+          throw new Error(message);
+        }
+
+        if (!data) throw new Error("Airtime purchase returned no result.");
+        result = data;
+        if (typeof data.balance_kobo === "number") {
+          setBalance(data.balance_kobo / 100);
+        }
+      }
+
+      setShowCheckout(false);
+      setReceipt({
+        status: result.status === "success" ? "success" : "pending",
+        message: result.message || "Airtime recharge submitted successfully.",
+        reference: result.reference,
+        network: selectedNetwork,
+        phone,
+        amount: numericAmount,
+      });
+      setPin("");
+      setIdempotencyKey("");
+      window.dispatchEvent(new Event("dashboard-refresh"));
+    } catch (error) {
+      const errorMessage = error instanceof Error
+        ? error.message
+        : "Could not complete airtime recharge.";
+      setMessage(
+        /incorrect.*pin|pin.*incorrect/i.test(errorMessage)
+          ? "Incorrect PIN. Please try again."
+          : errorMessage,
+      );
+    }
     finally { setPurchasing(false); }
   }
 
@@ -99,14 +195,79 @@ export function AirtimeShell() {
       <section className="airtime-content">
         <div className="data-section-heading"><span>SELECT PROVIDER</span><small>{detected ? `${detected} detected` : "Choose a network"}</small></div>
         <div className="network-grid">{networks.map((item) => <button className={`network-card${selectedNetwork === item.id ? " selected" : ""}`} type="button" onClick={() => setNetwork(item.id)} key={item.id}><span className="network-logo" style={{ backgroundColor: item.color }}><Image src={item.logo} alt="" width={31} height={31} /></span><span>{item.label}</span>{selectedNetwork === item.id && <i />}</button>)}</div>
-        <label className="data-phone-label">Recipient Phone Number<input value={phone} onChange={(event) => updatePhone(event.target.value)} placeholder="Enter phone number" inputMode="tel" /></label>
+        <label className="data-phone-label">Recipient Phone Number        <input value={phone} onChange={(event) => updatePhone(event.target.value)} placeholder="Enter 11-digit phone number" inputMode="numeric" maxLength={11} /></label>
         <label className="airtime-amount-label">Amount<input value={amount} onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))} placeholder="Enter amount (min. N50)" inputMode="numeric" /></label>
         <div className="airtime-presets-heading">OR SELECT AMOUNT</div>
         <div className="airtime-presets">{presets.map((preset) => <button className={Number(amount) === preset ? "active" : ""} type="button" onClick={() => setAmount(String(preset))} key={preset}>{formatNaira(preset)}</button>)}</div>
-        {message && <div className="data-message error" role="alert">{message}</div>}
-        <button className="airtime-submit" type="button" disabled={!selectedNetwork || !validPhone || !validAmount || purchasing} onClick={() => { setMessage(""); setShowCheckout(true); }}>{purchasing ? "Processing..." : !validAmount ? "Enter an amount from N50" : !validPhone ? "Enter 11-digit phone number" : `Pay ${formatNaira(numericAmount)}`}</button>
+        {message && !showCheckout && <div className="data-message error" role="alert">{message}</div>}
+        <button className="airtime-submit" type="button" disabled={!selectedNetwork || !validPhone || !validAmount || purchasing} onClick={() => { setMessage(""); setIdempotencyKey(crypto.randomUUID()); setShowCheckout(true); }}>{purchasing ? "Processing..." : !validAmount ? "Enter an amount from N50" : !validPhone ? "Enter 11-digit phone number" : `Pay ${formatNaira(numericAmount)}`}</button>
       </section>
-      {showCheckout && selectedNetwork && <div className="data-modal-backdrop" role="presentation"><section className="data-modal review-modal" role="dialog" aria-modal="true" aria-labelledby="airtime-checkout-title"><button className="data-modal-close" type="button" onClick={() => setShowCheckout(false)} aria-label="Close checkout">x</button><p className="data-kicker">Review &amp; Confirm</p><h2 id="airtime-checkout-title">Transaction Summary</h2><div className="total-due"><span>TOTAL AMOUNT DUE</span><strong>{formatNaira(numericAmount)}</strong></div><div className="transaction-summary"><div><span>Service</span><strong>{selectedNetwork} Airtime Recharge</strong></div><div><span>Beneficiary / Recipient</span><strong>{phone}</strong></div><div><span>Payment Method</span><strong>AbbaKano Main Wallet</strong></div><div><span>Current Wallet Balance</span><strong>{balance === null ? "Loading..." : formatNaira(balance)}</strong></div><div><span>Balance After Transaction</span><strong>{balance === null ? "Loading..." : formatNaira(balance - numericAmount)}</strong></div></div><form className="data-pin-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void purchase(); }}><label>Transaction PIN<div className="pin-authorization-row"><input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} placeholder="Enter 4-digit PIN" /><button className="biometric-action" type="button" onClick={() => void authorizeBiometric()} aria-label="Authorize with biometrics" title="Authorize with biometrics"><Fingerprint /></button></div></label><button className="data-purchase-button" type="submit" disabled={purchasing}>{purchasing ? "Processing..." : "Confirm & Authorize PIN"}</button></form></section></div>}
+      {showCheckout && selectedNetwork && (
+        <div className="data-modal-backdrop" role="presentation">
+          <section
+            className="data-modal review-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="airtime-checkout-title"
+          >
+            <button
+              className="data-modal-close"
+              type="button"
+              onClick={() => setShowCheckout(false)}
+              aria-label="Close checkout"
+            >
+              x
+            </button>
+            <p className="data-kicker">Review &amp; Confirm</p>
+            <h2 id="airtime-checkout-title">Transaction Summary</h2>
+            <div className="total-due">
+              <span>TOTAL AMOUNT DUE</span>
+              <strong>{formatNaira(numericAmount)}</strong>
+            </div>
+            <div className="transaction-summary">
+              <div><span>Service</span><strong>{selectedNetwork} Airtime Recharge</strong></div>
+              <div><span>Beneficiary / Recipient</span><strong>{phone}</strong></div>
+              <div><span>Payment Method</span><strong>AbbaKano Main Wallet</strong></div>
+              <div><span>Current Wallet Balance</span><strong>{balance === null ? "Loading..." : formatNaira(balance)}</strong></div>
+              <div><span>Balance After Transaction</span><strong>{balance === null ? "Loading..." : formatNaira(balance - numericAmount)}</strong></div>
+            </div>
+            {message && <div className="data-message error" role="alert">{message}</div>}
+            <form
+              className="data-pin-form"
+              onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                event.preventDefault();
+                void purchase();
+              }}
+            >
+              <label>
+                Transaction PIN
+                <div className="pin-authorization-row">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={pin}
+                    onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))}
+                    placeholder="Enter 4-digit PIN"
+                  />
+                  <button
+                    className="biometric-action"
+                    type="button"
+                    onClick={() => void authorizeBiometric()}
+                    aria-label="Authorize with biometrics"
+                    title="Authorize with biometrics"
+                  >
+                    <Fingerprint />
+                  </button>
+                </div>
+              </label>
+              <button className="data-purchase-button" type="submit" disabled={purchasing}>
+                {purchasing ? "Processing..." : "Confirm & Authorize PIN"}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
       {receipt && <div className="data-modal-backdrop" role="presentation"><section className="data-modal receipt-modal airtime-receipt" role="dialog" aria-modal="true" aria-labelledby="airtime-receipt-title"><div className={`receipt-mark ${receipt.status}`}>{receipt.status === "pending" ? "..." : <SuccessIcon />}</div><p className="data-kicker">{receipt.status === "pending" ? "Transaction Pending" : "Transaction Successful"}</p><h2 id="airtime-receipt-title">{receipt.network} Airtime Recharge</h2><p className="receipt-lead">{receipt.status === "pending" ? receipt.message : "Payment processed and delivered instantly"}</p><div className="airtime-receipt-amount"><span>AMOUNT PAID</span><strong>{formatNaira(receipt.amount)}</strong></div><div className="transaction-summary airtime-receipt-details"><div><span>Reference ID</span><strong>{receipt.reference || "Pending"}</strong></div><div><span>Beneficiary</span><strong>{receipt.phone}</strong></div><div><span>Payment Method</span><strong>AbbaKano Wallet</strong></div><div><span>Status</span><strong className="receipt-complete">{receipt.status === "pending" ? "PENDING" : "COMPLETED"}</strong></div></div><button className="receipt-done-button" type="button" onClick={() => { setReceipt(null); goHome(); }}>Back to Dashboard</button></section></div>}
       <WebBottomNav active="home" />
     </main>

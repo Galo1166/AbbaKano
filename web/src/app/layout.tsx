@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { BackendWarmup } from "@/components/common/BackendWarmup";
+import { AuthPrompt } from "@/components/auth/AuthPrompt";
 
 export const metadata: Metadata = {
   title: "AbbaKano DataSub",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body>
         <BackendWarmup />
+        <AuthPrompt />
         <a className="skip-link" href="#main-content">Skip to main content</a>
         {children}
       </body>

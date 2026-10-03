@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { fetchAuditLogs } from "@admin/services/api";
+import { formatTimeAgo } from "@admin/lib/utils";
 import PageHeader from "@admin/components/layout/PageHeader";
 
 interface NotificationItem {
-  id: number;
+  id: string;
   title: string;
   message: string;
   type: "critical" | "warning" | "info" | "success";
@@ -14,53 +16,30 @@ interface NotificationItem {
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState<string>("ALL");
-  const [items, setItems] = useState<NotificationItem[]>([
-    {
-      id: 1,
-      title: "9mobile Liquidity Buffer Depleted",
-      message:
-        "9mobile Gateway vault is below ₦100,000 threshold. Refill required to maintain active dispatch queue.",
-      type: "critical",
-      time: "2 minutes ago",
-      read: false,
-    },
-    {
-      id: 2,
-      title: "Super Admin Wallet Adjustment",
-      message:
-        "Abba Kano credited ₦50,000 to customer Usman Garba. Dual-factor authorization logged to audit ledger.",
-      type: "warning",
-      time: "1 hour ago",
-      read: false,
-    },
-    {
-      id: 3,
-      title: "Daily Settlement Report Ready",
-      message:
-        "The daily financial settlement report for today is compiled and ready for review.",
-      type: "info",
-      time: "3 hours ago",
-      read: true,
-    },
-    {
-      id: 4,
-      title: "Reseller Network Milestone Reached",
-      message:
-        "AbbaKano portal has surpassed 14,890 registered reseller accounts. 84 new partners onboarded today.",
-      type: "success",
-      time: "5 hours ago",
-      read: true,
-    },
-    {
-      id: 5,
-      title: "MTN Wholesale SME Margin Adjusted",
-      message:
-        "Wholesale spread for MTN 1GB SME data updated from ₦25 to ₦30 by Finance Officer Amina Yusuf.",
-      type: "info",
-      time: "8 hours ago",
-      read: true,
-    },
-  ]);
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAuditLogs(1, 50, { stream: "admin" })
+      .then((response) => {
+        if (cancelled) return;
+        setItems(response.data.map((entry) => ({
+          id: entry.id,
+          title: entry.action.replace(/[._]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+          message: `${entry.staffName}: ${entry.details}`,
+          type: entry.action.includes("delete") ? "critical" : entry.action.includes("update") ? "warning" : "info",
+          time: formatTimeAgo(entry.timestamp),
+          read: false,
+        })));
+        setErrorMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setErrorMessage(error instanceof Error ? error.message : "Unable to load administrator activity.");
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const typeConfig: Record<
     string,
@@ -100,7 +79,7 @@ export default function NotificationsPage() {
     setItems((prev) => prev.map((item) => ({ ...item, read: true })));
   };
 
-  const handleToggleRead = (id: number) => {
+  const handleToggleRead = (id: string) => {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, read: !item.read } : item))
     );
@@ -121,7 +100,7 @@ export default function NotificationsPage() {
       <PageHeader
         breadcrumbs={["Administration", "System Notifications"]}
         title="Notifications & System Alerts"
-        description="Real-time telecommunication pipeline events, balance threshold warnings, and security audits."
+        description="Administrator actions and security events recorded by Supabase."
         actions={
           <div className="flex items-center gap-2">
             {unreadCount > 0 && (
@@ -136,6 +115,12 @@ export default function NotificationsPage() {
           </div>
         }
       />
+
+      {errorMessage && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-800" role="alert">
+          {errorMessage}
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -160,9 +145,7 @@ export default function NotificationsPage() {
           ))}
         </div>
 
-        <span className="text-xs text-outline">
-          Real-time system updates
-        </span>
+        <span className="text-xs text-outline">Administrator activity from Supabase audit logs</span>
       </div>
 
       {/* Notification Cards Stream */}

@@ -3,11 +3,24 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { startAuthentication } from "@simplewebauthn/browser";
-import { apiRequest, ApiError } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
+
+function normalizePhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const local = digits.startsWith("234")
+    ? digits.slice(3)
+    : digits.startsWith("0")
+      ? digits.slice(1)
+      : digits;
+  if (!/^[789]\d{9}$/.test(local)) {
+    throw new Error("Enter a valid Nigerian phone number.");
+  }
+  return `+234${local}`;
+}
 
 export function LoginForm() {
   const router = useRouter();
+
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [rememberDevice, setRememberDevice] = useState(false);
@@ -17,64 +30,159 @@ export function LoginForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     setErrorMessage("");
-    if (!identifier.trim() || !password) {
-      setErrorMessage("Enter your phone number or email and password.");
+
+    const value = identifier.trim();
+
+    if (!value || !password) {
+      setErrorMessage(
+        "Enter your email and password."
+      );
       return;
     }
 
     setLoading(true);
+
     try {
-      await apiRequest("/login", { method: "POST", body: JSON.stringify({ identifier: identifier.trim(), password }) });
+      const credentials = value.includes("@")
+        ? { email: value.toLowerCase(), password }
+        : { phone: normalizePhone(value), password };
+      const { data, error } = await supabase.auth.signInWithPassword(credentials);
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.user) {
+        throw new Error("Could not create a login session.");
+      }
+
       router.push("/app");
+      router.refresh();
+
     } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : "Could not sign in.");
+      console.error("Supabase login error:", error);
+
+      setErrorMessage(
+        error instanceof Error && error.message === "Invalid login credentials"
+          ? "Supabase could not verify this email and password. If your account was only created on the previous system, it may need to be registered or migrated before you can sign in."
+          : error instanceof Error
+            ? error.message
+            : "Could not sign in."
+      );
     } finally {
       setLoading(false);
     }
   }
 
   async function handleBiometricSignIn() {
-    setErrorMessage("");
-    const accountIdentifier = identifier.trim();
-    if (!accountIdentifier) {
-      setErrorMessage("Enter the phone number or email for your passkey account first.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const options = await apiRequest<Record<string, unknown>>("/auth/passkey/login/options", {
-        method: "POST",
-        body: JSON.stringify({ identifier: accountIdentifier }),
-      });
-      const response = await startAuthentication({ optionsJSON: options as never });
-      await apiRequest("/auth/passkey/login/verify", {
-        method: "POST",
-        body: JSON.stringify({ identifier: accountIdentifier, response }),
-      });
-      router.push("/app");
-    } catch (error) {
-      setErrorMessage(error instanceof ApiError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "Could not complete biometric sign-in.");
-    } finally {
-      setLoading(false);
-    }
+    setErrorMessage(
+      "Passkey/biometric login will be migrated to Supabase in the next step."
+    );
   }
 
   return (
-    <form className="auth-form" onSubmit={handleSubmit}>
-      {errorMessage && <div className="auth-error" role="alert">{errorMessage}</div>}
-      <label>Mobile Number or Email<input value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="Enter phone number or email" autoComplete="username" /></label>
-      <label>Password<div className="auth-input-wrap"><input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" /><button className="input-action" type="button" onClick={() => setShowPassword((current) => !current)}>{showPassword ? "Hide" : "Show"}</button></div></label>
-      <div className="auth-options"><label className="check-label"><input type="checkbox" checked={rememberDevice} onChange={(event) => setRememberDevice(event.target.checked)} /> Remember this device</label><Link href="/forgot-password">Forgot Password?</Link></div>
-      <button className="auth-primary" type="submit" disabled={loading}>{loading ? "Signing in..." : "Secured Sign In to Wallet"}</button>
-      <div className="auth-divider"><span>Or continue with</span></div>
-      <button className="auth-secondary" type="button" onClick={() => void handleBiometricSignIn()} disabled={loading}>{loading ? "Verifying..." : "Sign In with Biometrics"}</button>
-      <p className="auth-help">Need help? <Link href="/support">Contact WhatsApp Support</Link></p>
+    <form
+      className="auth-form"
+      onSubmit={handleSubmit}
+    >
+      {errorMessage && (
+        <div
+          className="auth-error"
+          role="alert"
+        >
+          {errorMessage}
+        </div>
+      )}
+
+      <label>
+        Email
+
+        <input
+          value={identifier}
+          onChange={(event) =>
+            setIdentifier(event.target.value)
+          }
+          placeholder="Enter your email"
+          autoComplete="username"
+          type="email"
+        />
+      </label>
+
+      <label>
+        Password
+
+        <div className="auth-input-wrap">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(event) =>
+              setPassword(event.target.value)
+            }
+            placeholder="Enter your password"
+            autoComplete="current-password"
+          />
+
+          <button
+            className="input-action"
+            type="button"
+            onClick={() =>
+              setShowPassword((current) => !current)
+            }
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
+      </label>
+
+      <div className="auth-options">
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={rememberDevice}
+            onChange={(event) =>
+              setRememberDevice(event.target.checked)
+            }
+          />
+
+          Remember this device
+        </label>
+
+        <Link href="/forgot-password">
+          Forgot Password?
+        </Link>
+      </div>
+
+      <button
+        className="auth-primary"
+        type="submit"
+        disabled={loading}
+      >
+        {loading
+          ? "Signing in..."
+          : "Secured Sign In to Wallet"}
+      </button>
+
+      <div className="auth-divider">
+        <span>Or continue with</span>
+      </div>
+
+      <button
+        className="auth-secondary"
+        type="button"
+        onClick={() => void handleBiometricSignIn()}
+        disabled={loading}
+      >
+        Sign In with Biometrics
+      </button>
+
+      <p className="auth-help">
+        Need help?{" "}
+        <Link href="/support">
+          Contact WhatsApp Support
+        </Link>
+      </p>
     </form>
   );
 }

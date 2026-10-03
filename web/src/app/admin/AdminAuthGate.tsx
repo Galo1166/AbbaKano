@@ -6,36 +6,27 @@ import Sidebar from "@admin/components/layout/Sidebar";
 import TopNav from "@admin/components/layout/TopNav";
 import { SidebarProvider } from "@admin/context/SidebarContext";
 import { fetchAdminSession } from "@admin/services/api";
+import { supabase } from "@/lib/supabase";
 
 export default function AdminAuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [checking, setChecking] = useState(pathname !== "/admin/login");
-  const [authorized, setAuthorized] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<"checking" | "authorized" | "unauthorized">("checking");
 
   useEffect(() => {
-    if (pathname === "/admin/login") {
-      setChecking(false);
-      setAuthorized(false);
-      return;
-    }
-
-    if (authorized) return;
+    if (pathname === "/admin/login") return;
 
     let isCancelled = false;
-    setChecking(true);
 
     fetchAdminSession()
       .then(() => {
         if (!isCancelled) {
-          setAuthorized(true);
-          setChecking(false);
+          setSessionStatus("authorized");
         }
       })
       .catch(() => {
         if (!isCancelled) {
-          setAuthorized(false);
-          setChecking(false);
+          setSessionStatus("unauthorized");
           router.replace("/admin/login");
         }
       });
@@ -43,17 +34,29 @@ export default function AdminAuthGate({ children }: { children: React.ReactNode 
     return () => {
       isCancelled = true;
     };
-  }, [authorized, pathname, router]);
+  }, [pathname, router]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!session || session.user.app_metadata.admin_role !== "super_admin") {
+          setSessionStatus("unauthorized");
+          router.replace("/admin/login");
+        }
+      },
+    );
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
 
-  if (checking) {
+  if (sessionStatus === "checking") {
     return null;
   }
 
-  if (!authorized) {
+  if (sessionStatus !== "authorized") {
     return null;
   }
 

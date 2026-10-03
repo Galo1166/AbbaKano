@@ -1,9 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { apiRequest, ApiError } from "@/lib/api";
+import {supabase} from "@/lib/supabase";
+
+function subscribeToLocation(callback: () => void) {
+  window.addEventListener("popstate", callback);
+  return () => window.removeEventListener("popstate", callback);
+}
+
+function useLocationSearch() {
+  return useSyncExternalStore(
+    subscribeToLocation,
+    () => window.location.search,
+    () => "",
+  );
+}
 
 function VisibilityIcon({ visible }: { visible: boolean }) {
   return visible
@@ -13,8 +26,12 @@ function VisibilityIcon({ visible }: { visible: boolean }) {
 
 export function RegisterForm() {
   const router = useRouter();
+  const referralCodeFromUrl =
+    new URLSearchParams(useLocationSearch()).get("referralCode") || "";
   const [values, setValues] = useState({ fullName: "", phone: "", email: "", password: "", confirmPassword: "", pin: "", confirmPin: "", referralCode: "" });
-  const [showReferral, setShowReferral] = useState(false);
+  const [showReferral, setShowReferral] = useState(() =>
+    false,
+  );
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -29,7 +46,13 @@ export function RegisterForm() {
 
   function validate() {
     if (!values.fullName.trim() || !values.phone.trim()) return "Full name and phone number are required.";
-    if (values.email && !values.email.includes("@")) return "Enter a valid email address.";
+    if (!values.email.trim()) {
+  return "Email address is required.";
+}
+
+if (!values.email.includes("@")) {
+  return "Enter a valid email address.";
+}
     if (values.password.length < 8) return "Password must be at least 8 characters.";
     if (values.password !== values.confirmPassword) return "Passwords do not match.";
     if (!/^\d{4}$/.test(values.pin)) return "Transaction PIN must be exactly 4 digits.";
@@ -38,35 +61,114 @@ export function RegisterForm() {
     return "";
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const validationError = validate();
-    setErrorMessage(validationError);
-    if (validationError) return;
+ async function handleSubmit(
+  event: FormEvent<HTMLFormElement>,
+) {
+  event.preventDefault();
 
-    setLoading(true);
-    try {
-      await apiRequest("/signup", { method: "POST", body: JSON.stringify({ fullName: values.fullName.trim(), phone: values.phone.trim(), email: values.email || undefined, password: values.password, pin: values.pin, referralCode: values.referralCode || undefined }) });
-      router.push("/app");
-    } catch (error) {
-      setErrorMessage(error instanceof ApiError ? error.message : "Could not create your account.");
-    } finally {
-      setLoading(false);
-    }
+  const validationError =
+    validate();
+
+  setErrorMessage(
+    validationError,
+  );
+
+  if (validationError) {
+    return;
   }
+
+  setLoading(true);
+
+  try {
+    const {
+      data,
+      error,
+    } = await supabase.functions.invoke(
+      "register-user",
+      {
+        body: {
+          fullName:
+            values.fullName.trim(),
+
+          phone:
+            values.phone.trim(),
+
+          email:
+            values.email.trim(),
+
+          password:
+            values.password,
+
+          pin:
+            values.pin,
+
+          referralCode:
+            values.referralCode.trim() || referralCodeFromUrl,
+        },
+      },
+    );
+
+    if (error) {
+      console.error(
+        "Registration Edge Function error:",
+        error,
+      );
+
+      throw new Error(
+        error.message ||
+          "Could not create your account.",
+      );
+    }
+
+    if (!data) {
+      throw new Error(
+        "Could not create your account.",
+      );
+    }
+
+    /*
+     * The Edge Function has created the
+     * Supabase Auth account.
+     *
+     * Now sign the browser into that account.
+     *
+     * Email is optional in your registration,
+     * so password authentication without email
+     * cannot use signInWithPassword.
+     *
+     * We therefore redirect to login for now.
+     */
+    router.push(
+      "/login?registered=true",
+    );
+  } catch (error) {
+    console.error(
+      "Registration error:",
+      error,
+    );
+
+    setErrorMessage(
+      error instanceof Error
+        ? error.message
+        : "Could not create your account.",
+    );
+  } finally {
+    setLoading(false);
+  }
+}
 
   return (
     <form className="auth-form register-form" onSubmit={handleSubmit}>
       {errorMessage && <div className="auth-error" role="alert">{errorMessage}</div>}
       <label>Full Name<input value={values.fullName} onChange={(event) => updateValue("fullName", event.target.value)} placeholder="Enter full name" autoComplete="name" /></label>
-      <label>Phone Number <small>Mandatory</small><div className="phone-input"><span>+234</span><input value={values.phone} onChange={(event) => updateValue("phone", event.target.value)} placeholder="Enter phone number" autoComplete="tel" /></div></label>
+      <label>Phone Number <small>Mandatory · 11 digits</small><div className="phone-input"><span>+234</span><input value={values.phone} onChange={(event) => updateValue("phone", event.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="Enter phone number" autoComplete="tel" inputMode="numeric" maxLength={11} /></div></label>
       <label>Email Address <small>Optional</small><input value={values.email} onChange={(event) => updateValue("email", event.target.value)} placeholder="Enter email address" autoComplete="email" /></label>
       <label>Password<div className="auth-input-wrap"><input type={showPassword ? "text" : "password"} value={values.password} onChange={(event) => updateValue("password", event.target.value)} placeholder="Enter password (min. 8 characters)" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Hide password" : "Show password"}><VisibilityIcon visible={showPassword} /></button></div></label>
       <label>Confirm Password<div className="auth-input-wrap"><input type={showConfirmPassword ? "text" : "password"} value={values.confirmPassword} onChange={(event) => updateValue("confirmPassword", event.target.value)} placeholder="Re-enter password" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowConfirmPassword((current) => !current)} aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}><VisibilityIcon visible={showConfirmPassword} /></button></div></label>
       <label>Transaction PIN <small>4 digits for wallet security</small><div className="auth-input-wrap"><input type={showPin ? "text" : "password"} inputMode="numeric" maxLength={4} value={values.pin} onChange={(event) => updateValue("pin", event.target.value.replace(/\D/g, ""))} placeholder="Enter 4-digit PIN" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowPin((current) => !current)} aria-label={showPin ? "Hide transaction PIN" : "Show transaction PIN"}><VisibilityIcon visible={showPin} /></button></div></label>
       <label>Confirm Transaction PIN<div className="auth-input-wrap"><input type={showConfirmPin ? "text" : "password"} inputMode="numeric" maxLength={4} value={values.confirmPin} onChange={(event) => updateValue("confirmPin", event.target.value.replace(/\D/g, ""))} placeholder="Re-enter 4-digit PIN" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowConfirmPin((current) => !current)} aria-label={showConfirmPin ? "Hide confirmed transaction PIN" : "Show confirmed transaction PIN"}><VisibilityIcon visible={showConfirmPin} /></button></div></label>
       <button className="referral-toggle" type="button" onClick={() => setShowReferral((current) => !current)}>{showReferral ? "Hide referral code" : "Have a Referral Code (Phone No)?"}</button>
-      {showReferral && <label>Referral Code <small className="bonus">N100 BONUS</small><input value={values.referralCode} onChange={(event) => updateValue("referralCode", event.target.value)} placeholder="Enter referrer's phone number" /></label>}
+      {(showReferral || referralCodeFromUrl) && <label>Referral Code <small className="bonus">N100 BONUS</small><input value={values.referralCode || referralCodeFromUrl} onChange={(event) => updateValue("referralCode", event.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="Enter referrer's phone number" inputMode="numeric" maxLength={11} /></label>}
       <label className="check-label terms"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} /> I agree to the <Link href="/terms">Terms of Service</Link> and <Link href="/privacy">Privacy Policy</Link>.</label>
       <button className="auth-primary" type="submit" disabled={loading}>{loading ? "Creating Account..." : "Register & Get Started"}</button>
       <p className="security-note">256-bit secure registration. We never share your data.</p>

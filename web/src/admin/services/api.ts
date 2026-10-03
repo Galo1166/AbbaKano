@@ -19,6 +19,8 @@ import type {
   ApiResponse,
 } from "@admin/types/telecom";
 import { apiRequest } from "@/lib/api";
+import { invokeSupabaseFunction } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 import {
   mockTransactions,
@@ -45,7 +47,19 @@ export type DashboardOverview = {
   carrierBreakdown: Record<Carrier, { percentage: number; amount: number }>;
 };
 
-type Carrier =
+export type DashboardTrendPoint = {
+  label: string;
+  sales: number;
+  deposits: number;
+};
+
+export type AdminOverviewSnapshot = {
+  overview: DashboardOverview;
+  transactions: Transaction[];
+  trend: DashboardTrendPoint[];
+};
+
+export type Carrier =
   | "MTN"
   | "AIRTEL"
   | "GLO"
@@ -78,7 +92,7 @@ function normalizeCarrierName(value: string | null | undefined): Carrier {
 
 export type AdminSession = {
   admin: {
-    id: number;
+    id: string;
     username: string;
     full_name: string;
     email: string | null;
@@ -88,17 +102,36 @@ export type AdminSession = {
   permissions: string[];
 };
 
-export function fetchAdminSession(): Promise<AdminSession> {
-  return apiRequest<AdminSession>("/admin/auth/me");
+export async function fetchAdminSession(): Promise<AdminSession> {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  if (!user) throw new Error("Sign in to continue.");
+  if (user.app_metadata.admin_role !== "super_admin") {
+    throw new Error("This account is not authorized for the Admin Portal.");
+  }
+
+  return {
+    admin: {
+      id: user.id,
+      username: user.email || user.id,
+      full_name: String(user.user_metadata.full_name || user.user_metadata.name || "Super Administrator"),
+      email: user.email || null,
+      role: "super_admin",
+      status: "active",
+    },
+    permissions: ["*"],
+  };
 }
 
-export function logoutAdmin(): Promise<void> {
-  return apiRequest<void>("/admin/auth/logout", { method: "POST" });
+export async function logoutAdmin(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }
 
 type BackendTransaction = {
   id: string;
   type: string;
+  plan?: string;
   network: string;
   phone: string;
   amount: number;
@@ -129,11 +162,13 @@ function mapTransaction(transaction: BackendTransaction): Transaction {
     customerName: transaction.username,
     carrier,
     serviceType,
-    plan: transaction.type,
+    plan: transaction.plan || transaction.type,
     wholesaleCost: 0,
     sellingPrice: transaction.amount,
     profitMargin: 0,
-    status: transaction.status.toUpperCase() as Transaction["status"],
+    status: transaction.status.toUpperCase() === "PROCESSING"
+      ? "PENDING"
+      : transaction.status.toUpperCase() as Transaction["status"],
     gateway: transaction.provider || "Unknown provider",
     timestamp: transaction.created_at,
   };
@@ -218,6 +253,77 @@ export async function fetchTransactions(
   return paginate(results, page, pageSize);
 }
 
+export type AdminTransactionMetrics = {
+  stalledDisputed: number;
+  refunded: number;
+  queued: number;
+};
+
+export async function fetchAdminTransactions(
+  page: number,
+  pageSize: number,
+  filters: { status?: string; carrier?: string; search?: string },
+): Promise<PaginatedResponse<Transaction> & { metrics: AdminTransactionMetrics }> {
+  const response = await invokeSupabaseFunction<{
+    transactions: BackendTransaction[];
+    total: number;
+    metrics: AdminTransactionMetrics;
+  }>("admin-transactions", {
+    page,
+    pageSize,
+    status: filters.status || null,
+    carrier: filters.carrier || null,
+    search: filters.search || null,
+  });
+  const data = response.transactions.map(mapTransaction);
+  return {
+    data,
+    total: response.total,
+    page,
+    pageSize,
+    hasNextPage: page * pageSize < response.total,
+    metrics: response.metrics,
+  };
+}
+
+export type AdminVtuService = {
+  id: string;
+  type: string;
+  network: string;
+  name: string;
+};
+
+export async function fetchAdminVtuServices(): Promise<{
+  provider: string;
+  checkedAt: string;
+  services: AdminVtuService[];
+}> {
+  return invokeSupabaseFunction<{
+    provider: string;
+    checkedAt: string;
+    services: AdminVtuService[];
+  }>("admin-vtu-services", {});
+}
+
+export type AdminVtuPlan = {
+  id: number;
+  network: "MTN" | "AIRTEL" | "GLO" | "9MOBILE";
+  category: "GENERAL" | "SME" | "GIFTING" | "DIRECT";
+  capacity: string;
+  capacity_mb: number;
+  duration: "daily" | "weekly" | "monthly";
+  price_kobo: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function manageAdminVtuPlans(
+  payload: Record<string, unknown>,
+): Promise<{ plans?: AdminVtuPlan[]; plan?: AdminVtuPlan; deleted?: boolean }> {
+  return invokeSupabaseFunction("admin-vtu-plans", payload);
+}
+
 export async function fetchMtnGeneralDataPlans(): Promise<MtnGeneralDataPlan[]> {
   const response = await apiRequest<{ plans: MtnGeneralDataPlan[] }>("/admin/vtu-data-plans/mtn-general");
   return response.plans;
@@ -257,60 +363,70 @@ export async function retryTransaction(id: string): Promise<ApiResponse<{ queued
 export async function fetchInflows(
   page = 1,
   pageSize = 20,
-  filters?: { status?: string; bank?: string }
-): Promise<PaginatedResponse<InflowRecord>> {
-  const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
-  if (filters?.status) {
-    const statusMap: Record<string, string> = {
-      SETTLED: "success",
-      PENDING_SETTLEMENT: "pending",
-      FAILED: "failed",
-    };
-    if (statusMap[filters.status]) params.set("status", statusMap[filters.status]);
-  }
-  if (filters?.bank) params.set("q", filters.bank);
-  const response = await apiRequest<{ deposits: Array<{
+  filters?: { status?: string; bank?: string; search?: string }
+): Promise<PaginatedResponse<InflowRecord> & {
+  metrics: { totalCount: number; totalAmount: number; settledAmount: number; failedCount: number };
+}> {
+  const statusMap: Record<string, string> = {
+    SETTLED: "success",
+    PENDING_SETTLEMENT: "pending",
+    FAILED: "failed",
+  };
+  const response = await invokeSupabaseFunction<{
+    deposits: Array<{
     id: string;
-    customerName: string;
-    customerPhone: string | null;
-    virtualAccount: string | null;
-    bankName: string | null;
-    bankRef: string;
-    sessionRef: string;
+    customer_name: string;
+    customer_phone: string;
+    virtual_account: string;
+    bank_name: string;
+    bank_reference: string;
+    session_reference: string;
     amount: number;
     status: "success" | "pending" | "failed";
-    settledAt: string;
-  }>; total: number; page: number; limit: number }>(`/admin/deposits?${params.toString()}`);
+    created_at: string;
+    settled_at: string;
+  }>;
+    total: number;
+    page: number;
+    pageSize: number;
+    metrics: { totalCount: number; totalAmount: number; settledAmount: number; failedCount: number };
+  }>("admin-deposits", {
+    page,
+    pageSize,
+    status: filters?.status ? statusMap[filters.status] || null : null,
+    search: filters?.search || filters?.bank || null,
+  });
   return {
     data: response.deposits.map((deposit) => ({
       id: deposit.id,
-      customerName: deposit.customerName,
-      virtualAccount: deposit.virtualAccount || "Not assigned",
-      bankName: deposit.bankName || "Bank source unavailable",
-      bankRef: deposit.bankRef,
+      customerName: deposit.customer_name,
+      virtualAccount: deposit.virtual_account,
+      bankName: deposit.bank_name,
+      bankRef: deposit.bank_reference,
+      sessionRef: deposit.session_reference,
       amount: deposit.amount,
-      sessionRef: deposit.sessionRef,
-      settledAt: deposit.settledAt,
+      settledAt: deposit.settled_at || deposit.created_at,
       status: deposit.status === "success" ? "SETTLED" : deposit.status === "pending" ? "PENDING_SETTLEMENT" : "FAILED",
     })),
     total: response.total,
     page: response.page,
-    pageSize: response.limit,
-    hasNextPage: response.page * response.limit < response.total,
+    pageSize: response.pageSize,
+    hasNextPage: response.page * response.pageSize < response.total,
+    metrics: response.metrics,
   };
 }
 
 // ─── Provider Balances ────────────────────────────────────────
 export async function fetchProviderBalances(): Promise<ProviderBalance[]> {
-  const response = await apiRequest<{
+  const response = await invokeSupabaseFunction<{
     provider: "VTUGATE";
     providerName: string;
     balance: number;
-    status: "HEALTHY" | "CRITICAL";
+    status: ProviderBalance["status"];
     lastCheckedAt: string;
     lowBalanceThreshold: number;
     fundingOptions: ProviderFundingOption[];
-  }>("/admin/provider-balance");
+  }>("admin-provider-balances", {});
   return [{
     id: "vtugate",
     providerName: response.providerName,
@@ -353,9 +469,21 @@ function parseAuditDetails(details: unknown): string {
     const data = details as Record<string, unknown>;
     const parts: string[] = [];
     if (typeof data.target === "string" && data.target) parts.push(`Target: ${data.target}`);
+    if (typeof data.planId !== "undefined") parts.push(`Plan ID: ${String(data.planId)}`);
+    if (typeof data.network === "string") parts.push(`Network: ${data.network}`);
+    if (typeof data.category === "string") parts.push(`Category: ${data.category}`);
+    if (typeof data.capacityMb !== "undefined") parts.push(`Capacity: ${String(data.capacityMb)} MB`);
+    if (typeof data.duration === "string") parts.push(`Duration: ${data.duration}`);
+    if (typeof data.reference === "string") parts.push(`Reference: ${data.reference}`);
+    if (typeof data.transactionType === "string") parts.push(`Service: ${data.transactionType}`);
     if (typeof data.reason === "string" && data.reason) parts.push(`Reason: ${data.reason}`);
     if (typeof data.before !== "undefined" && typeof data.after !== "undefined") {
       parts.push(`Status: ${String(data.before)} → ${String(data.after)}`);
+    }
+    if (typeof data.previousStatus === "string" && typeof data.status === "string") {
+      parts.push(`Status: ${data.previousStatus} → ${data.status}`);
+    } else if (typeof data.status === "string") {
+      parts.push(`Status: ${data.status}`);
     }
     if (typeof data.amount !== "undefined") parts.push(`Amount: ₦${Number(data.amount).toLocaleString()}`);
     if (typeof data.direction === "string") parts.push(`${data.direction === "credit" ? "Credited" : "Debited"} wallet`);
@@ -368,37 +496,52 @@ function parseAuditDetails(details: unknown): string {
 export async function fetchAuditLogs(
   page = 1,
   pageSize = 20,
-  filters?: { staffName?: string; action?: string }
-): Promise<PaginatedResponse<AuditLog>> {
-  const response = await apiRequest<{ auditLog: Array<{
-    id: string;
-    action: string;
-    details: unknown;
-    ip_address?: string | null;
-    created_at: string;
-    actor?: string | null;
-  }> }>("/admin/audit-log");
+  filters?: { staffName?: string; action?: string; search?: string; stream?: "user" | "admin" }
+): Promise<PaginatedResponse<AuditLog> & {
+  metrics: { totalEvents: number; depositEvents: number; vtuEvents: number };
+}> {
+  const response = await invokeSupabaseFunction<{
+    auditLogs: Array<{
+      id: string;
+      action: string;
+      details: unknown;
+      ip_address?: string | null;
+      created_at: string;
+      actor?: string | null;
+      role?: string | null;
+    }>;
+    total: number;
+    page: number;
+    pageSize: number;
+    metrics: { totalEvents: number; depositEvents: number; vtuEvents: number };
+  }>("admin-audit-logs", {
+    page,
+    pageSize,
+    action: filters?.action || null,
+    search: filters?.search || filters?.staffName || null,
+    stream: filters?.stream || "user",
+  });
 
-  let results = (response.auditLog || []).map((entry) => ({
+  const results = response.auditLogs.map((entry) => ({
     id: String(entry.id),
     staffName: entry.actor || "System",
-    role: "ADMIN" as const,
-    action: (entry.action as AuditLog["action"]) || "admin.user_status_changed",
+    role: (entry.role?.toUpperCase() || "SYSTEM") as AuditLog["role"],
+    action: entry.action as AuditLog["action"],
     target: typeof entry.details === "object" && entry.details && "target" in entry.details ? String((entry.details as Record<string, unknown>).target ?? "Admin action") : "Admin action",
     details: parseAuditDetails(entry.details),
-    device: "Admin Console",
+    device: entry.role?.toUpperCase() === "SYSTEM" ? "Supabase event trigger" : "Admin Console",
     ipAddress: entry.ip_address || undefined,
     timestamp: entry.created_at,
   }));
 
-  if (filters?.staffName) {
-    results = results.filter((log) => log.staffName.toLowerCase().includes(filters.staffName!.toLowerCase()));
-  }
-  if (filters?.action) {
-    results = results.filter((log) => log.action === filters.action);
-  }
-
-  return paginate(results, page, pageSize);
+  return {
+    data: results,
+    total: response.total,
+    page: response.page,
+    pageSize: response.pageSize,
+    hasNextPage: response.page * response.pageSize < response.total,
+    metrics: response.metrics,
+  };
 }
 
 // ─── Staff / Roles ────────────────────────────────────────────
@@ -439,41 +582,47 @@ export async function fetchCustomers(
   pageSize = 20,
   search?: string,
   status?: "ACTIVE" | "BLOCKED"
-): Promise<PaginatedResponse<CustomerUser>> {
-  const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
-  if (search) params.set("search", search);
-  if (status) params.set("status", status.toLowerCase());
-  const response = await apiRequest<{ users: Array<{
-    id: number;
-    username: string;
-    full_name: string | null;
-    email: string | null;
-    phone: string | null;
-    status: "active" | "blocked";
-    created_at: string;
-    balance: number;
-    totalTransactions: number;
-    totalSpent: number;
-    lastTransactionAt: string;
-  }>; total: number }>(`/admin/users?${params.toString()}`);
+): Promise<PaginatedResponse<CustomerUser> & { metrics: { active: number; blocked: number } }> {
+  const response = await invokeSupabaseFunction<{
+    users: Array<{
+      id: string;
+      name: string;
+      email: string;
+      phone: string;
+      status: "active" | "blocked";
+      created_at: string;
+      wallet_balance: number;
+      total_transactions: number;
+      total_spent: number;
+      last_transaction_at: string;
+    }>;
+    total: number;
+    metrics: { active: number; blocked: number };
+  }>("admin-users", {
+    page,
+    pageSize,
+    search: search || null,
+    status: status || null,
+  });
   return {
     data: response.users.map((user) => ({
-      id: String(user.id),
-      name: user.full_name || user.username,
-      phone: user.phone || "",
-      email: user.email || "",
-      walletBalance: user.balance,
-      totalTransactions: user.totalTransactions,
-      totalSpent: user.totalSpent,
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      email: user.email,
+      walletBalance: user.wallet_balance,
+      totalTransactions: user.total_transactions,
+      totalSpent: user.total_spent,
       status: user.status === "blocked" ? "BLOCKED" : "ACTIVE",
       joinedAt: user.created_at,
-      lastTransactionAt: user.lastTransactionAt,
+      lastTransactionAt: user.last_transaction_at,
       referralCode: "",
     })),
     total: response.total,
     page,
     pageSize,
     hasNextPage: page * pageSize < response.total,
+    metrics: response.metrics,
   };
 }
 
@@ -585,5 +734,18 @@ export async function fetchDashboardOverview(): Promise<DashboardOverview> {
       };
       return breakdown;
     }, {} as DashboardOverview["carrierBreakdown"]),
+  };
+}
+
+export async function fetchAdminOverviewSnapshot(days: 1 | 7 | 30): Promise<AdminOverviewSnapshot> {
+  const response = await invokeSupabaseFunction<{
+    overview: DashboardOverview;
+    transactions: BackendTransaction[];
+    trend: DashboardTrendPoint[];
+  }>("admin-overview", { days });
+  return {
+    overview: response.overview,
+    transactions: response.transactions.map(mapTransaction),
+    trend: response.trend,
   };
 }

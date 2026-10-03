@@ -1,0 +1,162 @@
+
+[functions.initialize-paystack]
+enabled = true
+verify_jwt = false
+import_map = "./functions/initialize-paystack/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/initialize-paystack/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/initialize-paystack/*.html" ]
+
+[functions.paystack-webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/paystack-webhook/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/paystack-webhook/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/paystack-webhook/*.html" ]
+
+[functions.purchase-airtime]
+enabled = true
+verify_jwt = false
+import_map = "./functions/purchase-airtime/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/purchase-airtime/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/purchase-airtime/*.html" ]
+
+[functions.data-services]
+enabled = true
+verify_jwt = false
+import_map = "./functions/data-services/deno.json"
+entrypoint = "./functions/data-services/index.ts"
+
+[functions.data-purchase]
+enabled = true
+verify_jwt = false
+import_map = "./functions/data-purchase/deno.json"
+entrypoint = "./functions/data-purchase/index.ts"
+
+[functions.passkey-auth]
+enabled = true
+verify_jwt = false
+import_map = "./functions/passkey-auth/deno.json"
+entrypoint = "./functions/passkey-auth/index.ts"
+
+[functions.cable-services]
+enabled = true
+verify_jwt = false
+import_map = "./functions/cable-services/deno.json"
+entrypoint = "./functions/cable-services/index.ts"
+
+[functions.cable-purchase]
+enabled = true
+verify_jwt = false
+import_map = "./functions/cable-purchase/deno.json"
+entrypoint = "./functions/cable-purchase/index.ts"
+
+[functions.electricity-services]
+enabled = true
+verify_jwt = false
+import_map = "./functions/electricity-services/deno.json"
+entrypoint = "./functions/electricity-services/index.ts"
+
+[functions.electricity-purchase]
+enabled = true
+verify_jwt = false
+import_map = "./functions/electricity-purchase/deno.json"
+entrypoint = "./functions/electricity-purchase/index.ts"
+
+[functions.referral-services]
+enabled = true
+verify_jwt = false
+import_map = "./functions/referral-services/deno.json"
+entrypoint = "./functions/referral-services/index.ts"
+
+[functions.admin-overview]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-overview/deno.json"
+entrypoint = "./functions/admin-overview/index.ts"
+
+[functions.admin-transactions]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-transactions/deno.json"
+entrypoint = "./functions/admin-transactions/index.ts"
+
+[functions.admin-provider-balances]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-provider-balances/deno.json"
+entrypoint = "./functions/admin-provider-balances/index.ts"
+
+[functions.admin-users]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-users/deno.json"
+entrypoint = "./functions/admin-users/index.ts"
+
+[functions.admin-deposits]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-deposits/deno.json"
+entrypoint = "./functions/admin-deposits/index.ts"
+
+[functions.admin-audit-logs]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-audit-logs/deno.json"
+entrypoint = "./functions/admin-audit-logs/index.ts"
+
+[functions.admin-vtu-services]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-vtu-services/deno.json"
+entrypoint = "./functions/admin-vtu-services/index.ts"
+
+[functions.admin-vtu-plans]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-vtu-plans/deno.json"
+entrypoint = "./functions/admin-vtu-plans/index.ts"
+
+[functions.vtugate-services]
+enabled = true
+verify_jwt = false
+import_map = "./functions/vtugate-services/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/vtugate-services/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/vtugate-services/*.html" ]
+
+[functions.verify-transaction-pin]
+enabled = true
+verify_jwt = false
+import_map = "./functions/verify-transaction-pin/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/verify-transaction-pin/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/verify-transaction-pin/*.html" ]
+
+[functions.register-user]
+enabled = true
+verify_jwt = false
+import_map = "./functions/register-user/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/register-user/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/register-user/*.html" ]

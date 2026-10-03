@@ -4,6 +4,7 @@ import { startRegistration } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
+import { invokeSupabaseFunction, supabase } from "@/lib/supabase";
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
 import { useThemeMode } from "@/lib/theme";
 
@@ -69,23 +70,72 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
     return () => { cancelled = true; };
   }, [initialUser]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void invokeSupabaseFunction<{ hasPasskey: boolean }>(
+      "passkey-auth",
+      { action: "status" },
+    ).then(({ hasPasskey }) => {
+      if (cancelled) return;
+      setUser((current) => current ? { ...current, has_passkey: hasPasskey } : current);
+      setBiometrics(hasPasskey && user?.biometrics_enabled !== false);
+    }).catch((error) => {
+      if (!cancelled) {
+        setMessage(error instanceof Error ? error.message : "Could not load passkey status.");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [initialUser, user?.biometrics_enabled]);
+
   async function saveSecuritySetting(setting: "biometrics" | "appLock", nextValue: boolean) {
     setSavingSetting(setting);
     setMessage("");
     try {
-      const hasPasskey = user?.has_passkey === true;
+      const { hasPasskey } = await invokeSupabaseFunction<{ hasPasskey: boolean }>(
+        "passkey-auth",
+        { action: "status" },
+      );
       if (setting === "biometrics" && nextValue && !hasPasskey) {
-        const options = await apiRequest<Record<string, unknown>>("/auth/passkey/register/options", { method: "POST", body: JSON.stringify({}) });
+        const options = await invokeSupabaseFunction<Record<string, unknown>>(
+          "passkey-auth",
+          { action: "register-options" },
+        );
         const response = await startRegistration({ optionsJSON: options as never });
-        await apiRequest("/auth/passkey/register/verify", { method: "POST", body: JSON.stringify(response) });
+        await invokeSupabaseFunction("passkey-auth", {
+          action: "register-verify",
+          response,
+        });
         setUser((current) => current ? { ...current, has_passkey: true } : current);
-      } else if (setting === "biometrics" && !nextValue && hasPasskey) {
-        await apiRequest("/auth/passkey", { method: "DELETE" });
-        setUser((current) => current ? { ...current, has_passkey: false } : current);
       }
-      const response = await apiRequest<{ biometricsEnabled: boolean; appLockEnabled: boolean }>("/me/security-settings", { method: "PATCH", body: JSON.stringify(setting === "biometrics" ? { biometricsEnabled: nextValue } : { appLockEnabled: nextValue }) });
-      setBiometrics(response.biometricsEnabled);
-      setAppLock(response.appLockEnabled);
+
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!authUser) throw new Error("Authentication required.");
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update(setting === "biometrics"
+          ? { biometrics_enabled: nextValue }
+          : { app_lock_enabled: nextValue })
+        .eq("id", authUser.id);
+      if (profileError) throw profileError;
+      setUser((current) => current
+        ? {
+            ...current,
+            ...(setting === "biometrics"
+              ? { biometrics_enabled: nextValue }
+              : { app_lock_enabled: nextValue }),
+          }
+        : current);
+
+      if (setting === "biometrics") {
+        setBiometrics(nextValue);
+        if (!nextValue && hasPasskey) {
+          await invokeSupabaseFunction("passkey-auth", { action: "delete" });
+          setUser((current) => current ? { ...current, has_passkey: false } : current);
+        }
+      } else {
+        setAppLock(nextValue);
+      }
       if (setting === "biometrics") {
         setUser((current) => current ? { ...current, has_passkey: nextValue } : current);
       }
@@ -144,7 +194,7 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       <section className="profile-content">
         <div className="profile-identity"><div className="profile-avatar">{name.slice(0, 1).toUpperCase()}</div><div><h2>{name}</h2><p>{user?.email || "Your AbbaKano wallet"}</p><p className="profile-phone">{user?.phone || "Phone number not added"}</p></div></div>
         {message && <div className="profile-message" role="status">{message}</div>}
-        <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle="Earn N100 for each friend's first data top-up" badge="N100 BONUS" onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
+        <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle="Earn N100 for each friend who signs up with your code" badge="N100 BONUS" onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
         <ProfileSection title="Security & Preferences"><ProfileRow icon="pin" title="Change Transaction PIN" subtitle="4-digit wallet security PIN" onClick={openPinModal} /><ProfileRow icon="fingerprint" title="Biometrics Login" subtitle="Face ID / Fingerprint unlock" control={<Toggle enabled={biometrics} disabled={savingSetting === "biometrics"} onChange={() => void saveSecuritySetting("biometrics", !biometrics)} />} /><ProfileRow icon="lock" title="App Lock PIN" subtitle="Screen lock security timeout" control={<Toggle enabled={appLock} disabled={savingSetting === "appLock"} onChange={() => void saveSecuritySetting("appLock", !appLock)} />} /><ProfileRow icon="palette" title="Theme & Appearance" subtitle={themePreference === "system" ? `Auto (${theme === "dark" ? "Dark" : "Light"})` : `${theme === "dark" ? "Dark" : "Light"} mode active`} badge={themePreference === "system" ? "AUTO" : theme.toUpperCase()} onClick={() => setShowThemeModal(true)} /></ProfileSection>
         <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" onClick={() => router.push("/support")} /><ProfileRow icon="info" title="About AbbaKano" subtitle="About the platform and its services" onClick={() => router.push("/about")} /></ProfileSection>
         <button className="profile-signout" type="button" onClick={() => setShowSignOutModal(true)} aria-haspopup="dialog"><span className="profile-signout-icon"><Icon name="logout" /></span><span className="profile-signout-copy"><strong>Sign Out</strong><small>Exit your wallet session safely</small></span></button>

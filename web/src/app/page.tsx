@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { useThemeMode } from "@/lib/theme";
 
 const services = [
@@ -44,6 +45,7 @@ function StoreIcon({ store }: { store: "apple" | "play" }) {
 
 export default function Home() {
   const { theme, toggleTheme } = useThemeMode();
+  const [storeNotice, setStoreNotice] = useState("");
 
   return (
     <main className={`landing ${theme === "light" ? "light" : ""}`}>
@@ -67,9 +69,26 @@ export default function Home() {
             <Link className="button button-secondary" href="/login">Log in</Link>
           </div>
           <div className="store-row" aria-label="Mobile app availability">
-            <span className="store-badge"><StoreIcon store="apple" /> App Store</span>
-            <span className="store-badge"><StoreIcon store="play" /> Google Play</span>
+            <button
+              className="store-badge"
+              type="button"
+              onClick={() => setStoreNotice("The AbbaKano iOS app is coming soon.")}
+            >
+              <StoreIcon store="apple" /> App Store
+            </button>
+            <button
+              className="store-badge"
+              type="button"
+              onClick={() => setStoreNotice("The Google Play download link will be available soon.")}
+            >
+              <StoreIcon store="play" /> Google Play
+            </button>
           </div>
+          {storeNotice && (
+            <p className="store-notice" role="status">
+              {storeNotice}
+            </p>
+          )}
           <div className="trust-row">
             <div><p className="trust-value">&lt;10 sec</p><span className="trust-label">average delivery time</span></div>
             <div><p className="trust-value">24/7</p><span className="trust-label">support on WhatsApp &amp; call</span></div>
@@ -140,7 +159,7 @@ export default function Home() {
             <h2 className="footer-heading">Contact</h2>
             <div className="footer-links">
               <a href="mailto:support@abbakano.com">support@abbakano.com</a>
-              <a href="tel:+2348166774566">+234 816 677 4566</a>
+              <a href="tel:+2348133339850">+234 813 333 9850</a>
               <a href="/support">WhatsApp support</a>
               <span>Kano, Nigeria</span>
             </div>

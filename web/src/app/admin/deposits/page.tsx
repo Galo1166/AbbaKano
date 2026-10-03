@@ -9,25 +9,38 @@ import type { InflowRecord } from "@admin/types/telecom";
 
 export default function DepositsPage() {
   const [inflows, setInflows] = useState<InflowRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({ totalCount: 0, totalAmount: 0, settledAmount: 0, failedCount: 0 });
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const PAGE_SIZE = 20;
+  const requestKey = JSON.stringify([filter, search, page]);
+  const loading = loadedRequestKey !== requestKey;
 
   useEffect(() => {
-    fetchInflows(1, 20, { status: filter || undefined })
+    let cancelled = false;
+    fetchInflows(page, PAGE_SIZE, { status: filter || undefined, search: search || undefined })
       .then((res) => {
+        if (cancelled) return;
         setErrorMessage(null);
         setInflows(res.data);
+        setTotal(res.total);
+        setMetrics(res.metrics);
+        setLoadedRequestKey(requestKey);
       })
-      .catch((error: unknown) => setErrorMessage(error instanceof Error ? error.message : "Unable to load deposits."))
-      .finally(() => setLoading(false));
-  }, [filter]);
-
-  const totals = {
-    total: inflows.reduce((s, i) => s + i.amount, 0),
-    settled: inflows.filter((i) => i.status === "SETTLED").reduce((s, i) => s + i.amount, 0),
-    failed: inflows.filter((i) => i.status === "FAILED").length,
-  };
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setErrorMessage(error instanceof Error ? error.message : "Unable to load deposits.");
+        setInflows([]);
+        setTotal(0);
+        setMetrics({ totalCount: 0, totalAmount: 0, settledAmount: 0, failedCount: 0 });
+        setLoadedRequestKey(requestKey);
+      });
+    return () => { cancelled = true; };
+  }, [filter, search, page, requestKey]);
 
   return (
     <div className="space-y-6">
@@ -57,10 +70,10 @@ export default function DepositsPage() {
             </span>
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-on-surface font-mono">
-            {formatNaira(totals.total)}
+            {formatNaira(metrics.totalAmount)}
           </div>
           <p className="text-xs text-on-surface-variant mt-2 pt-2 border-t border-outline-variant/10">
-            {inflows.length} virtual account deposits
+            {metrics.totalCount.toLocaleString()} deposits recorded
           </p>
         </div>
 
@@ -74,10 +87,10 @@ export default function DepositsPage() {
             </span>
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 font-mono">
-            {formatNaira(totals.settled)}
+            {formatNaira(metrics.settledAmount)}
           </div>
           <p className="text-xs text-on-surface-variant mt-2 pt-2 border-t border-outline-variant/10">
-            {inflows.filter((i) => i.status === "SETTLED").length} auto-credited balances
+            Successfully settled deposits
           </p>
         </div>
 
@@ -91,12 +104,28 @@ export default function DepositsPage() {
             </span>
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-red-600 font-mono">
-            {totals.failed}
+            {metrics.failedCount}
           </div>
           <p className="text-xs text-on-surface-variant mt-2 pt-2 border-t border-outline-variant/10">
             Requires payment investigation
           </p>
         </div>
+      </div>
+
+      <div className="relative w-full sm:max-w-md">
+        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
+          search
+        </span>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Search customer, phone, or reference..."
+          className="h-10 w-full rounded-xl border border-outline-variant/30 bg-surface-container-lowest pl-9 pr-3 text-xs sm:text-sm text-on-surface outline-none focus:border-primary"
+        />
       </div>
 
       {/* Filter Tabs */}
@@ -212,6 +241,30 @@ export default function DepositsPage() {
             </table>
           </div>
         )}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-outline-variant/20 bg-surface-container-low/50">
+          <span className="text-xs text-on-surface-variant font-mono">
+            Showing {Math.min((page - 1) * PAGE_SIZE + 1, total)}–{Math.min(page * PAGE_SIZE, total)} of {total} deposits
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page === 1 || loading}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-on-surface-variant bg-surface-container-lowest border border-outline-variant/30 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-xs font-mono px-2 font-bold text-on-surface">
+              {page} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}
+            </span>
+            <button
+              onClick={() => setPage((current) => Math.min(Math.ceil(total / PAGE_SIZE), current + 1))}
+              disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-on-surface-variant bg-surface-container-lowest border border-outline-variant/30 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
     </div>

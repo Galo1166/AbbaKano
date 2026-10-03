@@ -4,13 +4,18 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { fetchAdminSession, fetchDashboardOverview, fetchTransactions } from "@admin/services/api";
+import {
+  fetchAdminOverviewSnapshot,
+  fetchProviderBalances,
+  type Carrier,
+} from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge, { txStatusVariant } from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
 import type { Transaction } from "@admin/types/telecom";
+import type { ProviderBalance } from "@admin/types/telecom";
 
-type Overview = Awaited<ReturnType<typeof fetchDashboardOverview>>;
+type Overview = Awaited<ReturnType<typeof fetchAdminOverviewSnapshot>>["overview"];
 
 const KPICard = ({
   label,
@@ -80,31 +85,77 @@ const CARRIER_COLORS: Record<string, string> = {
   AIRTEL: "#ef4444",
   GLO: "#10b981",
   "9MOBILE": "#0ea5e9",
+  AEDC: "#6366f1",
+  IKEDC: "#8b5cf6",
+  KEDCO: "#a855f7",
+  PHED: "#d946ef",
+  JED: "#ec4899",
+  DSTV: "#f97316",
+  GOTV: "#f59e0b",
+  STARTIMES: "#84cc16",
+  VTUGATE: "#64748b",
 };
+const OVERVIEW_CARRIERS = [
+  "MTN", "AIRTEL", "GLO", "9MOBILE", "AEDC", "IKEDC",
+  "KEDCO", "PHED", "JED", "DSTV", "GOTV", "STARTIMES", "VTUGATE",
+] as const;
 
 export default function OverviewPage() {
   const router = useRouter();
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [providerBalance, setProviderBalance] = useState<ProviderBalance | null>(null);
+  const [providerBalanceLoading, setProviderBalanceLoading] = useState(true);
+  const [providerBalanceError, setProviderBalanceError] = useState<string | null>(null);
   const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
+  const [trend, setTrend] = useState<Array<{ label: string; sales: number; deposits: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTimeRange, setActiveTimeRange] = useState("Today");
 
   useEffect(() => {
-    Promise.all([fetchAdminSession(), fetchDashboardOverview(), fetchTransactions(1, 8)])
-      .then(([, ov, txns]) => {
-        setOverview(ov);
-        setRecentTxns(txns.data);
+    let cancelled = false;
+    const days = activeTimeRange === "7D" ? 7 : activeTimeRange === "30D" ? 30 : 1;
+    fetchAdminOverviewSnapshot(days)
+      .then((snapshot) => {
+        if (cancelled) return;
+        setErrorMessage(null);
+        setOverview(snapshot.overview);
+        setRecentTxns(snapshot.transactions);
+        setTrend(snapshot.trend);
       })
       .catch((error: unknown) => {
         if (error && typeof error === "object" && "status" in error && error.status === 401) {
           router.replace("/admin/login");
           return;
         }
-        setErrorMessage(error instanceof Error ? error.message : "Unable to load the dashboard.");
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error ? error.message : "Unable to load the dashboard.");
+        }
       })
-      .finally(() => setLoading(false));
-  }, [router]);
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTimeRange, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProviderBalances()
+      .then((providers) => {
+        if (cancelled) return;
+        setProviderBalance(providers[0] ?? null);
+        setProviderBalanceError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setProviderBalance(null);
+        setProviderBalanceError(
+          error instanceof Error ? error.message : "Could not load provider balance.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setProviderBalanceLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   if (loading)
     return (
@@ -126,6 +177,19 @@ export default function OverviewPage() {
       </div>
     );
   }
+
+  const trendMaximum = Math.max(
+    1,
+    ...trend.flatMap((point) => [point.sales, point.deposits]),
+  );
+  const carrierNames: Carrier[] = [
+    ...OVERVIEW_CARRIERS,
+    ...(Object.keys(overview.carrierBreakdown) as Carrier[]).filter(
+      (carrier) => !OVERVIEW_CARRIERS.includes(carrier as typeof OVERVIEW_CARRIERS[number]),
+    ),
+  ];
+  const trendSales = trend.reduce((total, point) => total + point.sales, 0);
+  const trendDeposits = trend.reduce((total, point) => total + point.deposits, 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -170,9 +234,23 @@ export default function OverviewPage() {
         />
         <KPICard
           label="Provider Balance"
-          value={overview!.vtuProviderBalance === null ? "Unavailable" : formatNaira(overview!.vtuProviderBalance)}
-          subtitle={overview!.vtuProviderBalance === null ? "Provider balance endpoint not connected" : "Threshold: ₦500,000.00"}
-          badge={overview!.vtuProviderBalance === null ? undefined : "Normal"}
+          value={providerBalanceLoading
+            ? "Loading"
+            : providerBalance
+              ? formatNaira(providerBalance.balance)
+              : "Unavailable"}
+          subtitle={providerBalance
+            ? `Threshold: ${formatNaira(providerBalance.lowBalanceThreshold)} · Checked ${formatTimeAgo(providerBalance.lastRefillAt)}`
+            : providerBalanceError || "VTUGATE balance is unavailable"}
+          badge={providerBalance
+            ? providerBalance.status === "HEALTHY"
+              ? "Healthy"
+              : providerBalance.status === "LOW_BALANCE"
+                ? "Low"
+                : providerBalance.status === "CRITICAL"
+                  ? "Critical"
+                  : providerBalance.status
+            : undefined}
           icon="account_balance_wallet"
           href="/admin/provider-balances"
         />
@@ -215,190 +293,94 @@ export default function OverviewPage() {
                 <span className="w-2.5 h-2.5 rounded-full bg-primary" />
                 <span className="text-slate-500">Deposits:</span>
                 <span className="font-mono font-semibold text-slate-800">
-                  {formatNaira(overview!.depositsToday)}
+                  {formatNaira(trendDeposits)}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                 <span className="text-slate-500">Sales:</span>
                 <span className="font-mono font-semibold text-slate-800">
-                  {formatNaira(overview!.totalVolumeToday)}
+                  {formatNaira(trendSales)}
                 </span>
               </div>
             </div>
 
             {/* SVG Chart */}
-            <div className="relative min-w-0 pt-3 pb-1 overflow-x-auto">
-              <svg className="w-full min-w-[480px] h-52 overflow-visible" viewBox="0 0 680 220" fill="none">
-                <defs>
-                  <linearGradient id="depositsGrad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#00276c" stopOpacity="0.15" />
-                    <stop offset="100%" stopColor="#00276c" stopOpacity="0" />
-                  </linearGradient>
-                  <linearGradient id="vtuGrad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.18" />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                {/* Horizontal Grid */}
-                {[20, 65, 110, 155].map((y) => (
-                  <line
-                    key={y}
-                    x1="45"
-                    x2="670"
-                    y1={y}
-                    y2={y}
-                    stroke="#f1f5f9"
-                    strokeDasharray="3 3"
-                    strokeWidth="1"
-                  />
-                ))}
-                <line x1="45" x2="670" y1="195" y2="195" stroke="#e2e8f0" strokeWidth="1" />
-                {/* Y Labels */}
-                {[
-                  ["?5M", 24],
-                  ["?3.5M", 69],
-                  ["?2M", 114],
-                  ["?1M", 159],
-                  ["?0", 198],
-                ].map(([l, y]) => (
-                  <text
-                    key={String(l)}
-                    fill="#94a3b8"
-                    fontFamily="monospace"
-                    fontSize="10"
-                    textAnchor="end"
-                    x="40"
-                    y={Number(y)}
-                  >
-                    {l}
-                  </text>
-                ))}
-                {/* Deposits Area */}
-                <path
-                  d="M 55 195 L 55 178 Q 110 162 165 145 T 275 105 T 385 62 T 495 55 T 605 32 L 665 24 L 665 195 Z"
-                  fill="url(#depositsGrad)"
-                />
-                <path
-                  d="M 55 178 Q 110 162 165 145 T 275 105 T 385 62 T 495 55 T 605 32 L 665 24"
-                  stroke="#00276c"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                {/* Sales Area */}
-                <path
-                  d="M 55 195 L 55 186 Q 110 174 165 156 T 275 125 T 385 88 T 495 72 T 605 52 L 665 44 L 665 195 Z"
-                  fill="url(#vtuGrad)"
-                />
-                <path
-                  d="M 55 186 Q 110 174 165 156 T 275 125 T 385 88 T 495 72 T 605 52 L 665 44"
-                  stroke="#10b981"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                {/* X Labels */}
-                {[
-                  ["00:00", 55],
-                  ["04:00", 165],
-                  ["08:00", 275],
-                  ["11:00", 385],
-                  ["13:00", 495],
-                  ["14:00", 605],
-                  ["16:00", 665],
-                ].map(([l, x]) => (
-                  <text
-                    key={String(l)}
-                    fill="#94a3b8"
-                    fontFamily="monospace"
-                    fontSize="10"
-                    textAnchor="middle"
-                    x={Number(x)}
-                    y="212"
-                  >
-                    {l}
-                  </text>
-                ))}
-              </svg>
+            <div className="min-w-0 pt-4 pb-1 overflow-x-auto" role="img" aria-label={`Sales and deposits over ${activeTimeRange}`}>
+              {trend.length === 0 ? (
+                <p className="flex h-48 items-center justify-center text-xs text-slate-500">No completed sales or deposits in this period.</p>
+              ) : (
+                <div className="grid min-w-[480px] grid-rows-[176px_auto] gap-2">
+                  <div className="grid h-44 items-end gap-1 border-b border-slate-200" style={{ gridTemplateColumns: `repeat(${trend.length}, minmax(0, 1fr))` }}>
+                    {trend.map((point) => (
+                      <div className="flex h-full items-end justify-center gap-0.5" key={point.label} title={`${point.label}: Sales ${formatNaira(point.sales)}, deposits ${formatNaira(point.deposits)}`}>
+                        <span className="w-1/3 rounded-t-sm bg-primary" style={{ height: `${Math.max(point.deposits ? 2 : 0, point.deposits / trendMaximum * 100)}%` }} />
+                        <span className="w-1/3 rounded-t-sm bg-emerald-500" style={{ height: `${Math.max(point.sales ? 2 : 0, point.sales / trendMaximum * 100)}%` }} />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid min-w-0 gap-1" style={{ gridTemplateColumns: `repeat(${trend.length}, minmax(0, 1fr))` }}>
+                    {trend.map((point, index) => (
+                      <span className="truncate text-center font-mono text-[9px] text-slate-400" key={point.label}>
+                        {index % Math.max(1, Math.ceil(trend.length / 6)) === 0 || index === trend.length - 1 ? point.label : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Carrier Share ?4 cols */}
+        {/* Carrier Share */}
         <div className="w-full min-w-0 lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
           <div>
             <div className="pb-3 border-b border-slate-100">
               <h2 className="text-sm font-bold text-slate-900 tracking-tight">
                 Network Share
               </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Sales percentage across carriers
-              </p>
+              <p className="text-xs text-slate-500 mt-0.5">All-time successful sales by service</p>
             </div>
 
             <div className="relative flex items-center justify-center py-5">
               <svg className="w-36 h-36 -rotate-90" viewBox="0 0 120 120">
                 <circle cx="60" cy="60" r="46" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="none"
-                  stroke="#eab308"
-                  strokeDasharray="150 289"
-                  strokeDashoffset="0"
-                  strokeLinecap="round"
-                  strokeWidth="12"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeDasharray="75 289"
-                  strokeDashoffset="-152"
-                  strokeLinecap="round"
-                  strokeWidth="12"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="none"
-                  stroke="#10b981"
-                  strokeDasharray="40 289"
-                  strokeDashoffset="-228"
-                  strokeLinecap="round"
-                  strokeWidth="12"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="none"
-                  stroke="#0ea5e9"
-                  strokeDasharray="23 289"
-                  strokeDashoffset="-270"
-                  strokeLinecap="round"
-                  strokeWidth="12"
-                />
+                {carrierNames.map((carrier, index) => {
+                  const share = overview!.carrierBreakdown[carrier];
+                  const dashLength = (share.percentage / 100) * 289;
+                  const offset = carrierNames
+                    .slice(0, index)
+                    .reduce((total, previousCarrier) => total + overview!.carrierBreakdown[previousCarrier].percentage, 0);
+                  return (
+                    <circle
+                      key={carrier}
+                      cx="60"
+                      cy="60"
+                      r="46"
+                      fill="none"
+                      stroke={CARRIER_COLORS[carrier] || "#64748b"}
+                      strokeDasharray={`${dashLength} ${289 - dashLength}`}
+                      strokeDashoffset={`${-(offset / 100) * 289}`}
+                      strokeLinecap="butt"
+                      strokeWidth="12"
+                    />
+                  );
+                })}
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Total
+                  All-time
                 </span>
                 <span className="text-base font-bold text-slate-900 font-mono">
-                  {overview!.ordersToday.toLocaleString()}
+                  {formatNaira(carrierNames.reduce((total, carrier) => total + overview!.carrierBreakdown[carrier].amount, 0))}
                 </span>
-                <span className="text-[10px] text-slate-400">Orders</span>
+                <span className="text-[10px] text-slate-400">Successful sales</span>
               </div>
             </div>
 
             {/* Carrier Breakdown */}
             <div className="space-y-2.5">
-              {(["MTN", "AIRTEL", "GLO", "9MOBILE"] as const).map((carrier) => {
+              {carrierNames.map((carrier) => {
                 const d = overview!.carrierBreakdown[carrier];
                 return (
                   <div key={carrier} className="flex items-center gap-3">
@@ -421,7 +403,7 @@ export default function OverviewPage() {
                           className="h-full rounded-full"
                           style={{
                             width: `${d.percentage}%`,
-                            backgroundColor: CARRIER_COLORS[carrier],
+                            backgroundColor: CARRIER_COLORS[carrier] || "#64748b",
                           }}
                         />
                       </div>
@@ -434,13 +416,13 @@ export default function OverviewPage() {
         </div>
       </section>
 
-      {/* Carrier Status Grid */}
+      {/* Provider Health */}
       <section className="w-full min-w-0 bg-white rounded-xl border border-slate-200 shadow-xs p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">Network Gateway Status</h2>
+            <h2 className="text-sm font-bold text-slate-900">Provider Health</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Current operational status per network
+              Live latency and availability telemetry is not connected yet.
             </p>
           </div>
           <Link
@@ -451,66 +433,8 @@ export default function OverviewPage() {
           </Link>
         </div>
 
-        <div className="grid w-full min-w-0 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {[
-            {
-              carrier: "MTN",
-              speed: "312ms",
-              rate: "99.4%",
-              status: "Operational",
-              badgeVariant: "success" as const,
-            },
-            {
-              carrier: "AIRTEL",
-              speed: "428ms",
-              rate: "98.7%",
-              status: "Operational",
-              badgeVariant: "success" as const,
-            },
-            {
-              carrier: "GLO",
-              speed: "560ms",
-              rate: "97.9%",
-              status: "Degraded",
-              badgeVariant: "warning" as const,
-            },
-            {
-              carrier: "9MOBILE",
-              speed: "1,240ms",
-              rate: "94.2%",
-              status: "Low Balance",
-              badgeVariant: "critical" as const,
-            },
-          ].map((g) => (
-            <div
-              key={g.carrier}
-              className="flex w-full min-w-0 flex-col gap-2.5 p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Image
-                    src={resolveCarrierImage(g.carrier)}
-                    alt={g.carrier}
-                    width={22}
-                    height={22}
-                    className="object-contain"
-                  />
-                  <span className="font-bold text-sm text-slate-900">{g.carrier}</span>
-                </div>
-                <Badge variant={g.badgeVariant} label={g.status} withDot={false} />
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs pt-1.5 border-t border-slate-200/60 font-mono">
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-sans">Speed</span>
-                  <span className="font-semibold text-slate-700">{g.speed}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-sans">Success</span>
-                  <span className="font-semibold text-emerald-700">{g.rate}</span>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+          Provider availability, gateway latency, and upstream account balances are not currently supplied by a live telemetry source. No operational status is inferred from sales history.
         </div>
       </section>
 

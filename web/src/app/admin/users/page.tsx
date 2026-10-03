@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { adjustCustomerWallet, fetchCustomers, updateCustomerStatus } from "@admin/services/api";
+import { fetchCustomers } from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
@@ -9,21 +9,20 @@ import type { CustomerUser } from "@admin/types/telecom";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<CustomerUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({ active: 0, blocked: 0 });
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedUser, setSelectedUser] = useState<CustomerUser | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [ledgerDirection, setLedgerDirection] = useState<"credit" | "debit">("credit");
-  const [ledgerAmount, setLedgerAmount] = useState("");
-  const [ledgerReason, setLedgerReason] = useState("");
-  const [ledgerLoading, setLedgerLoading] = useState(false);
   const PAGE_SIZE = 15;
+  const requestKey = JSON.stringify([page, search, statusFilter]);
+  const loading = loadedRequestKey !== requestKey;
 
   useEffect(() => {
+    let cancelled = false;
     fetchCustomers(
       page,
       PAGE_SIZE,
@@ -31,65 +30,24 @@ export default function UsersPage() {
       statusFilter === "ALL" ? undefined : statusFilter as "ACTIVE" | "BLOCKED"
     )
       .then((res) => {
+        if (cancelled) return;
         setErrorMessage(null);
         setUsers(res.data);
         setTotal(res.total);
+        setMetrics(res.metrics);
+        setLoadedRequestKey(requestKey);
       })
       .catch((error: unknown) => {
+        if (cancelled) return;
         setErrorMessage(error instanceof Error ? error.message : "Unable to load reseller accounts.");
-      })
-      .finally(() => setLoading(false));
-  }, [page, search, statusFilter]);
+        setUsers([]);
+        setTotal(0);
+        setMetrics({ active: 0, blocked: 0 });
+        setLoadedRequestKey(requestKey);
+      });
 
-  const handleToggleBlock = async (user: CustomerUser) => {
-    const newStatus: "ACTIVE" | "BLOCKED" = user.status === "BLOCKED" ? "ACTIVE" : "BLOCKED";
-    try {
-      await updateCustomerStatus(user.id, newStatus);
-      setSelectedUser(null);
-      setActionSuccess(`Account for ${user.name} is now ${newStatus}`);
-      setTimeout(() => setActionSuccess(null), 3000);
-      const refreshed = await fetchCustomers(
-        page,
-        PAGE_SIZE,
-        search || undefined,
-        statusFilter === "ALL" ? undefined : statusFilter as "ACTIVE" | "BLOCKED"
-      );
-      setUsers(refreshed.data);
-      setTotal(refreshed.total);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to update account status.");
-    }
-  };
-
-  const handleLedgerAdjustment = async () => {
-    if (!selectedUser) return;
-    const amount = Number(ledgerAmount);
-    if (!Number.isInteger(amount) || amount <= 0 || !ledgerReason.trim()) {
-      setErrorMessage("Enter a whole-number amount and a reason for the adjustment.");
-      return;
-    }
-
-    setLedgerLoading(true);
-    try {
-      const response = await adjustCustomerWallet(
-        selectedUser.id,
-        amount,
-        ledgerDirection,
-        ledgerReason.trim()
-      );
-      const updatedUser = { ...selectedUser, walletBalance: response.balance };
-      setSelectedUser(updatedUser);
-      setUsers((current) => current.map((user) => user.id === updatedUser.id ? updatedUser : user));
-      setLedgerAmount("");
-      setLedgerReason("");
-      setActionSuccess(`Wallet ${ledgerDirection} applied for ${selectedUser.name}`);
-      setTimeout(() => setActionSuccess(null), 3000);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to adjust wallet balance.");
-    } finally {
-      setLedgerLoading(false);
-    }
-  };
+    return () => { cancelled = true; };
+  }, [page, search, statusFilter, requestKey]);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -112,7 +70,7 @@ export default function UsersPage() {
       <PageHeader
         breadcrumbs={["Operations", "Resellers"]}
         title="Reseller Accounts"
-        description="View registered reseller accounts, check balances, and manage access."
+        description="Review registered reseller accounts, balances, and purchase activity."
         actions={
           <button
             onClick={() => showToast("Reseller accounts exported to CSV successfully.")}
@@ -159,7 +117,7 @@ export default function UsersPage() {
             </div>
           </div>
           <p className="text-2xl font-bold font-mono text-emerald-700 tracking-tight truncate">
-            {users.filter((user) => user.status === "ACTIVE").length.toLocaleString()}
+            {metrics.active.toLocaleString()}
           </p>
           <p className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
             Can purchase airtime and data
@@ -176,7 +134,7 @@ export default function UsersPage() {
             </div>
           </div>
           <p className="text-2xl font-bold font-mono text-rose-600 tracking-tight truncate">
-            {users.filter((user) => user.status === "BLOCKED").length.toLocaleString()}
+            {metrics.blocked.toLocaleString()}
           </p>
           <p className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
             Purchases temporarily suspended
@@ -226,14 +184,6 @@ export default function UsersPage() {
           ))}
         </div>
       </div>
-
-      {/* Action Notification */}
-      {actionSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-medium text-emerald-800 flex items-center gap-2 animate-fade-in">
-          <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
-          <span>{actionSuccess}</span>
-        </div>
-      )}
 
       {/* Resellers Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
@@ -441,63 +391,12 @@ export default function UsersPage() {
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 space-y-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                  Wallet Adjustment
-                </span>
-                <div className="grid grid-cols-[110px_1fr] gap-2">
-                  <select
-                    value={ledgerDirection}
-                    onChange={(event) => setLedgerDirection(event.target.value as "credit" | "debit")}
-                    className="h-9 px-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 outline-none"
-                    disabled={ledgerLoading}
-                  >
-                    <option value="credit">Credit</option>
-                    <option value="debit">Debit</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={ledgerAmount}
-                    onChange={(event) => setLedgerAmount(event.target.value)}
-                    placeholder="Amount (NGN)"
-                    className="h-9 px-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 outline-none"
-                    disabled={ledgerLoading}
-                  />
-                </div>
-                <input
-                  type="text"
-                  value={ledgerReason}
-                  onChange={(event) => setLedgerReason(event.target.value)}
-                  placeholder="Reason for adjustment"
-                  className="w-full h-9 px-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 outline-none"
-                  disabled={ledgerLoading}
-                />
-                <button
-                  type="button"
-                  onClick={handleLedgerAdjustment}
-                  disabled={ledgerLoading}
-                  className="w-full h-9 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                >
-                  {ledgerLoading ? "Applying..." : "Apply Adjustment"}
-                </button>
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+                Wallet adjustments and account blocking are temporarily unavailable while these admin actions are migrated to Supabase.
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => handleToggleBlock(selectedUser)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                  selectedUser.status === "BLOCKED"
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                    : "bg-rose-600 text-white hover:bg-rose-700"
-                }`}
-              >
-                {selectedUser.status === "BLOCKED" ? "Unblock Account" : "Block Account"}
-              </button>
-
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
               <button
                 type="button"
                 onClick={() => setSelectedUser(null)}

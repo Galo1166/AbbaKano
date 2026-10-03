@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiRequest, ApiError } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { DataPurchaseShell } from "@/components/data/DataPurchaseShell";
 import { AirtimeShell } from "@/components/airtime/AirtimeShell";
 import { HistoryShell } from "@/components/history/HistoryShell";
@@ -68,6 +68,95 @@ function transactionLabel(transaction: DashboardData["transactions"][number]) {
     return transaction.label || transaction.type?.replaceAll("_", " ") || "Wallet transaction";
 }
 
+export function DashboardLoadingSkeleton() {
+    return (
+        <main className="dashboard-shell dashboard-loading-shell" aria-busy="true">
+            <span className="visually-hidden" role="status">Loading your dashboard</span>
+            <aside className="dashboard-sidebar dashboard-loading-sidebar" aria-hidden="true">
+                <div className="dashboard-loading-brand">
+                    <span className="dashboard-skeleton-block dashboard-loading-logo" />
+                    <span className="dashboard-loading-brand-copy">
+                        <span className="dashboard-skeleton-block" />
+                        <span className="dashboard-skeleton-block" />
+                    </span>
+                </div>
+                <div className="dashboard-loading-nav">
+                    {[0, 1, 2, 3].map((item) => (
+                        <span className="dashboard-skeleton-block" key={item} />
+                    ))}
+                </div>
+                <span className="dashboard-skeleton-block dashboard-loading-bottom" />
+            </aside>
+
+            <section className="dashboard-main">
+                <header className="dashboard-header dashboard-loading-header" aria-hidden="true">
+                    <div className="dashboard-loading-heading">
+                        <span className="dashboard-skeleton-block" />
+                        <span className="dashboard-skeleton-block" />
+                        <span className="dashboard-skeleton-block" />
+                    </div>
+                    <div className="dashboard-loading-actions">
+                        {[0, 1, 2].map((item) => (
+                            <span className="dashboard-skeleton-block" key={item} />
+                        ))}
+                    </div>
+                </header>
+
+                <div className="dashboard-content" aria-hidden="true">
+                    <section className="dashboard-loading-balance">
+                        <span className="dashboard-skeleton-block" />
+                        <span className="dashboard-skeleton-block" />
+                        <span className="dashboard-skeleton-block" />
+                    </section>
+
+                    <section className="dashboard-section">
+                        <div className="dashboard-loading-section-heading">
+                            <span className="dashboard-skeleton-block" />
+                            <span className="dashboard-skeleton-block" />
+                        </div>
+                        <div className="service-grid">
+                            {[0, 1, 2, 3].map((item) => (
+                                <div className="dashboard-loading-service" key={item}>
+                                    <span className="dashboard-skeleton-block" />
+                                    <span className="dashboard-skeleton-block" />
+                                    <span className="dashboard-skeleton-block" />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="dashboard-loading-support">
+                        <span className="dashboard-skeleton-block" />
+                        <span className="dashboard-skeleton-block" />
+                        <span className="dashboard-skeleton-block" />
+                    </section>
+
+                    <section className="dashboard-section">
+                        <div className="dashboard-loading-section-heading">
+                            <span className="dashboard-skeleton-block" />
+                            <span className="dashboard-skeleton-block" />
+                        </div>
+                        <div className="dashboard-loading-transactions">
+                            {[0, 1, 2].map((item) => (
+                                <div className="dashboard-loading-transaction" key={item}>
+                                    <span className="dashboard-skeleton-block" />
+                                    <span className="dashboard-skeleton-block" />
+                                    <span className="dashboard-skeleton-block" />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                </div>
+            </section>
+            <nav className="dashboard-loading-mobile-nav" aria-hidden="true">
+                {[0, 1, 2, 3].map((item) => (
+                    <span className="dashboard-skeleton-block" key={item} />
+                ))}
+            </nav>
+        </main>
+    );
+}
+
 export function DashboardShell() {
     const router = useRouter();
     const [data, setData] = useState<DashboardData | null>(null);
@@ -79,41 +168,133 @@ export function DashboardShell() {
     const [activeTab, setActiveTab] = useState("home");
     const lightMode = theme === "light";
 
-    async function handleLogout() {
+   async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+}
+
+   useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateDashboard() {
         try {
-            await apiRequest("/logout", { method: "POST" });
-        } catch (error) {
-            console.error("Could not log out of the dashboard", error);
-        }
-        router.push("/login");
-    }
+            const {
+                data: { user },
+                error: authError,
+            } = await supabase.auth.getUser();
 
-    useEffect(() => {
-        let cancelled = false;
+            if (authError || !user) {
+                router.push("/login");
+                return;
+            }
 
-        async function hydrateDashboard() {
-            try {
-                const [me, wallet, transactionResponse] = await Promise.all([
-                    apiRequest<{ user: DashboardData["user"] }>("/me"),
-                    apiRequest<{ balance: number }>("/wallet"),
-                    apiRequest<{ transactions: DashboardData["transactions"] }>("/transactions"),
+            const [profileResult, walletResult, transactionsResult] =
+                await Promise.all([
+                    supabase
+                        .from("profiles")
+                        .select(`
+                            full_name,
+                            phone,
+                            role,
+                            status,
+                            biometrics_enabled,
+                            app_lock_enabled
+                        `)
+                        .eq("id", user.id)
+                        .single(),
+
+                    supabase
+                        .from("wallets")
+                        .select("balance_kobo, currency")
+                        .eq("user_id", user.id)
+                        .single(),
+
+                   supabase
+    .from("wallet_ledger")
+    .select(`
+        id,
+        entry_type,
+        amount_kobo,
+        balance_before_kobo,
+        balance_after_kobo,
+        description,
+        metadata,
+        created_at
+    `)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(20),
                 ]);
-                if (!cancelled) setData({ user: me.user, balance: wallet.balance, transactions: transactionResponse.transactions || [] });
-            } catch (error) {
-                if (cancelled) return;
-                if (error instanceof ApiError && error.status === 401) {
-                    router.push("/login");
-                    return;
-                }
-                setErrorMessage(error instanceof ApiError ? error.message : "Could not load your wallet.");
-            } finally {
-                if (!cancelled) setLoading(false);
+
+            if (profileResult.error) {
+                throw profileResult.error;
+            }
+
+            if (walletResult.error) {
+                throw walletResult.error;
+            }
+
+            if (transactionsResult.error) {
+                throw transactionsResult.error;
+            }
+
+            if (cancelled) return;
+
+            const profile = profileResult.data;
+            const wallet = walletResult.data;
+
+            const transactions =
+    (transactionsResult.data || []).map((transaction) => ({
+        id: transaction.id,
+        type: transaction.entry_type,
+        label: transaction.description || transaction.entry_type,
+        status: "completed",
+        amount: Number(transaction.amount_kobo) / 100,
+        date: new Date(transaction.created_at).toLocaleString(
+            "en-NG",
+            {
+                dateStyle: "medium",
+                timeStyle: "short",
+            }
+        ),
+    }));
+
+            setData({
+                user: {
+                    full_name: profile.full_name || "",
+                    email: user.email || "",
+                    phone: profile.phone || "",
+                    biometrics_enabled: profile.biometrics_enabled,
+                    app_lock_enabled: profile.app_lock_enabled,
+                },
+
+                balance: Number(wallet.balance_kobo) / 100,
+
+                transactions,
+            });
+        } catch (error) {
+            if (cancelled) return;
+
+            console.error("Dashboard loading error:", error);
+
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : "Could not load your wallet."
+            );
+        } finally {
+            if (!cancelled) {
+                setLoading(false);
             }
         }
+    }
 
-        void hydrateDashboard();
-        return () => { cancelled = true; };
-    }, [reloadKey, router]);
+    void hydrateDashboard();
+
+    return () => {
+        cancelled = true;
+    };
+}, [reloadKey, router]);
 
     useEffect(() => {
         function handleTabChange(event: Event) {
@@ -139,7 +320,7 @@ export function DashboardShell() {
     const firstName = data?.user.full_name?.split(" ")[0] || data?.user.fullName?.split(" ")[0] || "there";
 
     if (loading) {
-        return <main className="dashboard-state"><div className="dashboard-spinner" /><p>Loading your wallet...</p></main>;
+        return <DashboardLoadingSkeleton />;
     }
 
     if (errorMessage || !data) {
@@ -159,7 +340,7 @@ export function DashboardShell() {
         <main className={`dashboard-shell${lightMode ? " light" : ""}`}>
             <WebDesktopSidebar active="home" onNavigate={(tab) => setActiveTab(tab === "data" ? "bolt" : tab)} onLogout={handleLogout} />
             <section className="dashboard-main" id="main-content">
-                <header className="dashboard-header"><Link className="dashboard-mobile-brand" href="/app"><span className="dashboard-logo"><Image src="/branding/logo.png" alt="AbbaKano" width={34} height={34} /></span><span>ABBAKANO<small>DATA SUB</small></span></Link><div><p className="dashboard-kicker">Wallet overview</p><h1>{activeTab === "home" ? `Welcome back, ${firstName}` : navigation.find(([icon]) => icon === activeTab)?.[1]}</h1><p>{activeTab === "home" ? "Manage your wallet and pay every bill from one place." : "Your dashboard tabs stay in place while each section loads."}</p></div>
+                <header className="dashboard-header"><Link className="dashboard-mobile-brand" href="/app"><span className="dashboard-logo"><Image src="/branding/logo.png" alt="AbbaKano" width={34} height={34} /></span><span>ABBAKANO<small>DATA SUB</small></span></Link><div className="dashboard-header-spacer" aria-hidden="true" />
                 <div className="dashboard-header-actions"><button className="dashboard-icon-button" type="button" onClick={toggleTheme} aria-label={`Switch to ${lightMode ? "dark" : "light"} mode`}><ThemeIcon light={lightMode} /></button><Link href="/support" className="dashboard-icon-button" aria-label="Contact Support"><Icon name="support" /></Link><button className="dashboard-avatar" type="button" onClick={() => setActiveTab("profile")} aria-label="Open profile">{firstName.slice(0, 1).toUpperCase()}</button></div></header>
 
                 <div className="dashboard-content">

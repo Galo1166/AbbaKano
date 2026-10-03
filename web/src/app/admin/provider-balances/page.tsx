@@ -36,7 +36,7 @@ export default function ProviderBalancesPage() {
       <PageHeader
         breadcrumbs={["Operations", "Provider Balances"]}
         title="Provider Liquidity & Balances"
-        description="Live VTUGATE wallet balance retrieved from the provider account API."
+        description="Live VTUGATE account balance and configured funding details."
         actions={null}
       />
 
@@ -48,17 +48,21 @@ export default function ProviderBalancesPage() {
       )}
 
       {/* Critical Runway Warnings */}
-      {providers.some((p) => p.status === "CRITICAL") && (
+      {providers.some((p) => p.status === "CRITICAL" || p.status === "LOW_BALANCE") && (
         <div className="bg-red-50 border border-red-300 rounded-2xl p-4 sm:p-5 flex items-start gap-3.5 shadow-sm">
           <span className="material-symbols-outlined text-red-600 text-[24px] shrink-0 mt-0.5">
             warning
           </span>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-red-950 text-sm">
-              VTUGATE Balance Alert
+              {providers.some((p) => p.status === "CRITICAL")
+                ? "VTUGATE Balance Critical"
+                : "VTUGATE Balance Low"}
             </p>
-              <p className="text-xs text-red-800 mt-1 leading-relaxed">
-                VTUGATE is at or below zero balance. Replenish the provider account before dispatches fail.
+            <p className="text-xs text-red-800 mt-1 leading-relaxed">
+              {providers.some((p) => p.status === "CRITICAL")
+                ? "VTUGATE is at or below zero balance. Replenish the provider account before dispatches fail."
+                : "VTUGATE is at or below the configured low-balance threshold. Replenish the provider account soon."}
             </p>
           </div>
         </div>
@@ -68,11 +72,12 @@ export default function ProviderBalancesPage() {
       <div className="grid grid-cols-1 gap-5 sm:gap-6">
         {providers.map((provider) => {
           const isCritical = provider.status === "CRITICAL";
-          const isLow = false;
-          const percentage = Math.min(
-            100,
-            Math.round((provider.balance / (provider.balance + provider.lowBalanceThreshold)) * 100)
-          );
+          const isLow = provider.status === "LOW_BALANCE";
+          const percentage = provider.lowBalanceThreshold > 0
+            ? Math.min(100, Math.max(0, Math.round(
+                provider.balance / provider.lowBalanceThreshold * 100,
+              )))
+            : provider.balance > 0 ? 100 : 0;
 
           return (
             <div
@@ -120,7 +125,7 @@ export default function ProviderBalancesPage() {
               {/* Progress & Threshold */}
               <div>
                 <div className="flex items-center justify-between text-xs text-on-surface-variant mb-1.5 font-medium">
-                  <span>Vault Reserve Ratio</span>
+                  <span>Balance vs. Low-balance Threshold</span>
                   <span className="font-mono font-bold">{percentage}%</span>
                 </div>
                 <div className="h-2.5 rounded-full bg-surface-container overflow-hidden">
@@ -137,7 +142,7 @@ export default function ProviderBalancesPage() {
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-outline mt-1.5 font-mono">
                   <span>Threshold: {formatNaira(provider.lowBalanceThreshold)}</span>
-                  <span>Safety Buffer Active</span>
+                  <span>{provider.balance > provider.lowBalanceThreshold ? "Above threshold" : "At/below threshold"}</span>
                 </div>
               </div>
 
@@ -147,11 +152,11 @@ export default function ProviderBalancesPage() {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-outline">
                     Provider API Check
                   </p>
-                  <p className="text-sm font-bold font-mono mt-0.5 text-emerald-700">
+                  <p className={`text-sm font-bold font-mono mt-0.5 ${isCritical ? "text-red-700" : isLow ? "text-amber-700" : "text-emerald-700"}`}>
                     Connected
                   </p>
                 </div>
-                <span className="text-[11px] text-on-surface-variant">Live accountdetails</span>
+                <span className="text-[11px] text-on-surface-variant">Live account details</span>
               </div>
 
             </div>

@@ -87,7 +87,7 @@ export default function AboutPage() {
           </div>
           <ul className="about-contact">
             <li><a href="mailto:support@abbakano.com?subject=AbbaKano%20Support%20Request">Email support@abbakano.com</a></li>
-            <li><a href="tel:+2348166774566">Call +234 816 677 4566</a></li>
+            <li><a href="tel:+2348133339850">Call +234 813 333 9850</a></li>
             <li><a href="https://wa.me/2348166774566?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20with%20my%20account." target="_blank" rel="noreferrer">Message us on WhatsApp</a></li>
           </ul>
         </section>

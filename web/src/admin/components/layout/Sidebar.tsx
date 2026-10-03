@@ -32,7 +32,8 @@ export default function Sidebar() {
     try {
       await logoutAdmin();
     } catch {
-      // Ignore logout failures and continue to the sign-in screen.
+      window.alert("Could not safely sign out. Please try again.");
+      return;
     }
 
     router.push("/admin/login");

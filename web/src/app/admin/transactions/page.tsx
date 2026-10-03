@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { fetchDashboardOverview, fetchTransactions } from "@admin/services/api";
+import { fetchAdminOverviewSnapshot, fetchAdminTransactions } from "@admin/services/api";
 import { formatNaira, formatDate, formatTimeAgo } from "@admin/lib/utils";
 import Badge, { txStatusVariant } from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
 import type { Transaction } from "@admin/types/telecom";
 
-const CARRIERS = ["ALL", "MTN", "AIRTEL", "GLO", "9MOBILE"] as const;
-type DashboardOverview = Awaited<ReturnType<typeof fetchDashboardOverview>>;
+const CARRIERS = [
+  "ALL", "MTN", "AIRTEL", "GLO", "9MOBILE", "AEDC", "IKEDC", "KEDCO",
+  "PHED", "JED", "DSTV", "GOTV", "STARTIMES", "VTUGATE",
+] as const;
+type DashboardOverview = Awaited<ReturnType<typeof fetchAdminOverviewSnapshot>>["overview"];
 
 const resolveCarrierImage = (carrier: string) => {
   const normalized = String(carrier || "").trim().toUpperCase();
@@ -35,7 +38,10 @@ type CarrierFilter = (typeof CARRIERS)[number];
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({ stalledDisputed: 0, refunded: 0, queued: 0 });
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
   const [carrier, setCarrier] = useState<CarrierFilter>("ALL");
   const [status, setStatus] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -45,37 +51,65 @@ export default function TransactionsPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const PAGE_SIZE = 15;
+  const transactionRequestKey = JSON.stringify([page, carrier, status, search]);
+  const loading = loadedRequestKey !== transactionRequestKey;
 
   useEffect(() => {
-    Promise.all([
-      fetchDashboardOverview(),
-      fetchTransactions(page, PAGE_SIZE, {
+    let cancelled = false;
+    fetchAdminOverviewSnapshot(1)
+      .then(({ overview: overviewData }) => {
+        if (!cancelled) setOverview(overviewData);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setOverviewError(error instanceof Error ? error.message : "Could not load transaction summary.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminTransactions(page, PAGE_SIZE, {
         carrier: carrier === "ALL" ? undefined : carrier,
         status: status || undefined,
         search: search || undefined,
-      }),
-    ])
-      .then(([overviewData, res]) => {
-        setOverview(overviewData);
+      })
+      .then((res) => {
+        if (cancelled) return;
         setTransactions(res.data);
         setTotal(res.total);
-        setLoading(false);
+        setMetrics(res.metrics);
+        setTransactionsError(null);
+        setLoadedRequestKey(transactionRequestKey);
       })
-      .catch(() => setLoading(false));
-  }, [carrier, status, search, page]);
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setTransactions([]);
+        setTotal(0);
+        setMetrics({ stalledDisputed: 0, refunded: 0, queued: 0 });
+        setTransactionsError(error instanceof Error ? error.message : "Could not load transactions.");
+        setLoadedRequestKey(transactionRequestKey);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [carrier, status, search, page, transactionRequestKey]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const totalDispatchesToday = overview?.ordersToday ?? transactions.length;
+  const totalDispatchesToday = overview?.ordersToday ?? 0;
   const successRate = overview?.successRate ?? 0;
   const successfulDeliveries = Math.max(
     0,
     Math.round((successRate / 100) * totalDispatchesToday)
   );
-  const stalledDisputed = transactions.filter(
-    (txn) => txn.status === "FAILED" || txn.status === "PENDING"
-  ).length;
-  const refundedToWallet = transactions.filter((txn) => txn.status === "REFUNDED").length;
-  const queuedCount = transactions.filter((txn) => txn.status === "PENDING").length;
+  const stalledDisputed = metrics.stalledDisputed;
+  const refundedToWallet = metrics.refunded;
+  const queuedCount = metrics.queued;
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -118,6 +152,13 @@ export default function TransactionsPage() {
           </div>
         }
       />
+
+      {(overviewError || transactionsError) && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          {overviewError && <p>Transaction summary: {overviewError}</p>}
+          {transactionsError && <p>Transactions: {transactionsError}</p>}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
@@ -292,6 +333,13 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/10">
+                {transactions.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-5 py-12 text-center text-sm text-on-surface-variant">
+                      {transactionsError ? "Transactions could not be loaded." : "No transactions match these filters."}
+                    </td>
+                  </tr>
+                )}
                 {transactions.map((txn) => (
                   <tr
                     key={txn.id}

@@ -21,7 +21,7 @@ export type Carrier =
 export type ServiceType = "DATA_BUNDLE" | "AIRTIME" | "ELECTRICITY" | "CABLE_TV" | "EXAM_PIN";
 export type TransactionStatus = "SUCCESS" | "PENDING" | "FAILED" | "REFUNDED";
 export type InflowStatus = "SETTLED" | "PENDING_SETTLEMENT" | "FAILED";
-export type StaffRole = "SUPER_ADMIN" | "SUPPORT_AGENT" | "OPERATIONS_MANAGER" | "VIEWER" | "ADMIN";
+export type StaffRole = "SUPER_ADMIN" | "SUPPORT_AGENT" | "OPERATIONS_MANAGER" | "VIEWER" | "ADMIN" | "SYSTEM";
 export type StaffStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
 export type ProviderStatus = "HEALTHY" | "LOW_BALANCE" | "CRITICAL" | "OFFLINE";
 export type AuditAction =
@@ -41,7 +41,12 @@ export type AuditAction =
   | "admin.logout"
   | "agent.status_changed"
   | "deposit.settled"
-  | "vtu.settled";
+  | "deposit.status_changed"
+  | "vtu.settled"
+  | "vtu.status_changed"
+  | "admin.vtu_plan_created"
+  | "admin.vtu_plan_updated"
+  | "admin.vtu_plan_deleted";
 
 // ─── Transaction ──────────────────────────────────────────────
 export interface Transaction {

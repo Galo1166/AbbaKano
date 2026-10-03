@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import Image from "next/image";
-import { fetchMtnGeneralDataPlans, fetchTransactions, saveMtnGeneralDataPlan } from "@admin/services/api";
+import { fetchAdminTransactions, fetchAdminVtuServices, manageAdminVtuPlans } from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge, { txStatusVariant } from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
-import Toggle from "@admin/components/ui/Toggle";
-import type { MtnGeneralDataPlan } from "@admin/services/api";
 import type { Transaction } from "@admin/types/telecom";
+import type { AdminVtuPlan } from "@admin/services/api";
+import Toggle from "@admin/components/ui/Toggle";
 
 const CARRIERS = ["ALL", "MTN", "AIRTEL", "GLO", "9MOBILE"] as const;
 const resolveCarrierImage = (carrier: string) => {
@@ -35,98 +36,165 @@ interface GatewayControl {
   carrier: string;
   gateway: string;
   active: boolean;
-  speed: string;
+  serviceCount: number;
 }
+
+type PlanForm = {
+  network: AdminVtuPlan["network"];
+  category: AdminVtuPlan["category"];
+  capacity: string;
+  duration: AdminVtuPlan["duration"];
+  price: string;
+};
+
+const emptyPlanForm: PlanForm = {
+  network: "MTN",
+  category: "GENERAL",
+  capacity: "",
+  duration: "monthly",
+  price: "",
+};
 
 export default function VtuServicesPage() {
   const [dispatches, setDispatches] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [carrier, setCarrier] = useState<string>("ALL");
-  const [retryingId, setRetryingId] = useState<string | null>(null);
-  const [gateways, setGateways] = useState<GatewayControl[]>([
-    { carrier: "MTN", gateway: "MTN Corporate Direct v4", active: true, speed: "24ms" },
-    { carrier: "AIRTEL", gateway: "Airtel Direct SMPP", active: true, speed: "31ms" },
-    { carrier: "GLO", gateway: "Glo Cloud Aggregator", active: true, speed: "45ms" },
-    { carrier: "9MOBILE", gateway: "9mobile Link 03", active: false, speed: "112ms" },
-  ]);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [mtnPlans, setMtnPlans] = useState<MtnGeneralDataPlan[]>([]);
-  const [loadingMtnPlans, setLoadingMtnPlans] = useState(true);
-  const [savingPlanKey, setSavingPlanKey] = useState<string | null>(null);
-  const [planFeedback, setPlanFeedback] = useState<{ message: string; error: boolean } | null>(null);
-
-  useEffect(() => {
-    fetchTransactions(1, 25, { carrier: carrier === "ALL" ? undefined : carrier }).then((res) => {
-      setDispatches(res.data);
-      setLoading(false);
-    });
-  }, [carrier]);
+  const [gateways, setGateways] = useState<GatewayControl[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [serviceError, setServiceError] = useState<string | null>(null);
+  const [servicesCheckedAt, setServicesCheckedAt] = useState<string | null>(null);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
+  const [plans, setPlans] = useState<AdminVtuPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState<string | null>(null);
+  const [planForm, setPlanForm] = useState<PlanForm>(emptyPlanForm);
+  const [creatingPlan, setCreatingPlan] = useState(false);
+  const [savingPlanId, setSavingPlanId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetchMtnGeneralDataPlans()
-      .then((plans) => {
+    fetchAdminVtuServices()
+      .then((response) => {
         if (cancelled) return;
-        setMtnPlans(plans);
+        const carriers = ["MTN", "AIRTEL", "GLO", "9MOBILE"];
+        setGateways(carriers.map((carrierName) => {
+          const matchingServices = response.services.filter((service) => service.network === carrierName);
+          return {
+            carrier: carrierName,
+            gateway: response.provider,
+            active: matchingServices.length > 0,
+            serviceCount: matchingServices.length,
+          };
+        }));
+        setServicesCheckedAt(response.checkedAt);
+        setServiceError(null);
       })
       .catch((error: unknown) => {
-        if (!cancelled) setPlanFeedback({
-          message: error instanceof Error ? error.message : "Could not load MTN General pricing.",
-          error: true,
-        });
+        if (!cancelled) {
+          setServiceError(error instanceof Error ? error.message : "Could not load VTU services.");
+          setGateways([]);
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoadingMtnPlans(false);
+        if (!cancelled) setLoadingServices(false);
       });
     return () => { cancelled = true; };
   }, []);
 
-  const updateMtnPlan = (planKey: string, changes: Partial<MtnGeneralDataPlan>) => {
-    setMtnPlans((current) => current.map((plan) => plan.key === planKey ? { ...plan, ...changes } : plan));
-  };
-
-  const handleSaveMtnPlan = async (plan: MtnGeneralDataPlan) => {
-    setSavingPlanKey(plan.key);
-    setPlanFeedback(null);
-    try {
-      const savedPlan = await saveMtnGeneralDataPlan(plan);
-      setMtnPlans((current) => current.map((item) => item.key === plan.key ? savedPlan : item));
-      setPlanFeedback({ message: `${savedPlan.label} pricing saved.`, error: false });
-    } catch (error) {
-      setPlanFeedback({
-        message: error instanceof Error ? error.message : `Could not save ${plan.label}.`,
-        error: true,
-      });
-    } finally {
-      setSavingPlanKey(null);
-    }
-  };
-
-  const handleToggleGateway = (carrierName: string, nextState: boolean) => {
-    setGateways((prev) =>
-      prev.map((g) => {
-        if (g.carrier === carrierName) {
-          setToastMessage(
-            `${g.carrier} Gateway routing is now ${nextState ? "ACTIVE" : "PAUSED"}.`
-          );
-          setTimeout(() => setToastMessage(null), 3000);
-          return { ...g, active: nextState };
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminTransactions(1, 25, { carrier: carrier === "ALL" ? undefined : carrier })
+      .then((res) => {
+        if (!cancelled) {
+          setDispatches(res.data);
+          setDispatchError(null);
         }
-        return g;
       })
-    );
-  };
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setDispatches([]);
+          setDispatchError(error instanceof Error ? error.message : "Could not load dispatches.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [carrier]);
 
-  const handleRetry = async (txnId: string) => {
-    setRetryingId(txnId);
-    await new Promise((r) => setTimeout(r, 1000));
-    setDispatches((prev) =>
-      prev.map((d) => (d.id === txnId ? { ...d, status: "SUCCESS" } : d))
-    );
-    setRetryingId(null);
-    setToastMessage(`Transaction #${txnId} re-dispatched successfully.`);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    manageAdminVtuPlans({ action: "list" })
+      .then((response) => {
+        if (!cancelled) setPlans(response.plans || []);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setPlansError(error instanceof Error ? error.message : "Could not load admin plans.");
+      })
+      .finally(() => {
+        if (!cancelled) setPlansLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function createPlan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreatingPlan(true);
+    setPlansError(null);
+    try {
+      const response = await manageAdminVtuPlans({
+        action: "create",
+        ...planForm,
+        capacity: planForm.capacity.trim(),
+        price: Number(planForm.price),
+        enabled: true,
+      });
+      if (!response.plan) throw new Error("The created plan was not returned.");
+      setPlans((current) => [...current, response.plan!].sort((a, b) => a.capacity_mb - b.capacity_mb));
+      setPlanForm(emptyPlanForm);
+    } catch (error) {
+      setPlansError(error instanceof Error ? error.message : "Could not create plan.");
+    } finally {
+      setCreatingPlan(false);
+    }
+  }
+
+  async function updatePlan(plan: AdminVtuPlan, changes: Partial<PlanForm> & { enabled?: boolean }) {
+    setSavingPlanId(plan.id);
+    setPlansError(null);
+    try {
+      const response = await manageAdminVtuPlans({
+        action: "update",
+        id: plan.id,
+        network: changes.network || plan.network,
+        category: changes.category || plan.category,
+        capacity: (changes.capacity ?? plan.capacity).trim(),
+        duration: changes.duration || plan.duration,
+        price: Number(changes.price ?? plan.price_kobo / 100),
+        enabled: typeof changes.enabled === "boolean" ? changes.enabled : plan.enabled,
+      });
+      if (!response.plan) throw new Error("The updated plan was not returned.");
+      setPlans((current) => current.map((item) => item.id === plan.id ? response.plan! : item));
+    } catch (error) {
+      setPlansError(error instanceof Error ? error.message : "Could not update plan.");
+    } finally {
+      setSavingPlanId(null);
+    }
+  }
+
+  async function deletePlan(plan: AdminVtuPlan) {
+    if (!window.confirm(`Delete ${plan.network} ${plan.capacity} plan?`)) return;
+    setSavingPlanId(plan.id);
+    setPlansError(null);
+    try {
+      await manageAdminVtuPlans({ action: "delete", id: plan.id });
+      setPlans((current) => current.filter((item) => item.id !== plan.id));
+    } catch (error) {
+      setPlansError(error instanceof Error ? error.message : "Could not delete plan.");
+    } finally {
+      setSavingPlanId(null);
+    }
+  }
 
   const failed = dispatches.filter((d) => d.status === "FAILED").length;
   const pending = dispatches.filter((d) => d.status === "PENDING").length;
@@ -154,11 +222,14 @@ export default function VtuServicesPage() {
         }
       />
 
-      {/* Gateway Toast Feedback */}
-      {toastMessage && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs font-medium text-blue-900 flex items-center gap-2 animate-fade-in">
-          <span className="material-symbols-outlined text-[16px] text-blue-600">info</span>
-          <span>{toastMessage}</span>
+      {serviceError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs font-medium text-rose-900" role="alert">
+          {serviceError}
+        </div>
+      )}
+      {dispatchError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs font-medium text-rose-900" role="alert">
+          {dispatchError}
         </div>
       )}
 
@@ -171,9 +242,16 @@ export default function VtuServicesPage() {
               Turn network dispatches on or off
             </p>
           </div>
-          <span className="text-xs text-slate-400 font-mono">Failover: 800ms</span>
+          <span className="text-xs text-slate-400 font-mono">
+            {servicesCheckedAt ? `Checked ${formatTimeAgo(servicesCheckedAt)}` : "Live provider catalog"}
+          </span>
         </div>
 
+        {loadingServices ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          </div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {gateways.map((g) => (
             <div
@@ -192,7 +270,7 @@ export default function VtuServicesPage() {
                     />
                     <span className="font-bold text-sm text-slate-900">{g.carrier}</span>
                   </div>
-                  <span className="text-[11px] font-mono text-slate-500">{g.speed}</span>
+                  <span className="text-[11px] font-mono text-slate-500">{g.serviceCount} services</span>
                 </div>
                 <p className="text-xs text-slate-500 truncate">{g.gateway}</p>
               </div>
@@ -203,102 +281,84 @@ export default function VtuServicesPage() {
                     g.active ? "text-emerald-700" : "text-slate-500"
                   }`}
                 >
-                  {g.active ? "Active" : "Paused"}
+                  {g.active ? "Available" : "Not configured"}
                 </span>
-
-                {/* Pixel-perfect Reusable Toggle */}
-                <Toggle
-                  checked={g.active}
-                  onChange={(next) => handleToggleGateway(g.carrier, next)}
-                  id={`btn-gateway-toggle-${g.carrier.toLowerCase()}`}
-                  label={`Toggle ${g.carrier} route`}
-                />
+                <span className="text-[11px] text-slate-400">Read-only</span>
               </div>
             </div>
           ))}
         </div>
+        )}
       </div>
 
       <section className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
-        <div className="mb-4">
-          <h2 className="text-sm font-bold text-slate-900">MTN General plans</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Set the customer price and validity. Enabled plans appear in General; purchases remain unavailable until the new provider is connected.
+        <div className="flex flex-col gap-1 mb-4">
+          <h2 className="text-sm font-bold text-slate-900">Admin data plan catalog</h2>
+          <p className="text-xs text-slate-500">
+            Create and maintain plans by network, category, capacity, duration, and customer price. These plans are catalog records and do not change live provider routing.
           </p>
         </div>
 
-        {planFeedback && (
-          <p className={`mb-4 rounded-lg border px-3 py-2 text-xs ${planFeedback.error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`} role="status">
-            {planFeedback.message}
+        {plansError && (
+          <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">
+            {plansError}
           </p>
         )}
 
-        {loadingMtnPlans ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          </div>
-        ) : mtnPlans.length === 0 ? (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            MTN General plans could not be loaded. Check the backend database migration, then reload this page.
-          </p>
+        <form onSubmit={createPlan} className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] md:items-end">
+          <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            Network
+            <select value={planForm.network} onChange={(event) => setPlanForm((current) => ({ ...current, network: event.target.value as PlanForm["network"] }))} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-xs">
+              {CARRIERS.filter((item) => item !== "ALL").map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            Category
+            <select value={planForm.category} onChange={(event) => setPlanForm((current) => ({ ...current, category: event.target.value as PlanForm["category"] }))} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-xs">
+              <option value="GENERAL">General</option>
+              <option value="SME">SME Data</option>
+              <option value="GIFTING">Gifting</option>
+              <option value="DIRECT">Direct</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            Capacity
+            <input required type="text" maxLength={32} value={planForm.capacity} onChange={(event) => setPlanForm((current) => ({ ...current, capacity: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm" placeholder="e.g. 3GB or 3072MB" />
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            Duration
+            <select value={planForm.duration} onChange={(event) => setPlanForm((current) => ({ ...current, duration: event.target.value as PlanForm["duration"] }))} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-xs">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold text-slate-600">
+            Price (NGN)
+            <input required type="number" min="1" max="1000000" step="0.01" value={planForm.price} onChange={(event) => setPlanForm((current) => ({ ...current, price: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm" placeholder="e.g. 1200" />
+          </label>
+          <button type="submit" disabled={creatingPlan} className="h-10 rounded-lg bg-primary px-4 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-60">
+            {creatingPlan ? "Creating..." : "Create plan"}
+          </button>
+        </form>
+
+        {plansLoading ? (
+          <div className="flex items-center justify-center py-8"><div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" /></div>
+        ) : plans.length === 0 ? (
+          <p className="py-8 text-center text-xs text-slate-500">No admin plans created yet.</p>
         ) : (
-          <div className="grid gap-3">
-            {mtnPlans.map((plan) => (
-              <article key={plan.key} className="grid min-w-0 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-[minmax(75px,0.7fr)_minmax(140px,1fr)_minmax(120px,0.8fr)_auto_auto] sm:items-end">
+          <div className="mt-4 grid gap-3">
+            {plans.map((plan) => (
+              <article key={plan.id} className="grid min-w-0 gap-3 rounded-lg border border-slate-200 p-3 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto_auto] md:items-end">
                 <div>
-                  <p className="text-sm font-bold text-slate-900">{plan.label}</p>
-                  <p className="text-[11px] text-slate-500">MTN · General</p>
+                  <p className="text-sm font-bold text-slate-900">{plan.capacity}</p>
+                  <p className="text-[11px] text-slate-500">{plan.network} · {plan.category}</p>
                 </div>
-
-                <label className="grid min-w-0 gap-1.5 text-xs font-semibold text-slate-600">
-                  Validity
-                  <select
-                    value={plan.validityPeriod}
-                    onChange={(event) => updateMtnPlan(plan.key, { validityPeriod: event.target.value as MtnGeneralDataPlan["validityPeriod"] })}
-                    className="h-10 min-w-0 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-normal text-slate-800"
-                    disabled={savingPlanKey === plan.key}
-                  >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </label>
-
-                <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
-                  Customer price (₦)
-                  <input
-                    type="number"
-                    min="0"
-                    max="100000"
-                    step="1"
-                    value={plan.sellingPrice || ""}
-                    onChange={(event) => updateMtnPlan(plan.key, { sellingPrice: Number(event.target.value) || 0 })}
-                    className="h-10 rounded-lg border border-slate-300 bg-white px-2.5 text-sm font-normal text-slate-800"
-                    disabled={savingPlanKey === plan.key}
-                  />
-                </label>
-
-                <div className="flex items-center gap-2 pb-2">
-                  <Toggle
-                    checked={plan.enabled}
-                    onChange={(enabled) => updateMtnPlan(plan.key, { enabled })}
-                    id={`toggle-mtn-plan-${plan.key}`}
-                    label={`Enable ${plan.label} for customers`}
-                    disabled={savingPlanKey === plan.key}
-                  />
-                  <span className={`text-xs font-semibold ${plan.enabled ? "text-emerald-700" : "text-slate-500"}`}>
-                    {plan.enabled ? "On" : "Off"}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void handleSaveMtnPlan(plan)}
-                  disabled={savingPlanKey === plan.key}
-                  className="h-10 rounded-lg bg-primary px-4 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {savingPlanKey === plan.key ? "Saving..." : "Save plan"}
-                </button>
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Capacity<input type="text" maxLength={32} defaultValue={plan.capacity} disabled={savingPlanId === plan.id} onBlur={(event) => void updatePlan(plan, { capacity: event.currentTarget.value })} className="h-9 rounded-lg border border-slate-300 px-2 text-xs" /></label>
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Duration<select value={plan.duration} disabled={savingPlanId === plan.id} onChange={(event) => void updatePlan(plan, { duration: event.target.value as PlanForm["duration"] })} className="h-9 rounded-lg border border-slate-300 px-2 text-xs"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Price (NGN)<input type="number" min="1" step="0.01" defaultValue={plan.price_kobo / 100} disabled={savingPlanId === plan.id} onBlur={(event) => void updatePlan(plan, { price: event.target.value })} className="h-9 rounded-lg border border-slate-300 px-2 text-xs" /></label>
+                <div className="flex items-center gap-2 pb-1"><Toggle checked={plan.enabled} onChange={(enabled) => void updatePlan(plan, { enabled })} id={`toggle-plan-${plan.id}`} label={`Toggle ${plan.network} plan`} disabled={savingPlanId === plan.id} /><span className="text-xs text-slate-600">{plan.enabled ? "On" : "Off"}</span></div>
+                <button type="button" onClick={() => void deletePlan(plan)} disabled={savingPlanId === plan.id} className="h-9 rounded-lg border border-rose-200 px-3 text-xs font-semibold text-rose-700 disabled:opacity-50">Delete</button>
               </article>
             ))}
           </div>
@@ -433,19 +493,7 @@ export default function VtuServicesPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       {d.status === "FAILED" ? (
-                        <button
-                          onClick={() => handleRetry(d.id)}
-                          disabled={retryingId === d.id}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs text-primary bg-slate-100 hover:bg-slate-200 font-semibold disabled:opacity-60 transition-colors cursor-pointer"
-                          id={`btn-retry-dispatch-${d.id}`}
-                        >
-                          {retryingId === d.id ? (
-                            <div className="w-3 h-3 rounded-full border border-primary border-t-transparent animate-spin" />
-                          ) : (
-                            <span className="material-symbols-outlined text-[14px]">replay</span>
-                          )}
-                          <span>Retry</span>
-                        </button>
+                        <span className="text-slate-400 text-xs">Retry unavailable</span>
                       ) : (
                         <span className="text-slate-300 text-xs">—</span>
                       )}

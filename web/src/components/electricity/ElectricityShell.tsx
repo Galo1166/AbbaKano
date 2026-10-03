@@ -3,13 +3,14 @@
 import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
-import { ApiError, apiRequest } from "@/lib/api";
+import { getWalletBalance, invokeSupabaseFunction, supabase } from "@/lib/supabase";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
 type Provider = "AEDC" | "IKEDC" | "KEDCO" | "PHED" | "JED";
-type ServicePlan = { label: string; price: number; code: string; selectionToken: string; category?: string; provider?: string };
+type ServicePlan = { label: string; price: number; code: string; category?: string; provider?: string };
 type Receipt = { status: string; message: string; reference?: string; provider: Provider; meterNumber: string; phone: string; amount: number; customerName?: string };
+type MeterVerification = "idle" | "checking" | "verified" | "error";
 
 const providers: Array<{ id: Provider; label: string }> = [
   { id: "AEDC", label: "AEDC" },
@@ -39,6 +40,9 @@ export function ElectricityShell() {
   const [amount, setAmount] = useState("500");
   const [plans, setPlans] = useState<ServicePlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<ServicePlan | null>(null);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [meterVerification, setMeterVerification] = useState<MeterVerification>("idle");
+  const [verifiedSelectionToken, setVerifiedSelectionToken] = useState("");
   const [message, setMessage] = useState("");
   const [pin, setPin] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
@@ -48,31 +52,49 @@ export function ElectricityShell() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   useEffect(() => {
-    void apiRequest<{ balance: number }>('/wallet')
-      .then((response) => setBalance(response.balance))
-      .catch(() => {});
+    void getWalletBalance()
+      .then(setBalance)
+      .catch((error: unknown) => console.error("Electricity wallet balance load failed:", error));
 
-    void apiRequest<{ user?: { phone?: string } }>('/me')
-      .then((response) => setAccountPhone(String(response.user?.phone || "")))
-      .catch(() => setAccountPhone(""));
+    void supabase.auth.getUser().then(async ({ data, error }) => {
+      if (error) throw error;
+      if (!data.user) throw new Error("Authentication required.");
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("phone")
+        .eq("id", data.user.id)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      setAccountPhone(String(profile?.phone || ""));
+    }).catch((error: unknown) => {
+      console.error("Electricity profile load failed:", error);
+      setMessage("Could not load your profile phone number. Refresh and try again.");
+    });
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     async function loadPlans() {
+      setPlansLoading(true);
       setPlans([]);
       setSelectedPlan(null);
+      setMessage("");
       try {
-        const response = await apiRequest<{ plans: ServicePlan[] }>(`/vtu/service-plans?service=electricity&provider=${provider.toLowerCase()}&meterType=prepaid`);
+        const response = await invokeSupabaseFunction<{ plans: ServicePlan[] }>(
+          "electricity-services",
+          { action: "plans", provider },
+        );
         if (cancelled) return;
-        const nextPlans = (response.plans || []).filter((plan) => typeof plan?.selectionToken === 'string' && plan.selectionToken.length > 0);
+        const nextPlans = (response.plans || []).filter((plan) => Boolean(plan?.code));
         setPlans(nextPlans);
         if (nextPlans.length > 0) setSelectedPlan(nextPlans[0]);
         else setSelectedPlan(null);
       } catch (error) {
         if (!cancelled) {
-          setMessage(error instanceof ApiError ? error.message : 'Could not load electricity plans.');
+          setMessage(error instanceof Error ? error.message : "Could not load electricity plans.");
         }
+      } finally {
+        if (!cancelled) setPlansLoading(false);
       }
     }
 
@@ -81,29 +103,62 @@ export function ElectricityShell() {
   }, [provider]);
 
   useEffect(() => {
+    let cancelled = false;
     const meter = meterNumber.replace(/\D/g, "");
-    if (meter.length < 8) {
-      setCustomerName("");
+    if (!/^\d{8,14}$/.test(meter)) {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      void apiRequest<{ customerName?: string }>('/vtu/verify-electricity', {
-        method: 'POST',
-        body: JSON.stringify({ provider: provider.toLowerCase(), meterNumber: meter }),
-      }).then((response) => {
-        setCustomerName(response.customerName || 'Verified customer');
-      }).catch(() => setCustomerName(""));
+      if (cancelled) return;
+      setMeterVerification("checking");
+      setCustomerName("");
+      setVerifiedSelectionToken("");
+      void invokeSupabaseFunction<{ customerName: string; selectionToken: string }>(
+        "electricity-services",
+        { action: "verify-meter", provider, meterNumber: meter },
+      ).then((response) => {
+        if (cancelled) return;
+        setCustomerName(response.customerName);
+        setVerifiedSelectionToken(response.selectionToken);
+        setMeterVerification("verified");
+      }).catch((error: unknown) => {
+        if (cancelled) return;
+        setCustomerName("");
+        setVerifiedSelectionToken("");
+        setMeterVerification("error");
+        setMessage(error instanceof Error ? error.message : "Could not verify this electricity meter.");
+      });
     }, 250);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [meterNumber, provider]);
 
   const numericAmount = Number(amount) || 0;
   const validPhone = /^(?:\+?234|0)\d{10}$/.test(accountPhone.replace(/\s+/g, ""));
-  const validMeter = meterNumber.replace(/\D/g, "").length >= 8;
+  const validMeter = /^\d{8,14}$/.test(meterNumber.replace(/\D/g, ""));
   const validAmount = Number.isInteger(numericAmount) && numericAmount >= 50 && numericAmount <= 100000;
-  const canReview = validMeter && validPhone && validAmount && Boolean(selectedPlan && typeof selectedPlan.selectionToken === 'string' && selectedPlan.selectionToken.length > 0);
+  const canReview = validMeter && validPhone && validAmount &&
+    meterVerification === "verified" && Boolean(verifiedSelectionToken && selectedPlan);
+
+  function chooseProvider(nextProvider: Provider) {
+    setProvider(nextProvider);
+    setCustomerName("");
+    setVerifiedSelectionToken("");
+    setMeterVerification("idle");
+    setMessage("");
+  }
+
+  function changeMeter(value: string) {
+    setMeterNumber(value.replace(/\D/g, "").slice(0, 14));
+    setCustomerName("");
+    setVerifiedSelectionToken("");
+    setMeterVerification("idle");
+    setMessage("");
+  }
 
   function goHome() {
     if (window.location.pathname === '/app') {
@@ -114,7 +169,7 @@ export function ElectricityShell() {
   }
 
   async function purchase(transactionAuthorization?: string) {
-    if (!selectedPlan || !canReview || (!transactionAuthorization && !/^\d{4}$/.test(pin))) {
+    if (!selectedPlan || !verifiedSelectionToken || !canReview || (!transactionAuthorization && !/^\d{4}$/.test(pin))) {
       setMessage('Enter a valid meter number, amount and 4-digit transaction PIN.');
       return;
     }
@@ -123,17 +178,18 @@ export function ElectricityShell() {
     setMessage('');
 
     try {
-      const result = await apiRequest<{ status?: string; message?: string; reference?: string }>('/vtu/electricity', {
-        method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({
-          network: provider,
-          phone: accountPhone.replace(/[^\d]/g, ''),
-          meterNumber: meterNumber.replace(/\D/g, ''),
-          amount: numericAmount,
-          planToken: selectedPlan.selectionToken,
-          ...(transactionAuthorization ? { transactionAuthorization } : { pin }),
-        }),
+      const result = await invokeSupabaseFunction<{
+        status?: string;
+        message?: string;
+        reference?: string;
+        balance_kobo?: number;
+      }>("electricity-purchase", {
+        provider,
+        meterNumber: meterNumber.replace(/\D/g, ""),
+        amount: numericAmount,
+        selectionToken: verifiedSelectionToken,
+        idempotencyKey: crypto.randomUUID(),
+        ...(transactionAuthorization ? { transactionAuthorization } : { pin }),
       });
 
       setShowCheckout(false);
@@ -147,25 +203,46 @@ export function ElectricityShell() {
         amount: numericAmount,
         customerName,
       });
+      if (typeof result.balance_kobo === "number") {
+        setBalance(result.balance_kobo / 100);
+      }
       setPin('');
       window.dispatchEvent(new Event('dashboard-refresh'));
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Could not complete electricity purchase.');
+      setMessage(error instanceof Error ? error.message : 'Could not complete electricity purchase.');
     } finally {
       setPurchasing(false);
     }
   }
 
   async function authorizeBiometric() {
+    if (!verifiedSelectionToken) {
+      setMessage("Verify the meter before authorizing the purchase.");
+      return;
+    }
     setPurchasing(true);
     setMessage('');
     try {
-      const options = await apiRequest<Record<string, unknown>>('/auth/passkey/transaction/options', { method: 'POST', body: JSON.stringify({}) });
+      const options = await invokeSupabaseFunction<Record<string, unknown>>(
+        "passkey-auth",
+        {
+          action: "transaction-options",
+          purchase: {
+            network: provider,
+            phone: accountPhone.replace(/\D/g, "").replace(/^234/, "0"),
+            selectionToken: verifiedSelectionToken,
+            amount: numericAmount,
+          },
+        },
+      );
       const response = await startAuthentication({ optionsJSON: options as never });
-      const authorization = await apiRequest<{ transactionAuthorization: string }>('/auth/passkey/transaction/verify', { method: 'POST', body: JSON.stringify({ response }) });
+      const authorization = await invokeSupabaseFunction<{ transactionAuthorization: string }>(
+        "passkey-auth",
+        { action: "transaction-verify", response },
+      );
       await purchase(authorization.transactionAuthorization);
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Biometric authorization was not completed.');
+      setMessage(error instanceof Error ? error.message : 'Biometric authorization was not completed.');
       setPurchasing(false);
     }
   }
@@ -187,7 +264,7 @@ export function ElectricityShell() {
         </div>
         <div className="network-grid">
           {providers.map((item) => (
-            <button className={`network-card${provider === item.id ? ' selected' : ''}`} type="button" onClick={() => setProvider(item.id)} key={item.id}>
+            <button className={`network-card${provider === item.id ? ' selected' : ''}`} type="button" onClick={() => chooseProvider(item.id)} key={item.id}>
               <span className="network-logo" style={{ backgroundColor: '#f59e0b' }}><span>{item.label.slice(0, 2)}</span></span>
               <span>{item.label}</span>
               {provider === item.id && <i />}
@@ -197,9 +274,10 @@ export function ElectricityShell() {
 
         <label className="data-phone-label">
           Meter Number
-          <input value={meterNumber} onChange={(event) => setMeterNumber(event.target.value.replace(/\D/g, ''))} placeholder="Enter meter number" inputMode="numeric" />
+          <input value={meterNumber} onChange={(event) => changeMeter(event.target.value)} placeholder="Enter 8–14 digit meter number" inputMode="numeric" maxLength={14} minLength={8} />
         </label>
 
+        {meterVerification === "checking" && <div className="profile-message" role="status">Verifying meter...</div>}
         {customerName && <div className="profile-message">Customer: {customerName}</div>}
 
         <label className="airtime-amount-label">
@@ -210,8 +288,8 @@ export function ElectricityShell() {
         <div className="airtime-presets-heading">PLAN TYPE</div>
         <div className="airtime-presets">
           {plans.length > 0 ? plans.map((plan) => (
-            <button className={selectedPlan?.selectionToken === plan.selectionToken ? 'active' : ''} type="button" onClick={() => setSelectedPlan(plan)} key={plan.selectionToken}>{plan.label}</button>
-          )) : <button type="button" className="active" disabled>No plan loaded</button>}
+            <button className={selectedPlan?.code === plan.code ? 'active' : ''} type="button" onClick={() => setSelectedPlan(plan)} key={plan.code}>{plan.label}</button>
+          )) : <button type="button" className="active" disabled>{plansLoading ? "Loading plan..." : "No plan loaded"}</button>}
         </div>
 
         {message && <div className="data-message error" role="alert">{message}</div>}

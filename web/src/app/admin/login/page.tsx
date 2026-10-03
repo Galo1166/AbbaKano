@@ -3,17 +3,29 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { apiRequest } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { fetchAdminSession } from "@admin/services/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@abbakano.ng");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAdminSession()
+      .then(() => {
+        if (!cancelled) router.replace("/admin/overview");
+      })
+      .catch(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,17 +46,24 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await apiRequest<{ user?: { role?: string } }>("/login", {
-        method: "POST",
-        body: JSON.stringify({ identifier: email.trim(), password }),
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
       });
+      if (error) throw error;
 
-      if (response.user?.role !== "admin") {
-        await apiRequest("/admin/auth/logout", { method: "POST" }).catch(() => undefined);
-        throw new Error("This account is not authorized for the Admin Portal.");
+      try {
+        await fetchAdminSession();
+      } catch (authorizationError) {
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) {
+          console.error("Could not sign out unauthorized admin login:", signOutError);
+          throw new Error("This account is not authorized. Sign-out failed; close this browser session and contact support.");
+        }
+        throw authorizationError;
       }
 
-      router.push("/admin/overview");
+      router.replace("/admin/overview");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to sign in. Please try again.");
       setIsLoading(false);
@@ -177,21 +196,10 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember Me & Help */}
+            {/* Access notice */}
             <div className="flex items-center justify-between pt-1 text-xs">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="remember"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-blue-600 focus:ring-0 cursor-pointer"
-                />
-                <label htmlFor="remember" className="text-slate-400 cursor-pointer select-none">
-                  Keep me signed in
-                </label>
-              </div>
-              <span className="text-slate-500">Superadmin Only</span>
+              <span className="text-slate-400">Access is limited to provisioned administrators.</span>
+              <span className="text-slate-500">Super Admin Only</span>
             </div>
 
             {/* Submit */}

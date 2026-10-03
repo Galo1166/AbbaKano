@@ -4,14 +4,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
-import { ApiError, apiRequest } from "@/lib/api";
+import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
 type Network = "MTN" | "AIRTEL" | "GLO" | "9MOBILE";
-type Category = "GENERAL" | "SME" | "GIFTING";
+type Category = "GENERAL" | "SME" | "GIFTING" | "DIRECT";
 type Plan = { label: string; price: number; code: string; category?: string; selectionToken?: string; provider?: string; validityPeriod?: "daily" | "weekly" | "monthly"; purchaseAvailable?: boolean };
-type Receipt = { status: string; message: string; reference?: string; label: string; network: Network; phone: string; amount: number };
+type Receipt = { status: string; message: string; reference?: string; label: string; network: Network; phone: string };
 
 const networks: Array<{ id: Network; label: string; color: string; logo: string }> = [
   { id: "MTN", label: "MTN", color: "#ffcc00", logo: "/providers/mtn-logo.png" },
@@ -24,6 +24,7 @@ const categories: Array<{ id: Category; label: string }> = [
   { id: "GENERAL", label: "General" },
   { id: "SME", label: "SME Data" },
   { id: "GIFTING", label: "Gifting" },
+  { id: "DIRECT", label: "Direct" },
 ];
 
 const PLAN_CACHE_TTL_MS = 30_000;
@@ -37,9 +38,9 @@ function loadCachedPlans(network: Network, forceReload = false) {
   if (cachedPlans) planCache.delete(network);
   const pendingRequest = planRequests.get(network);
   if (pendingRequest) return pendingRequest;
-  const request = apiRequest<{ plans: Plan[] }>(`/vtu/plans?network=${network}`)
+  const request = invokeSupabaseFunction<{ plans: Plan[] }>("data-services", { network })
     .then((response) => {
-      const nextPlans = response.plans || [];
+      const nextPlans = response.plans;
       planCache.set(network, { plans: nextPlans, expiresAt: Date.now() + PLAN_CACHE_TTL_MS });
       return nextPlans;
     })
@@ -85,18 +86,16 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
 
   useEffect(() => {
     let cancelled = false;
-    void apiRequest<{ balance: number }>("/wallet").then((response) => {
-      if (!cancelled) setWalletBalance(response.balance);
-    }).catch(() => {});
+    void getWalletBalance().then((balance) => {
+      if (!cancelled) setWalletBalance(balance);
+    }).catch((error: unknown) => {
+      if (!cancelled) console.error("Data wallet balance load failed:", error);
+    });
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    if (!validPhone) {
-      return () => { cancelled = true; };
-    }
-
     async function loadPlans() {
       setLoading(true);
       setErrorMessage("");
@@ -107,20 +106,14 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
       } catch (error) {
         if (cancelled) return;
         setPlans([]);
-        if (error instanceof ApiError && error.status === 401) {
-          setErrorMessage("Please sign in to load data plans.");
-        } else if (error instanceof ApiError && error.status === 502) {
-          setErrorMessage("Data plans are temporarily unavailable because the VTU provider is not configured.");
-        } else {
-          setErrorMessage(error instanceof ApiError ? error.message : "Could not load plans right now.");
-        }
+        setErrorMessage(error instanceof Error ? error.message : "Could not load plans right now.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
     void loadPlans();
     return () => { cancelled = true; };
-  }, [network, phone, reloadKey, validPhone]);
+  }, [network, reloadKey]);
 
   const availablePlans = plans.filter((plan) => {
     const planCategory = (plan.category || "GENERAL").toUpperCase();
@@ -139,9 +132,10 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
   }
 
   function choosePhone(value: string) {
-    setPhone(value);
+    const normalized = value.replace(/\D/g, "").slice(0, 11);
+    setPhone(normalized);
     setSelectedPlan(null);
-    const detected = detectNetwork(value);
+    const detected = detectNetwork(normalized);
     if (detected) chooseNetwork(detected);
   }
 
@@ -154,7 +148,7 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
 
   async function executePurchase(transactionAuthorization?: string) {
     if (selectedPlan?.purchaseAvailable === false) {
-      setPurchaseMessage("This MTN General plan will be purchasable when the new data provider is connected.");
+      setPurchaseMessage("This plan is listed by the administrator but is not yet connected to a provider purchase route.");
       setPurchasing(false);
       return;
     }
@@ -166,17 +160,30 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
     setPurchasing(true);
     setPurchaseMessage("");
     try {
-      const result = await apiRequest<{ message?: string; status?: string; reference?: string; providerReference?: string }>("/vtu/data", {
-        method: "POST",
-        headers: { "Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ network, phone, amount: selectedPlan.price, planCode: selectedPlan.code, planToken: selectedPlan.selectionToken, ...(transactionAuthorization ? { transactionAuthorization } : { pin }) }),
+      if (!selectedPlan.selectionToken) {
+        throw new Error("This data plan has expired. Reload plans and choose again.");
+      }
+      const result = await invokeSupabaseFunction<{
+        message?: string;
+        status?: string;
+        reference?: string;
+        balance_kobo?: number;
+      }>("data-purchase", {
+        network,
+        phone,
+        selectionToken: selectedPlan.selectionToken,
+        idempotencyKey: crypto.randomUUID(),
+        ...(transactionAuthorization ? { transactionAuthorization } : { pin }),
       });
       setShowCheckout(false);
-      setReceipt({ status: result.status?.toLowerCase() === "pending" ? "pending" : "success", message: result.message || "Data purchase submitted successfully.", reference: result.reference || result.providerReference, label: selectedPlan.label, network, phone, amount: selectedPlan.price });
+      setReceipt({ status: result.status?.toLowerCase() === "pending" ? "pending" : "success", message: result.message || "Data purchase submitted successfully.", reference: result.reference, label: selectedPlan.label, network, phone });
+      if (typeof result.balance_kobo === "number") {
+        setWalletBalance(result.balance_kobo / 100);
+      }
       window.dispatchEvent(new Event("dashboard-refresh"));
       setPin("");
     } catch (error) {
-      setPurchaseMessage(error instanceof ApiError ? error.message : "Could not complete this purchase.");
+      setPurchaseMessage(error instanceof Error ? error.message : "Could not complete this purchase.");
     } finally {
       setPurchasing(false);
     }
@@ -191,12 +198,25 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
     setPurchasing(true);
     setPurchaseMessage("");
     try {
-      const options = await apiRequest<Record<string, unknown>>("/auth/passkey/transaction/options", { method: "POST", body: JSON.stringify({}) });
+      const options = await invokeSupabaseFunction<Record<string, unknown>>(
+        "passkey-auth",
+        {
+          action: "transaction-options",
+          purchase: {
+            network,
+            phone,
+            selectionToken: selectedPlan?.selectionToken,
+          },
+        },
+      );
       const response = await startAuthentication({ optionsJSON: options as never });
-      const authorization = await apiRequest<{ transactionAuthorization: string }>("/auth/passkey/transaction/verify", { method: "POST", body: JSON.stringify({ response }) });
+      const authorization = await invokeSupabaseFunction<{ transactionAuthorization: string }>(
+        "passkey-auth",
+        { action: "transaction-verify", response },
+      );
       await executePurchase(authorization.transactionAuthorization);
     } catch (error) {
-      setPurchaseMessage(error instanceof ApiError ? error.message : "Biometric authorization was not completed.");
+      setPurchaseMessage(error instanceof Error ? error.message : "Biometric authorization was not completed.");
       setPurchasing(false);
     }
   }
@@ -209,19 +229,18 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
         <div className="network-grid">{networks.map((item) => <button className={`network-card${network === item.id ? " selected" : ""}`} type="button" onClick={() => chooseNetwork(item.id)} key={item.id}><span className="network-logo" style={{ backgroundColor: item.color }}><Image src={item.logo} alt="" width={31} height={31} /></span><span>{item.label}</span>{network === item.id && <i />}</button>)}</div>
 
         <div className="data-tabs" role="tablist" aria-label="Data plan category">{categories.map((item) => <button className={category === item.id ? "active" : ""} type="button" role="tab" aria-selected={category === item.id} onClick={() => { setCategory(item.id); setSelectedPlan(null); }} key={item.id}>{item.label}</button>)}</div>
-        <label className="data-phone-label">Recipient Phone Number {detectedNetwork && <small style={{ color: networks.find((item) => item.id === detectedNetwork)?.color }}>{detectedNetwork}</small>}<input value={phone} onChange={(event) => choosePhone(event.target.value)} placeholder="Enter phone number" inputMode="tel" /></label>
+        <label className="data-phone-label">Recipient Phone Number {detectedNetwork && <small style={{ color: networks.find((item) => item.id === detectedNetwork)?.color }}>{detectedNetwork}</small>}<input value={phone} onChange={(event) => choosePhone(event.target.value)} placeholder="Enter 11-digit phone number" inputMode="numeric" maxLength={11} /></label>
 
-        <div className="data-plans-heading"><span>{validPhone ? `AVAILABLE ${network} ${category} PLANS` : "AVAILABLE PLANS"}</span>{loading && validPhone && <small>LOADING PLANS...</small>}</div>
-        {!validPhone && <div className="data-empty">Enter a valid phone number to view available plans.</div>}
-        {validPhone && errorMessage && <div className="data-message error" role="alert">{errorMessage}<button type="button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
-        {validPhone && !loading && !errorMessage && availablePlans.length === 0 && <div className="data-empty">No {category.toLowerCase()} plans are currently available for {network}.</div>}
-        {validPhone && <div className="airtime-presets">{availablePlans.map((plan) => <button className={selectedPlan?.code === plan.code ? "active" : ""} type="button" aria-pressed={selectedPlan?.code === plan.code} onClick={() => setSelectedPlan(plan)} key={`${plan.code}-${plan.label}`}>{plan.label}{plan.validityPeriod ? ` · ${plan.validityPeriod[0].toUpperCase()}${plan.validityPeriod.slice(1)}` : ""}<br />{formatNaira(plan.price)}</button>)}</div>}
-        {validPhone && network === "MTN" && category === "GENERAL" && availablePlans.some((plan) => plan.purchaseAvailable === false) && <p className="data-empty">MTN General plans can be viewed now. Purchases will be enabled when the new data provider is connected.</p>}
+        <div className="data-plans-heading"><span>AVAILABLE {network} {category} PLANS</span>{loading && <small>LOADING PLANS...</small>}</div>
+        {errorMessage && <div className="data-message error" role="alert">{errorMessage}<button type="button" onClick={() => setReloadKey((current) => current + 1)}>Retry</button></div>}
+        {!loading && !errorMessage && availablePlans.length === 0 && <div className="data-empty">No {category.toLowerCase()} plans are currently available for {network}.</div>}
+        {!loading && !errorMessage && availablePlans.length > 0 && <div className="airtime-presets">{availablePlans.map((plan) => <button className={selectedPlan?.code === plan.code ? "active" : ""} type="button" aria-pressed={selectedPlan?.code === plan.code} onClick={() => setSelectedPlan(plan)} key={`${plan.code}-${plan.label}`}>{plan.label}{plan.validityPeriod ? ` · ${plan.validityPeriod[0].toUpperCase()}${plan.validityPeriod.slice(1)}` : ""}<br />{formatNaira(plan.price)}</button>)}</div>}
+        {!loading && !errorMessage && network === "MTN" && category === "GENERAL" && availablePlans.some((plan) => plan.purchaseAvailable === false) && <p className="data-empty">MTN General plans can be viewed now. Purchases will be enabled when the new data provider is connected.</p>}
         <button className="airtime-submit" type="button" disabled={!validPhone || !selectedPlan || selectedPlan.purchaseAvailable === false || loading || purchasing} onClick={openCheckout}>{purchasing ? "Processing..." : selectedPlan?.purchaseAvailable === false ? "Purchases coming soon" : selectedPlan ? `Pay ${formatNaira(selectedPlan.price)}` : "Select a data plan"}</button>
       </section>
 
       {showCheckout && selectedPlan && <div className="data-modal-backdrop" role="presentation"><section className="data-modal review-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><button className="data-modal-close" type="button" onClick={() => setShowCheckout(false)} aria-label="Close checkout">x</button><p className="data-kicker">Review &amp; Confirm</p><h2 id="checkout-title">Transaction Summary</h2><div className="total-due"><span>TOTAL AMOUNT DUE</span><strong>{formatNaira(selectedPlan.price)}</strong></div><div className="transaction-summary"><div><span>Service</span><strong>{network} {selectedPlan.label}</strong></div><div><span>Beneficiary / Recipient</span><strong>{phone || "Not provided"}</strong></div><div><span>Package / Plan</span><strong>{selectedPlan.label}</strong></div><div><span>Payment Method</span><strong>AbbaKano Main Wallet</strong></div><div><span>Current Wallet Balance</span><strong>{walletBalance === null ? "Loading..." : formatNaira(walletBalance)}</strong></div><div><span>Balance After Transaction</span><strong>{walletBalance === null ? "Loading..." : formatNaira(walletBalance - selectedPlan.price)}</strong></div></div><form className="data-pin-form" onSubmit={submitPurchase}><label>Transaction PIN<div className="pin-authorization-row"><input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} placeholder="Enter 4-digit PIN" autoComplete="current-password" /><button className="biometric-action" type="button" onClick={() => void authorizeBiometric()} disabled={purchasing} aria-label="Authorize with biometrics" title="Authorize with biometrics"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7.5 8.5a6 6 0 0 1 9 0M5 12a7 7 0 0 1 14 0M9.5 12a2.5 2.5 0 0 1 5 0v5M12 14.5V20M8 16v1a4 4 0 0 0 8 0v-1" /></svg></button></div></label>{purchaseMessage && <div className="data-message error" role="alert">{purchaseMessage}</div>}<button className="data-purchase-button" type="submit" disabled={purchasing}>{purchasing ? "Processing..." : "Confirm & Authorize PIN"}</button></form></section></div>}
-      {receipt && <div className="data-modal-backdrop" role="presentation"><section className="data-modal receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div className={`receipt-mark ${receipt.status}`} aria-hidden="true">{receipt.status === "pending" ? "..." : "✓"}</div><p className="data-kicker">{receipt.status === "pending" ? "Transaction pending" : "Transaction successful"}</p><h2 id="receipt-title">{receipt.label}</h2><div className="checkout-summary"><span>{receipt.network} Data<br />{receipt.phone}</span><strong>{formatNaira(receipt.amount)}</strong></div><p className="receipt-message">{receipt.message}</p>{receipt.reference && <p className="receipt-reference">Reference: <strong>{receipt.reference}</strong></p>}<button className="data-purchase-button" type="button" onClick={() => { setReceipt(null); goHome(); }}>Back to Dashboard</button></section></div>}
+      {receipt && <div className="data-modal-backdrop" role="presentation"><section className="data-modal receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title"><div className={`receipt-mark ${receipt.status}`} aria-hidden="true">{receipt.status === "pending" ? "..." : "✓"}</div><p className="data-kicker">{receipt.status === "pending" ? "Transaction pending" : "Transaction successful"}</p><h2 id="receipt-title">{receipt.label}</h2><div className="checkout-summary"><span>{receipt.network} Data<br />{receipt.phone}</span></div><p className="receipt-message">{receipt.message}</p>{receipt.reference && <p className="receipt-reference">Reference: <strong>{receipt.reference}</strong></p>}<button className="data-purchase-button" type="button" onClick={() => { setReceipt(null); goHome(); }}>Back to Dashboard</button></section></div>}
       <WebBottomNav active="data" onNavigate={onTabChange} />
     </main>
   );

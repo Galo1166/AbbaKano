@@ -35,9 +35,9 @@ const supportChannels = [
   },
   {
     title: "Hotline 1 (Primary)",
-    value: "+2348166774566",
+    value: "+2348133339850",
     detail: "Direct Phone Call",
-    href: "tel:+2348166774566",
+    href: "tel:+2348133339850",
     tone: "blue",
   },
   {
@@ -101,7 +101,7 @@ export default function SupportPage() {
             <span>Instant Price Drops</span>
             <span>Network Status</span>
           </div>
-          <a href="https://wa.me/2348166774566?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20with%20my%20account." className="support-community-button" target="_blank" rel="noreferrer">
+          <a href="https://chat.whatsapp.com/DEpJ8XD2yWy1lKyLEHj4Di" className="support-community-button" target="_blank" rel="noreferrer">
             Join WhatsApp Community
             <span>Available Soon</span>
           </a>

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
-import { ApiError, apiRequest } from "@/lib/api";
+import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
@@ -37,6 +37,7 @@ export function CableTVShell() {
   const [plans, setPlans] = useState<CablePlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<CablePlan | null>(null);
   const [customerName, setCustomerName] = useState("");
+  const [verifyingCustomer, setVerifyingCustomer] = useState(false);
   const [message, setMessage] = useState("");
   const [pin, setPin] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
@@ -45,40 +46,32 @@ export function CableTVShell() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   useEffect(() => {
-    void apiRequest<{ balance: number }>('/wallet')
-      .then((response) => setBalance(response.balance))
-      .catch(() => {});
+    void getWalletBalance()
+      .then(setBalance)
+      .catch((error: unknown) => console.error("Cable TV wallet balance load failed:", error));
 
-    void apiRequest<{ user?: { phone?: string } }>('/me')
-      .then((response) => setAccountPhone(String(response.user?.phone || "")))
-      .catch(() => setAccountPhone(""));
   }, []);
 
   useEffect(() => {
     const smartcard = smartcardNumber.replace(/\D/g, '');
-    if (smartcard.length !== 10) {
-      setPlans([]);
-      setSelectedPlan(null);
-      setCustomerName('');
-      setMessage('');
-      return;
-    }
+    if (smartcard.length !== 10) return;
 
     let active = true;
-    setPlans([]);
-    setSelectedPlan(null);
-    setCustomerName('');
-    setMessage('');
-
     const timer = window.setTimeout(() => {
-      void apiRequest<{ customerName?: string; plans?: CablePlan[] }>('/vtu/verify-cable', {
-        method: 'POST',
-        body: JSON.stringify({ provider: provider.toLowerCase(), smartcardNumber: smartcard }),
-      }).then((response) => {
+      void invokeSupabaseFunction<{
+        customerName?: string;
+        accountPhone?: string;
+        plans: CablePlan[];
+      }>(
+        "cable-services",
+        { provider, smartcardNumber: smartcard },
+      ).then((response) => {
         if (!active) return;
+        setAccountPhone(response.accountPhone || "");
         const nextPlans = (response.plans || []).filter((plan) => typeof plan?.selectionToken === 'string' && plan.selectionToken.length > 0);
         setPlans(nextPlans);
         setCustomerName(response.customerName || 'Customer verified');
+        setVerifyingCustomer(false);
         if (nextPlans.length > 0) setSelectedPlan(nextPlans[0]);
         else setSelectedPlan(null);
       }).catch((error) => {
@@ -86,7 +79,8 @@ export function CableTVShell() {
         setPlans([]);
         setSelectedPlan(null);
         setCustomerName('');
-        setMessage(error instanceof ApiError ? error.message : 'Could not verify cable customer.');
+        setVerifyingCustomer(false);
+        setMessage(error instanceof Error ? error.message : 'Could not verify cable customer.');
       });
     }, 300);
 
@@ -108,6 +102,27 @@ export function CableTVShell() {
     router.push('/app');
   }
 
+  function updateSmartcardNumber(value: string) {
+    const nextSmartcard = value.replace(/\D/g, "");
+    if (nextSmartcard === smartcardNumber) return;
+    setSmartcardNumber(nextSmartcard);
+    setVerifyingCustomer(nextSmartcard.length === 10);
+    setPlans([]);
+    setSelectedPlan(null);
+    setCustomerName("");
+    setMessage("");
+  }
+
+  function updateProvider(nextProvider: Provider) {
+    if (nextProvider === provider) return;
+    setProvider(nextProvider);
+    setVerifyingCustomer(smartcardNumber.replace(/\D/g, "").length === 10);
+    setPlans([]);
+    setSelectedPlan(null);
+    setCustomerName("");
+    setMessage("");
+  }
+
   async function purchase(transactionAuthorization?: string) {
     if (!selectedPlan || !canReview || (!transactionAuthorization && !/^\d{4}$/.test(pin))) {
       setMessage('Enter a valid smartcard and 4-digit transaction PIN.');
@@ -118,17 +133,17 @@ export function CableTVShell() {
     setMessage('');
 
     try {
-      const result = await apiRequest<{ status?: string; message?: string; reference?: string }>('/vtu/cable_tv', {
-        method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify({
-          network: provider,
-          phone: accountPhone.replace(/[^\d]/g, ''),
-          smartcardNumber: smartcardNumber.replace(/\D/g, ''),
-          amount: selectedPlan.price,
-          planToken: selectedPlan.selectionToken,
-          ...(transactionAuthorization ? { transactionAuthorization } : { pin }),
-        }),
+      const result = await invokeSupabaseFunction<{
+        status?: string;
+        message?: string;
+        reference?: string;
+        balance_kobo?: number;
+      }>("cable-purchase", {
+        provider,
+        smartcardNumber: smartcardNumber.replace(/\D/g, ""),
+        selectionToken: selectedPlan.selectionToken,
+        idempotencyKey: crypto.randomUUID(),
+        ...(transactionAuthorization ? { transactionAuthorization } : { pin }),
       });
 
       setShowCheckout(false);
@@ -143,9 +158,12 @@ export function CableTVShell() {
         customerName,
       });
       setPin('');
+      if (typeof result.balance_kobo === "number") {
+        setBalance(result.balance_kobo / 100);
+      }
       window.dispatchEvent(new Event('dashboard-refresh'));
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Could not complete cable TV purchase.');
+      setMessage(error instanceof Error ? error.message : 'Could not complete cable TV purchase.');
     } finally {
       setPurchasing(false);
     }
@@ -155,12 +173,25 @@ export function CableTVShell() {
     setPurchasing(true);
     setMessage('');
     try {
-      const options = await apiRequest<Record<string, unknown>>('/auth/passkey/transaction/options', { method: 'POST', body: JSON.stringify({}) });
+      const options = await invokeSupabaseFunction<Record<string, unknown>>(
+        "passkey-auth",
+        {
+          action: "transaction-options",
+          purchase: {
+            network: provider,
+            phone: accountPhone.replace(/\D/g, ""),
+            selectionToken: selectedPlan?.selectionToken,
+          },
+        },
+      );
       const response = await startAuthentication({ optionsJSON: options as never });
-      const authorization = await apiRequest<{ transactionAuthorization: string }>('/auth/passkey/transaction/verify', { method: 'POST', body: JSON.stringify({ response }) });
+      const authorization = await invokeSupabaseFunction<{ transactionAuthorization: string }>(
+        "passkey-auth",
+        { action: "transaction-verify", response },
+      );
       await purchase(authorization.transactionAuthorization);
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Biometric authorization was not completed.');
+      setMessage(error instanceof Error ? error.message : 'Biometric authorization was not completed.');
       setPurchasing(false);
     }
   }
@@ -182,7 +213,7 @@ export function CableTVShell() {
         </div>
         <div className="network-grid">
           {providers.map((item) => (
-            <button className={`network-card${provider === item.id ? ' selected' : ''}`} type="button" onClick={() => setProvider(item.id)} key={item.id}>
+            <button className={`network-card${provider === item.id ? ' selected' : ''}`} type="button" onClick={() => updateProvider(item.id)} key={item.id}>
               <span className="network-logo" style={{ backgroundColor: '#8b5cf6' }}><span>{item.label.slice(0, 2)}</span></span>
               <span>{item.label}</span>
               {provider === item.id && <i />}
@@ -192,10 +223,12 @@ export function CableTVShell() {
 
         <label className="data-phone-label">
           Smartcard Number
-          <input value={smartcardNumber} onChange={(event) => setSmartcardNumber(event.target.value.replace(/\D/g, ''))} placeholder="Enter 10-digit smartcard number" inputMode="numeric" maxLength={10} />
+          <input value={smartcardNumber} onChange={(event) => updateSmartcardNumber(event.target.value)} placeholder="Enter 10-digit smartcard number" inputMode="numeric" maxLength={10} />
         </label>
 
-        {customerName && <div className="profile-message">Customer: {customerName}</div>}
+        {verifyingCustomer
+          ? <div className="profile-message cable-verifying" role="status"><span className="dashboard-spinner" aria-hidden="true" />Verifying smartcard...</div>
+          : customerName && <div className="profile-message">Customer: {customerName}</div>}
 
         <div className="airtime-presets-heading">AVAILABLE PACKAGES</div>
         <div className="airtime-presets">

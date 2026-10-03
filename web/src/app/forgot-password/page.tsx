@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { AuthShell } from "@/components/auth/AuthShell";
-import { apiRequest, ApiError } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -11,23 +11,58 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("");
-    if (!email.includes("@")) {
-      setMessage("Password recovery is currently available by email only.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const response = await apiRequest<{ message: string }>("/password-reset/request", { method: "POST", body: JSON.stringify({ email }) });
-      setMessage(response.message);
-    } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Could not send recovery instructions.");
-    } finally {
-      setLoading(false);
-    }
+async function submit(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
+  setMessage("");
+
+  if (!email.includes("@")) {
+    setMessage(
+      "Password recovery is currently available by email only.",
+    );
+    return;
   }
+
+  if (recoveryType === "pin") {
+    setMessage(
+      "Transaction PIN recovery will be connected separately.",
+    );
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const { error } =
+      await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        {
+          redirectTo:
+            `${window.location.origin}/reset-password`,
+        },
+      );
+
+    if (error) {
+      throw error;
+    }
+
+    setMessage(
+      "If an account exists for this email, recovery instructions have been sent.",
+    );
+  } catch (error) {
+    console.error(
+      "Password recovery error:",
+      error,
+    );
+
+    setMessage(
+      error instanceof Error
+        ? error.message
+        : "Could not send recovery instructions.",
+    );
+  } finally {
+    setLoading(false);
+  }
+}
 
   return (
     <AuthShell title="Account Recovery" subtitle="Recover your account" description="Choose what you need to recover and we will send instructions to your registered email." footer={<>Remembered your details? <Link href="/login">Back to sign in</Link></>}>
