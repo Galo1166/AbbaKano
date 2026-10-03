@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 function normalizePhone(phone: string) {
@@ -19,8 +18,6 @@ function normalizePhone(phone: string) {
 }
 
 export function LoginForm() {
-  const router = useRouter();
-
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [rememberDevice, setRememberDevice] = useState(false);
@@ -58,8 +55,15 @@ export function LoginForm() {
         throw new Error("Could not create a login session.");
       }
 
-      router.push("/app");
-      router.refresh();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw sessionError || new Error("Login succeeded, but the session could not be restored.");
+      }
+
+      window.location.assign("/app");
 
     } catch (error) {
       console.error("Supabase login error:", error);
