@@ -70,12 +70,5 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = request.cookies.get("session")?.value;
-
-  if (!sessionCookie) {
-    const loginPath = pathname.startsWith("/admin") ? "/admin/login" : "/login";
-    return NextResponse.redirect(new URL(loginPath, request.url));
-  }
-
   return NextResponse.next();
 }
