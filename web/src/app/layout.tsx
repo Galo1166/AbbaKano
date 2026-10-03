@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import "./globals.css";
 import { BackendWarmup } from "@/components/common/BackendWarmup";
 import { AuthPrompt } from "@/components/auth/AuthPrompt";
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
   description: "One wallet for airtime, data, and every bill you owe.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning data-theme="dark" data-scroll-behavior="smooth">
       <head>
