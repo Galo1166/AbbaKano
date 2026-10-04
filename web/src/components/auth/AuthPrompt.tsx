@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-const excludedPaths = ["/", "/login", "/register", "/forgot-password"];
+const excludedPaths = ["/", "/login", "/register", "/forgot-password", "/reset-password"];
 
 function isExcludedPath(pathname: string) {
   return excludedPaths.includes(pathname) || pathname.startsWith("/admin");

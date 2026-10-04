@@ -69,7 +69,7 @@ async function submit(event: FormEvent<HTMLFormElement>) {
       <form className="auth-form" onSubmit={submit}>
         {message && <div className="auth-info" role="status">{message}</div>}
         <fieldset className="recovery-options"><legend>Recovery type</legend><button type="button" className={recoveryType === "password" ? "selected" : ""} onClick={() => setRecoveryType("password")}>Account Password<span>For App Sign-In</span></button><button type="button" className={recoveryType === "pin" ? "selected" : ""} onClick={() => setRecoveryType("pin")}>Transaction PIN<span>4-Digit Wallet PIN</span></button></fieldset>
-        <label>Registered Phone or Email<input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter phone number or email" autoComplete="email" /></label>
+        <label>Registered Email Address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email address" autoComplete="email" required /></label>
         <div className="security-card"><strong>256-Bit Encrypted Recovery</strong><span>Never share your reset code or OTP with anyone.</span></div>
         <button className="auth-primary" type="submit" disabled={loading}>{loading ? "Sending Recovery Code..." : "Send Recovery Code"}</button>
       </form>
