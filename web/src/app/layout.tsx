@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { BackendWarmup } from "@/components/common/BackendWarmup";
 import { AuthPrompt } from "@/components/auth/AuthPrompt";
 import { GlobalToast } from "@/components/common/GlobalToast";
 
@@ -39,7 +38,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
       </head>
       <body>
-        <BackendWarmup />
         <AuthPrompt />
         <GlobalToast />
         <a className="skip-link" href="#main-content">Skip to main content</a>

@@ -3,7 +3,6 @@
 import { startRegistration } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { ApiError, apiRequest } from "@/lib/api";
 import { invokeSupabaseFunction, supabase } from "@/lib/supabase";
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
 import { useThemeMode } from "@/lib/theme";
@@ -57,20 +56,54 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
   const { theme, themePreference, setThemePreference } = useThemeMode();
 
   useEffect(() => {
-    if (initialUser) return;
     let cancelled = false;
-    void apiRequest<{ user: ProfileUser | null }>("/me").then((response) => {
-      if (cancelled) return;
-      if (!response.user) throw new Error("Profile data was not returned.");
-      setUser(response.user);
-      setBiometrics(response.user.biometrics_enabled !== false && response.user.has_passkey === true);
-      setAppLock(response.user.app_lock_enabled === true);
-      setPinStep(response.user.has_transaction_pin ? "current" : "new");
+
+    if (!initialUser) {
+      void (async () => {
+        try {
+          const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+          if (authError) throw authError;
+          if (!authUser) throw new Error("Authentication required.");
+
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("full_name, phone, biometrics_enabled, app_lock_enabled")
+            .eq("id", authUser.id)
+            .single();
+          if (profileError) throw profileError;
+          if (cancelled) return;
+
+          setUser({
+            full_name: profile.full_name || "",
+            email: authUser.email || "",
+            phone: profile.phone || "",
+            biometrics_enabled: profile.biometrics_enabled,
+            app_lock_enabled: profile.app_lock_enabled,
+          });
+          setBiometrics(profile.biometrics_enabled !== false);
+          setAppLock(profile.app_lock_enabled === true);
+        } catch (error) {
+          if (!cancelled) setMessage(safeErrorMessage(error, "Could not load your profile."));
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+    }
+
+    void invokeSupabaseFunction<{ hasPin: boolean }>(
+      "verify-transaction-pin",
+      { action: "status" },
+    ).then(({ hasPin }) => {
+      if (!cancelled) {
+        setPinStep(hasPin ? "current" : "new");
+        setUser((current) => current
+          ? { ...current, has_transaction_pin: hasPin }
+          : current);
+      }
     }).catch((error) => {
       if (!cancelled) setMessage(safeErrorMessage(error, "Could not load your profile."));
-    }).finally(() => {
-      if (!cancelled) setLoading(false);
     });
+
     return () => { cancelled = true; };
   }, [initialUser]);
 
@@ -144,9 +177,7 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
         setUser((current) => current ? { ...current, has_passkey: nextValue } : current);
       }
     } catch (error) {
-      if (error instanceof ApiError) {
-        setMessage(safeErrorMessage(error, "Could not save this security setting."));
-      } else if (error instanceof Error && error.name === "NotAllowedError") {
+      if (error instanceof Error && error.name === "NotAllowedError") {
         setMessage("Passkey setup was cancelled or unavailable. Try again and complete the browser prompt.");
       } else if (error instanceof Error && error.name === "SecurityError") {
         setMessage("Passkey setup is temporarily unavailable. Please try again later or contact support.");
@@ -191,11 +222,6 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       return;
     }
 
-    try {
-      await apiRequest("/logout", { method: "POST" }, { showServiceErrorToast: false });
-    } catch (error) {
-      console.warn("Could not clear the customer's backend session; local sign-out succeeded", error);
-    }
     router.replace("/login");
   }
 
@@ -215,11 +241,6 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       await supabase.auth.signOut({ scope: "local" });
     } catch (error) {
       console.error("Could not clear the deleted customer's local session", error);
-    }
-    try {
-      await apiRequest("/logout", { method: "POST" }, { showServiceErrorToast: false });
-    } catch (error) {
-      console.error("Could not clear the deleted customer's web session", error);
     }
     router.replace("/login");
   }

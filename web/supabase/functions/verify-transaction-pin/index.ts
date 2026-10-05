@@ -108,15 +108,16 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
 
     const pin = body?.pin;
+    const isStatusRequest = body?.action === "status";
 
     /*
      * Same validation rule as the old Express backend:
      * exactly 4 digits.
      */
-    if (
+    if (!isStatusRequest && (
       typeof pin !== "string" ||
       !/^\d{4}$/.test(pin)
-    ) {
+    )) {
       return jsonResponse(
         {
           message:
@@ -153,6 +154,12 @@ Deno.serve(async (req: Request) => {
         },
         500,
       );
+    }
+
+    if (isStatusRequest) {
+      return jsonResponse({
+        hasPin: Boolean(profile?.transaction_pin_hash && profile?.transaction_pin_salt),
+      });
     }
 
     if (
