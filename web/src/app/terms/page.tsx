@@ -1,8 +1,15 @@
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
+import { shouldHideDashboardNavigation } from "@/lib/publicPageNavigation";
 
-export default function TermsPage() {
+export default async function TermsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string | string[] }>;
+}) {
+  const hideDashboardNavigation = await shouldHideDashboardNavigation(searchParams);
+
   return (
-    <CustomerPageLayout active="profile" eyebrow="Legal" title="Terms and Conditions" subtitle="The terms that apply when you use AbbaKano DataSub." className="profile-page" headerClassName="profile-header">
+    <CustomerPageLayout active="profile" eyebrow="Legal" title="Terms and Conditions" subtitle="The terms that apply when you use AbbaKano DataSub." className="profile-page" headerClassName="profile-header" hideDashboardNavigation={hideDashboardNavigation}>
       <div className="profile-content about-content">
         <section className="profile-section">
           <h2>Acceptance and Eligibility</h2>

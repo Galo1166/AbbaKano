@@ -135,7 +135,7 @@ export default function Home() {
               <span>AbbaKano DataSub</span>
             </Link>
             <p>Bill payments made simple, from Kano to every state.</p>
-            <Link className="footer-support" href="/support">Talk to support <span aria-hidden="true">-&gt;</span></Link>
+            <Link className="footer-support" href="/support?from=welcome">Talk to support <span aria-hidden="true">-&gt;</span></Link>
           </div>
           <div>
             <h2 className="footer-heading">Services</h2>
@@ -149,9 +149,9 @@ export default function Home() {
           <div>
             <h2 className="footer-heading">Company</h2>
             <nav className="footer-links" aria-label="Company">
-              <Link href="/about">About AbbaKano</Link>
+              <Link href="/about?from=welcome">About AbbaKano</Link>
               <Link href="/refer-and-earn">Refer &amp; earn</Link>
-              <Link href="/support">Help centre</Link>
+              <Link href="/support?from=welcome">Help centre</Link>
               <Link href="/login">Sign in</Link>
             </nav>
           </div>
@@ -160,7 +160,7 @@ export default function Home() {
             <div className="footer-links">
               <a href="mailto:support@abbakano.com">support@abbakano.com</a>
               <a href="tel:+2348133339850">+234 813 333 9850</a>
-              <a href="/support">WhatsApp support</a>
+              <a href="/support?from=welcome">WhatsApp support</a>
               <span>Kano, Nigeria</span>
             </div>
           </div>
@@ -171,7 +171,7 @@ export default function Home() {
         </div>
         <div className="footer-bottom">
           <span>© 2026 AbbaKano DataSub. All rights reserved.</span>
-          <div className="footer-legal"><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/support">Support Desk</Link></div>
+          <div className="footer-legal"><Link href="/terms?from=welcome">Terms</Link><Link href="/privacy?from=welcome">Privacy</Link><Link href="/support?from=welcome">Support Desk</Link></div>
         </div>
       </footer>
     </main>

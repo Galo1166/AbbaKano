@@ -1,8 +1,15 @@
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
+import { shouldHideDashboardNavigation } from "@/lib/publicPageNavigation";
 
-export default function PrivacyPage() {
+export default async function PrivacyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string | string[] }>;
+}) {
+  const hideDashboardNavigation = await shouldHideDashboardNavigation(searchParams);
+
   return (
-    <CustomerPageLayout active="profile" eyebrow="Legal" title="Privacy Policy" subtitle="How AbbaKano collects, uses, and protects your personal information." className="profile-page" headerClassName="profile-header">
+    <CustomerPageLayout active="profile" eyebrow="Legal" title="Privacy Policy" subtitle="How AbbaKano collects, uses, and protects your personal information." className="profile-page" headerClassName="profile-header" hideDashboardNavigation={hideDashboardNavigation}>
       <div className="profile-content about-content">
         <section className="profile-section">
           <h2>Information We Collect</h2>

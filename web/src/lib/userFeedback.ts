@@ -4,7 +4,7 @@ export const GENERIC_SERVICE_ERROR =
 const serviceFailurePattern =
   /\b(supabase|vtu[\s_-]*gate|upstream|gateway|backend|internal server|internal error|database|postgres|fetch|network request|edge function|temporarily unavailable|could not reach|http error|status code|postgrest|pgrst|row[- ]level security|permission denied|invalid api key|jwt)\b/i;
 
-type ToastEventDetail = { type: "error"; message: string };
+type ToastEventDetail = { type: "error" | "success"; message: string };
 
 export function isServiceFailure(message: string, status?: number): boolean {
   return (typeof status === "number" && status >= 500) ||
@@ -12,10 +12,18 @@ export function isServiceFailure(message: string, status?: number): boolean {
 }
 
 export function showErrorToast(message = GENERIC_SERVICE_ERROR): void {
+  showToast("error", message);
+}
+
+export function showSuccessToast(message: string): void {
+  showToast("success", message);
+}
+
+function showToast(type: ToastEventDetail["type"], message: string): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent<ToastEventDetail>("abbakano:toast", {
-      detail: { type: "error", message },
+      detail: { type, message },
     }),
   );
 }

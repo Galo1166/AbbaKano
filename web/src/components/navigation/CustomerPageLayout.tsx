@@ -10,6 +10,7 @@ export function CustomerPageLayout({
   children,
   className = "profile-page",
   headerClassName = "profile-header",
+  hideDashboardNavigation = false,
 }: {
   active: "home" | "data" | "history" | "profile";
   eyebrow: string;
@@ -18,20 +19,21 @@ export function CustomerPageLayout({
   children: React.ReactNode;
   className?: string;
   headerClassName?: string;
+  hideDashboardNavigation?: boolean;
 }) {
   return (
-    <main className={className}>
-      <WebDesktopSidebar active={active} />
+    <main className={`${className}${hideDashboardNavigation ? " public-info-page" : ""}`}>
+      {!hideDashboardNavigation && <WebDesktopSidebar active={active} />}
       <div className="customer-page-body">
         <header className={headerClassName}>
-          <DashboardBackButton />
+          {!hideDashboardNavigation && <DashboardBackButton />}
           <p className="data-kicker">{eyebrow}</p>
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </header>
         {children}
       </div>
-      <WebBottomNav active={active} />
+      {!hideDashboardNavigation && <WebBottomNav active={active} />}
     </main>
   );
 }

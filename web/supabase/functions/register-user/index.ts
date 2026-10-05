@@ -50,6 +50,19 @@ function normalizePhone(phone: string) {
   return { local: `0${local}`, international: `+234${local}` };
 }
 
+function referralPhoneCandidates(referralCode: string) {
+  const digits = referralCode.replace(/\D/g, "");
+  if (digits.startsWith("234")) {
+    const local = `0${digits.slice(3)}`;
+    return [digits, local, `+${digits}`];
+  }
+  if (digits.startsWith("0")) {
+    const internationalDigits = `234${digits.slice(1)}`;
+    return [digits, internationalDigits, `+${internationalDigits}`];
+  }
+  return digits ? [digits] : [];
+}
+
 async function hashPin(pin: string) {
   const { scrypt } = await import(
     "https://esm.sh/@noble/hashes@1.8.0/scrypt"
@@ -199,26 +212,45 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check whether phone already exists.
-    const {
-      data: existingProfile,
-      error: profileLookupError,
-    } = await supabaseAdmin
+    const referralPhones = referralPhoneCandidates(referralCode);
+    if (referralCode && referralPhones.length === 0) {
+      return json(
+        {
+          message: "Referral phone number was not found.",
+        },
+        400
+      );
+    }
+
+    const phoneCandidates = supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("phone", phone.local)
       .maybeSingle();
+    const referralCandidates = referralCode
+      ? supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .in("phone", referralPhones)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null });
 
-    if (profileLookupError) {
-      console.error(
-        "Profile lookup error:",
-        profileLookupError
-      );
+    const [
+      { data: existingProfile, error: profileLookupError },
+      { data: referrerProfile, error: referralLookupError },
+    ] = await Promise.all([phoneCandidates, referralCandidates]);
+
+    if (profileLookupError || referralLookupError) {
+      console.error("Registration preflight failed:", {
+        profileLookupError,
+        referralLookupError,
+      });
 
       return json(
         {
-          message:
-            "Could not check your registration details.",
+          message: "Could not check your registration details.",
         },
         500
       );
@@ -231,6 +263,15 @@ Deno.serve(async (req) => {
             "An account with this phone number already exists.",
         },
         409
+      );
+    }
+
+    if (referralCode && !referrerProfile) {
+      return json(
+        {
+          message: "Referral phone number was not found.",
+        },
+        400
       );
     }
 

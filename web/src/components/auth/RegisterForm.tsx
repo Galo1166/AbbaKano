@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {invokeSupabaseFunction} from "@/lib/supabase";
-import { safeErrorMessage } from "@/lib/userFeedback";
+import { safeErrorMessage, showErrorToast, showSuccessToast } from "@/lib/userFeedback";
 
 function subscribeToLocation(callback: () => void) {
   window.addEventListener("popstate", callback);
@@ -104,28 +104,20 @@ if (!values.email.includes("@")) {
       },
     );
 
-    /*
-     * The Edge Function has created the
-     * Supabase Auth account.
-     *
-     * Now sign the browser into that account.
-     *
-     * Email is optional in your registration,
-     * so password authentication without email
-     * cannot use signInWithPassword.
-     *
-     * We therefore redirect to login for now.
-     */
-    router.push(
-      "/login?registered=true",
-    );
+    showSuccessToast("Account created successfully. You can now log in.");
+    router.push("/login");
   } catch (error) {
     console.error(
       "Registration error:",
       error,
     );
 
-    setErrorMessage(safeErrorMessage(error, "Could not create your account."));
+    if (error instanceof Error && /referral.*(?:not found|invalid)/i.test(error.message)) {
+      setErrorMessage("");
+      showErrorToast("Invalid referral code. Please check the phone number and try again.");
+    } else {
+      setErrorMessage(safeErrorMessage(error, "Could not create your account."));
+    }
   } finally {
     setLoading(false);
   }
@@ -143,7 +135,7 @@ if (!values.email.includes("@")) {
       <label>Confirm Transaction PIN<div className="auth-input-wrap"><input type={showConfirmPin ? "text" : "password"} inputMode="numeric" maxLength={4} value={values.confirmPin} onChange={(event) => updateValue("confirmPin", event.target.value.replace(/\D/g, ""))} placeholder="Re-enter 4-digit PIN" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowConfirmPin((current) => !current)} aria-label={showConfirmPin ? "Hide confirmed transaction PIN" : "Show confirmed transaction PIN"}><VisibilityIcon visible={showConfirmPin} /></button></div></label>
       <button className="referral-toggle" type="button" onClick={() => setShowReferral((current) => !current)}>{showReferral ? "Hide referral code" : "Have a Referral Code (Phone No)?"}</button>
       {(showReferral || referralCodeFromUrl) && <label>Referral Code <small className="bonus">N100 BONUS</small><input value={values.referralCode || referralCodeFromUrl} onChange={(event) => updateValue("referralCode", event.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="Enter referrer's phone number" inputMode="numeric" maxLength={11} /></label>}
-      <label className="check-label terms"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} /> I agree to the <Link href="/terms">Terms of Service</Link> and <Link href="/privacy">Privacy Policy</Link>.</label>
+      <label className="check-label terms"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} /> I agree to the <Link href="/terms?from=auth">Terms of Service</Link> and <Link href="/privacy?from=auth">Privacy Policy</Link>.</label>
       <button className="auth-primary" type="submit" disabled={loading}>{loading ? "Creating Account..." : "Register & Get Started"}</button>
       <p className="security-note">256-bit secure registration. We never share your data.</p>
     </form>

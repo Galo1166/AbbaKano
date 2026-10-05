@@ -114,6 +114,7 @@ a { color: inherit; text-decoration: none; }
 .web-sidebar-logout { color: #dc2626 !important; }
 .web-sidebar-logout:hover { background: rgba(239, 68, 68, 0.08) !important; color: #b91c1c !important; }
 .data-page, .airtime-page, .history-page, .profile-page, .fund-page, .support-page { margin-left: 226px; }
+.public-info-page { margin-left: 0 !important; }
 
 .landing {
 	min-height: 100vh;
@@ -831,7 +832,9 @@ a { color: inherit; text-decoration: none; }
 .signout-confirm:hover { background: #991b1b; }
 .global-toast { position: fixed; z-index: 10000; right: 20px; bottom: 24px; display: flex; width: min(420px, calc(100vw - 32px)); align-items: center; gap: 12px; border: 1px solid rgba(239, 68, 68, 0.38); border-radius: 14px; background: var(--surface, #161b24); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32); color: var(--text, #f5f7fb); padding: 14px 15px; font-size: 0.82rem; line-height: 1.5; animation: global-toast-in 180ms ease-out; }
 .global-toast-error { border-left: 4px solid #ef4444; }
+.global-toast-success { border-left: 4px solid #22c55e; }
 .global-toast-icon { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border-radius: 50%; background: rgba(239, 68, 68, 0.14); color: #ff8f86; font-weight: 900; }
+.global-toast-success .global-toast-icon { background: rgba(34, 197, 94, 0.14); color: #4ade80; }
 .global-toast button { margin-left: auto; border: 0; background: transparent; color: var(--text-subtle, #a6afbf); cursor: pointer; padding: 2px 4px; font: inherit; font-size: 1.2rem; }
 @keyframes global-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .profile-page .profile-content.about-content { padding-bottom: 40px; }

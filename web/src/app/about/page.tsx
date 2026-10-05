@@ -1,5 +1,6 @@
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
 import Link from "next/link";
+import { shouldHideDashboardNavigation } from "@/lib/publicPageNavigation";
 
 const services = [
   {
@@ -27,9 +28,18 @@ const steps = [
   "Authorize the purchase and follow its status in transaction history.",
 ];
 
-export default function AboutPage() {
+export default async function AboutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const hideDashboardNavigation = await shouldHideDashboardNavigation(Promise.resolve(params));
+  const from = params.from === "welcome" || params.from === "auth" ? params.from : undefined;
+  const sourceQuery = from ? `?from=${from}` : "";
+
   return (
-    <CustomerPageLayout active="profile" eyebrow="About" title="About AbbaKano" subtitle="Everyday payments, made simpler." className="profile-page" headerClassName="profile-header">
+    <CustomerPageLayout active="profile" eyebrow="About" title="About AbbaKano" subtitle="Everyday payments, made simpler." className="profile-page" headerClassName="profile-header" hideDashboardNavigation={hideDashboardNavigation}>
       <div className="profile-content about-content">
         <section className="about-introduction" aria-labelledby="about-introduction-title">
           <p className="about-kicker">One account for everyday top-ups and bills</p>
@@ -39,7 +49,7 @@ export default function AboutPage() {
           </p>
           <div className="about-actions">
             <Link href="/register" className="about-primary-link">Create an account</Link>
-            <Link href="/support" className="about-secondary-link">Get support</Link>
+            <Link href={`/support${sourceQuery}`} className="about-secondary-link">Get support</Link>
           </div>
         </section>
 
@@ -93,8 +103,8 @@ export default function AboutPage() {
         </section>
 
         <nav className="about-legal-links" aria-label="Legal information">
-          <Link href="/terms">Terms of Service</Link>
-          <Link href="/privacy">Privacy Policy</Link>
+          <Link href={`/terms${sourceQuery}`}>Terms of Service</Link>
+          <Link href={`/privacy${sourceQuery}`}>Privacy Policy</Link>
           <span>AbbaKano Data Sub · Kano State, Nigeria</span>
         </nav>
       </div>

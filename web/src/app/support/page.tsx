@@ -1,6 +1,7 @@
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { DashboardBackButton } from "@/components/navigation/DashboardBackButton";
+import { shouldHideDashboardNavigation } from "@/lib/publicPageNavigation";
 
 const faqs = [
   {
@@ -56,14 +57,20 @@ const supportChannels = [
   },
 ];
 
-export default function SupportPage() {
+export default async function SupportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string | string[] }>;
+}) {
+  const hideDashboardNavigation = await shouldHideDashboardNavigation(searchParams);
+
   return (
-    <main className="support-page">
-      <WebDesktopSidebar active="profile" />
+    <main className={`support-page${hideDashboardNavigation ? " public-info-page" : ""}`}>
+      {!hideDashboardNavigation && <WebDesktopSidebar active="profile" />}
 
       <div className="support-shell">
         <header className="support-header">
-          <DashboardBackButton />
+          {!hideDashboardNavigation && <DashboardBackButton />}
           <p className="data-kicker">Customer Support</p>
           <h1>Customer Support</h1>
           <p className="support-intro">24/7 Multi-Channel Resolution Desk</p>
@@ -158,7 +165,7 @@ export default function SupportPage() {
         </footer>
       </div>
 
-      <WebBottomNav active="profile" />
+      {!hideDashboardNavigation && <WebBottomNav active="profile" />}
     </main>
   );
 }

@@ -36,7 +36,7 @@ export function LoginForm() {
 
     if (!value || !password) {
       setErrorMessage(
-        "Enter your email and password."
+        "Enter your phone number or email and password."
       );
       return;
     }
@@ -80,7 +80,7 @@ export function LoginForm() {
       }
       setErrorMessage(
         error instanceof Error && error.message === "Invalid login credentials"
-          ? "Email or password is incorrect."
+          ? "Phone number/email or password is incorrect."
           : error instanceof Error
             ? error.message
             : "Could not sign in."
@@ -145,16 +145,19 @@ export function LoginForm() {
       )}
 
       <label>
-        Email
+        Phone number or email
 
         <input
           value={identifier}
           onChange={(event) =>
             setIdentifier(event.target.value)
           }
-          placeholder="Enter your email"
+          placeholder="Enter your phone number or email"
           autoComplete="username"
-          type="email"
+          type="text"
+          inputMode={identifier.includes("@") ? "email" : "tel"}
+          autoCapitalize="none"
+          autoCorrect="off"
         />
       </label>
 
@@ -227,7 +230,7 @@ export function LoginForm() {
 
       <p className="auth-help">
         Need help?{" "}
-        <Link href="/support">
+        <Link href="/support?from=auth">
           Contact WhatsApp Support
         </Link>
       </p>
