@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { useCheckout } from '@/context/CheckoutContext';
@@ -23,14 +24,15 @@ export const ReceiptModal: React.FC = () => {
 
   if (!activeReceipt) return null;
 
-  const handleCopyToken = () => {
-    if (activeReceipt.token) {
-      setTokenCopied(true);
-      setTimeout(() => setTokenCopied(false), 2000);
-    }
+  const handleCopyToken = async () => {
+    if (!activeReceipt.token) return;
+    await Clipboard.setStringAsync(activeReceipt.token);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2000);
   };
 
-  const handleCopyRef = () => {
+  const handleCopyRef = async () => {
+    await Clipboard.setStringAsync(activeReceipt.reference);
     setRefCopied(true);
     setTimeout(() => setRefCopied(false), 2000);
   };

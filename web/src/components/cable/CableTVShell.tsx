@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
 import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
+import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
@@ -11,10 +12,10 @@ type Provider = "DSTV" | "GOTV" | "STARTIMES";
 type CablePlan = { label: string; price: number; code: string; selectionToken: string; category?: string; provider?: string };
 type Receipt = { status: string; message: string; reference?: string; provider: Provider; smartcardNumber: string; phone: string; amount: number; customerName?: string };
 
-const providers: Array<{ id: Provider; label: string }> = [
-  { id: "DSTV", label: "DSTV" },
-  { id: "GOTV", label: "GOTV" },
-  { id: "STARTIMES", label: "Startimes" },
+const providers: Array<{ id: Provider; label: string; serviceId: string }> = [
+  { id: "DSTV", label: "DSTV", serviceId: "344" },
+  { id: "GOTV", label: "GOTV", serviceId: "345" },
+  { id: "STARTIMES", label: "Startimes", serviceId: "277" },
 ];
 
 function formatNaira(amount: number) {
@@ -57,6 +58,7 @@ export function CableTVShell() {
     if (smartcard.length !== 10) return;
 
     let active = true;
+    const currentProvider = providers.find((p) => p.id === provider);
     const timer = window.setTimeout(() => {
       void invokeSupabaseFunction<{
         customerName?: string;
@@ -64,7 +66,11 @@ export function CableTVShell() {
         plans: CablePlan[];
       }>(
         "cable-services",
-        { provider, smartcardNumber: smartcard },
+        {
+          provider,
+          serviceId: currentProvider?.serviceId || "1",
+          smartcardNumber: smartcard,
+        },
       ).then((response) => {
         if (!active) return;
         setAccountPhone(response.accountPhone || "");
@@ -80,7 +86,7 @@ export function CableTVShell() {
         setSelectedPlan(null);
         setCustomerName('');
         setVerifyingCustomer(false);
-        setMessage(error instanceof Error ? error.message : 'Could not verify cable customer.');
+        setMessage(safeErrorMessage(error, 'Could not verify cable customer.'));
       });
     }, 300);
 
@@ -149,7 +155,7 @@ export function CableTVShell() {
       setShowCheckout(false);
       setReceipt({
         status: result.status === 'pending' ? 'pending' : 'success',
-        message: result.message || 'Cable TV purchase submitted successfully.',
+        message: sanitizeServiceMessage(result.message || 'Cable TV purchase submitted successfully.'),
         reference: result.reference,
         provider,
         smartcardNumber: smartcardNumber.replace(/\D/g, ''),
@@ -163,7 +169,7 @@ export function CableTVShell() {
       }
       window.dispatchEvent(new Event('dashboard-refresh'));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not complete cable TV purchase.');
+      setMessage(safeErrorMessage(error, 'Could not complete cable TV purchase.'));
     } finally {
       setPurchasing(false);
     }
@@ -191,7 +197,7 @@ export function CableTVShell() {
       );
       await purchase(authorization.transactionAuthorization);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Biometric authorization was not completed.');
+      setMessage(safeErrorMessage(error, 'Biometric authorization was not completed.'));
       setPurchasing(false);
     }
   }
@@ -292,4 +298,3 @@ export function CableTVShell() {
     </main>
   );
 }
-

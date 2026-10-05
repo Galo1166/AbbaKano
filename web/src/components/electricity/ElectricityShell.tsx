@@ -4,20 +4,21 @@ import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
 import { getWalletBalance, invokeSupabaseFunction, supabase } from "@/lib/supabase";
+import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
 type Provider = "AEDC" | "IKEDC" | "KEDCO" | "PHED" | "JED";
 type ServicePlan = { label: string; price: number; code: string; category?: string; provider?: string };
-type Receipt = { status: string; message: string; reference?: string; provider: Provider; meterNumber: string; phone: string; amount: number; customerName?: string };
+type Receipt = { status: string; message: string; reference?: string; provider: Provider; meterNumber: string; phone: string; amount: number; customerName?: string; token?: string; units?: string };
 type MeterVerification = "idle" | "checking" | "verified" | "error";
 
-const providers: Array<{ id: Provider; label: string }> = [
-  { id: "AEDC", label: "AEDC" },
-  { id: "IKEDC", label: "IKEDC" },
-  { id: "KEDCO", label: "KEDCO" },
-  { id: "PHED", label: "PHED" },
-  { id: "JED", label: "JED" },
+const providers: Array<{ id: Provider; label: string; serviceId: string; disco: string }> = [
+  { id: "AEDC", label: "AEDC", serviceId: "327", disco: "aedc" },
+  { id: "IKEDC", label: "IKEDC", serviceId: "325", disco: "ikedc" },
+  { id: "KEDCO", label: "KEDCO", serviceId: "328", disco: "kedco" },
+  { id: "PHED", label: "PHED", serviceId: "329", disco: "portharcourt" },
+  { id: "JED", label: "JED", serviceId: "330", disco: "jos" },
 ];
 
 function formatNaira(amount: number) {
@@ -50,6 +51,7 @@ export function ElectricityShell() {
   const [balance, setBalance] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [tokenCopied, setTokenCopied] = useState(false);
 
   useEffect(() => {
     void getWalletBalance()
@@ -91,7 +93,7 @@ export function ElectricityShell() {
         else setSelectedPlan(null);
       } catch (error) {
         if (!cancelled) {
-          setMessage(error instanceof Error ? error.message : "Could not load electricity plans.");
+          setMessage(safeErrorMessage(error, "Could not load electricity plans."));
         }
       } finally {
         if (!cancelled) setPlansLoading(false);
@@ -109,6 +111,7 @@ export function ElectricityShell() {
       return;
     }
 
+    const currentProvider = providers.find((p) => p.id === provider);
     const timer = window.setTimeout(() => {
       if (cancelled) return;
       setMeterVerification("checking");
@@ -116,7 +119,13 @@ export function ElectricityShell() {
       setVerifiedSelectionToken("");
       void invokeSupabaseFunction<{ customerName: string; selectionToken: string }>(
         "electricity-services",
-        { action: "verify-meter", provider, meterNumber: meter },
+        {
+          action: "verify-meter",
+          provider,
+          serviceId: currentProvider?.serviceId || "1",
+          disco: currentProvider?.disco || provider.toLowerCase(),
+          meterNumber: meter,
+        },
       ).then((response) => {
         if (cancelled) return;
         setCustomerName(response.customerName);
@@ -127,7 +136,7 @@ export function ElectricityShell() {
         setCustomerName("");
         setVerifiedSelectionToken("");
         setMeterVerification("error");
-        setMessage(error instanceof Error ? error.message : "Could not verify this electricity meter.");
+        setMessage(safeErrorMessage(error, "Could not verify this electricity meter."));
       });
     }, 250);
 
@@ -183,6 +192,8 @@ export function ElectricityShell() {
         message?: string;
         reference?: string;
         balance_kobo?: number;
+        token?: string;
+        units?: string;
       }>("electricity-purchase", {
         provider,
         meterNumber: meterNumber.replace(/\D/g, ""),
@@ -195,13 +206,15 @@ export function ElectricityShell() {
       setShowCheckout(false);
       setReceipt({
         status: result.status === 'pending' ? 'pending' : 'success',
-        message: result.message || 'Electricity purchase submitted successfully.',
+        message: sanitizeServiceMessage(result.message || 'Electricity purchase submitted successfully.'),
         reference: result.reference,
         provider,
         meterNumber: meterNumber.replace(/\D/g, ''),
         phone: accountPhone.replace(/[^\d]/g, ''),
         amount: numericAmount,
         customerName,
+        token: result.token,
+        units: result.units,
       });
       if (typeof result.balance_kobo === "number") {
         setBalance(result.balance_kobo / 100);
@@ -209,10 +222,16 @@ export function ElectricityShell() {
       setPin('');
       window.dispatchEvent(new Event('dashboard-refresh'));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not complete electricity purchase.');
+      setMessage(safeErrorMessage(error, 'Could not complete electricity purchase.'));
     } finally {
       setPurchasing(false);
     }
+  }
+
+  async function copyReceiptToken(value: string) {
+    await navigator.clipboard?.writeText(value);
+    setTokenCopied(true);
+    window.setTimeout(() => setTokenCopied(false), 1800);
   }
 
   async function authorizeBiometric() {
@@ -242,7 +261,7 @@ export function ElectricityShell() {
       );
       await purchase(authorization.transactionAuthorization);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Biometric authorization was not completed.');
+      setMessage(safeErrorMessage(error, 'Biometric authorization was not completed.'));
       setPurchasing(false);
     }
   }
@@ -333,6 +352,25 @@ export function ElectricityShell() {
             <h2 id="electricity-receipt-title">{receipt.provider} Electricity</h2>
             <p className="receipt-lead">{receipt.customerName ? `Customer: ${receipt.customerName}` : 'Meter verified and prepared for payment.'}</p>
             <div className="airtime-receipt-amount"><span>AMOUNT PAID</span><strong>{formatNaira(receipt.amount)}</strong></div>
+            {receipt.token && (
+              <div className="transaction-summary airtime-receipt-details">
+                <div>
+                  <span>Prepaid Meter Token</span>
+                  <strong>{receipt.token}</strong>
+                </div>
+                {receipt.units && (
+                  <div>
+                    <span>Units</span>
+                    <strong>{receipt.units}</strong>
+                  </div>
+                )}
+                <div>
+                  <button className="copy-inline" type="button" onClick={() => void copyReceiptToken(receipt.token!)}>
+                    {tokenCopied ? 'Copied' : 'Copy token'}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="transaction-summary airtime-receipt-details">
               <div><span>Reference ID</span><strong>{receipt.reference || 'Pending'}</strong></div>
               <div><span>Meter Number</span><strong>{receipt.meterNumber}</strong></div>

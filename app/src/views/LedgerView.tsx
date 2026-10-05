@@ -21,6 +21,10 @@ type FilterStatus = 'ALL' | 'SUCCESSFUL' | 'PENDING' | 'FAILED';
 
 const FILTER_CATEGORIES: FilterCategory[] = ['All', 'Data', 'Airtime', 'Wallet Deposits', 'Electricity'];
 
+function breakLongReference(value: string): string {
+  return value.length > 18 ? value.replace(/(.{4})(?=.)/g, "$1\u200B") : value;
+}
+
 export const LedgerView: React.FC = () => {
   const { transactions, theme: Palette, isDark } = useApp();
   const styles = useMemo(() => getStyles(Palette, isDark), [Palette, isDark]);
@@ -268,7 +272,16 @@ export const LedgerView: React.FC = () => {
                 ].map(({ label, value }) => (
                   <View key={label} style={styles.txDetailRow}>
                     <Text style={styles.txDetailRowLabel}>{label}</Text>
-                    <Text style={styles.txDetailRowValue} numberOfLines={2}>{value}</Text>
+                    <Text
+                      style={[
+                        styles.txDetailRowValue,
+                        label === 'Reference' && styles.txDetailReferenceValue,
+                      ]}
+                      numberOfLines={label === 'Reference' ? 4 : 2}
+                      accessibilityLabel={label === 'Reference' ? value : undefined}
+                    >
+                      {label === 'Reference' ? breakLongReference(value) : value}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -614,6 +627,12 @@ const getStyles = (Palette: PaletteType, isDark: boolean = true) => StyleSheet.c
     fontFamily: Typography.family,
     textAlign: 'right',
     flex: 1,
+  },
+  txDetailReferenceValue: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    textAlign: 'left',
   },
   closeModalBtn: {
     width: '100%',

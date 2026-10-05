@@ -2,33 +2,48 @@ import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
 
 export default function PrivacyPage() {
   return (
-    <CustomerPageLayout active="profile" eyebrow="Legal" title="Privacy Policy" subtitle="How we handle, protect, and respect your personal information." className="profile-page" headerClassName="profile-header">
+    <CustomerPageLayout active="profile" eyebrow="Legal" title="Privacy Policy" subtitle="How AbbaKano collects, uses, and protects your personal information." className="profile-page" headerClassName="profile-header">
       <div className="profile-content about-content">
         <section className="profile-section">
-          <h2>1. Information We Collect</h2>
+          <h2>Information We Collect</h2>
           <p className="about-copy">
-            We collect the information you provide during registration and wallet usage, including your name, phone number, email address, and transaction records. We do not store raw transaction PINs or payment card details.
+            Depending on how you use AbbaKano, we may collect the name, phone number, and email address you provide; details needed to process airtime, data, utility, and wallet transactions; referral activity; and messages you send to support.
           </p>
         </section>
 
         <section className="profile-section">
-          <h2>2. How We Use Your Information</h2>
+          <h2>How We Use Your Information</h2>
           <p className="about-copy">
-            Your information is used solely to deliver telecom and utility services, authenticate your transactions, credit your referral commissions, and provide customer support. We do not sell or lease your personal information to third parties.
+            We use this information to create and secure your account, process the services and payments you request, maintain transaction and referral records, respond to support requests, and meet applicable legal and accounting obligations.
           </p>
         </section>
 
         <section className="profile-section">
-          <h2>3. Data Protection &amp; Security</h2>
+          <h2>When Information Is Shared</h2>
           <p className="about-copy">
-            We implement 256-bit encryption, strict CSRF validation, salted password hashes, and NDPR-compliant security practices to keep your account and wallet safe from unauthorized access.
+            We share information with service providers only as needed to operate AbbaKano and complete your requested transactions—for example, payment, telecom, and utility providers. We do not sell your personal information. Providers may process information under their own privacy terms.
           </p>
         </section>
 
         <section className="profile-section">
-          <h2>4. Inquiries &amp; Rights</h2>
+          <h2>Security and Retention</h2>
           <p className="about-copy">
-            You may request information regarding your stored data or request account assistance anytime by contacting our support team at support@abbakano.com.
+            We use safeguards intended to protect personal information from unauthorized access, loss, or misuse. We keep information only for as long as it is needed to provide the service and meet legal, accounting, and security requirements. No online service can guarantee absolute security.
+          </p>
+        </section>
+
+        <section className="profile-section">
+          <h2>Your Choices and Requests</h2>
+          <p className="about-copy">
+            You can ask to access or correct your information, or request account deletion, by using the options in your profile or contacting support. Some transaction records may need to be retained where required by law or for legitimate accounting and security purposes.
+          </p>
+        </section>
+
+        <section className="profile-section">
+          <h2>Contact Us</h2>
+          <p className="about-copy">
+            For privacy questions or data requests, contact our support team at{" "}
+            <a href="mailto:support@abbakano.com">support@abbakano.com</a>.
           </p>
         </section>
       </div>

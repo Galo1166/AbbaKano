@@ -4,8 +4,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
-import { ApiError, apiRequest } from "@/lib/api";
-import { getWalletBalance, invokeSupabaseFunction, supabase } from "@/lib/supabase";
+import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
+import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
@@ -96,78 +96,31 @@ export function AirtimeShell() {
     if (!selectedNetwork || !validPhone || !validAmount || (!transactionAuthorization && !/^\d{4}$/.test(pin))) { setMessage("Select a network, enter an 11-digit phone number, and authorize the payment."); return; }
     setPurchasing(true); setMessage("");
     try {
-      let result: { status?: string; message?: string; reference?: string };
+      const requestKey = idempotencyKey || crypto.randomUUID();
+      if (!transactionAuthorization) setIdempotencyKey(requestKey);
 
-      if (transactionAuthorization) {
-        const { data, error } = await supabase.functions.invoke<{
-          status?: string;
-          message?: string;
-          reference?: string;
-          balance_kobo?: number;
-        }>("purchase-airtime", {
-          body: {
-            network: selectedNetwork,
-            phone,
-            amount: numericAmount,
-            transactionAuthorization,
-            idempotencyKey: idempotencyKey || crypto.randomUUID(),
-          },
-        });
-        if (error) throw error;
-        if (!data) throw new Error("Could not complete airtime recharge.");
-        result = data;
-        if (typeof data.balance_kobo === "number") setBalance(data.balance_kobo / 100);
-      } else {
-        const requestKey = idempotencyKey || crypto.randomUUID();
-        setIdempotencyKey(requestKey);
-
-        const { data, error } = await supabase.functions.invoke<{
-          status?: string;
-          message?: string;
-          reference?: string;
-          balance_kobo?: number;
-        }>("purchase-airtime", {
-          body: {
-            network: selectedNetwork,
-            phone,
-            amount: numericAmount,
-            pin,
-            idempotencyKey: requestKey,
-          },
-        });
-
-        if (error) {
-          let message = error.message;
-          if (error.context instanceof Response) {
-            const response = error.context;
-            const payload = await response.clone().json().catch(() => null) as { message?: string } | null;
-            const responseMessage = payload?.message?.trim();
-
-            if (responseMessage) {
-              message = responseMessage;
-            } else if (response.status === 401) {
-              message = "Incorrect transaction PIN.";
-            }
-          }
-
-          if (/incorrect.*pin|pin.*incorrect/i.test(message)) {
-            message = "Incorrect PIN. Please try again.";
-          }
-
-          throw new Error(message);
-        }
-
-        if (!data) throw new Error("Airtime purchase returned no result.");
-        result = data;
-        if (typeof data.balance_kobo === "number") {
-          setBalance(data.balance_kobo / 100);
-        }
+      const result = await invokeSupabaseFunction<{
+        status?: string;
+        message?: string;
+        reference?: string;
+        balance_kobo?: number;
+      }>("purchase-airtime", {
+        network: selectedNetwork,
+        phone,
+        amount: numericAmount,
+        ...(transactionAuthorization
+          ? { transactionAuthorization }
+          : { pin }),
+        idempotencyKey: requestKey,
+      });
+      if (typeof result.balance_kobo === "number") {
+        setBalance(result.balance_kobo / 100);
       }
 
       setShowCheckout(false);
       setReceipt({
         status: result.status === "success" ? "success" : "pending",
-        message: result.message || "Airtime recharge submitted successfully.",
+        message: sanitizeServiceMessage(result.message || "Airtime recharge submitted successfully."),
         reference: result.reference,
         network: selectedNetwork,
         phone,
@@ -183,7 +136,7 @@ export function AirtimeShell() {
       setMessage(
         /incorrect.*pin|pin.*incorrect/i.test(errorMessage)
           ? "Incorrect PIN. Please try again."
-          : errorMessage,
+          : safeErrorMessage(error, "Could not complete airtime recharge."),
       );
     }
     finally { setPurchasing(false); }
@@ -203,7 +156,7 @@ export function AirtimeShell() {
       });
       await purchase(authorization.transactionAuthorization);
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Biometric authorization was not completed.");
+      setMessage(safeErrorMessage(error, "Biometric authorization was not completed."));
       setPurchasing(false);
     }
   }

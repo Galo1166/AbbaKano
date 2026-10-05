@@ -7,6 +7,7 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { invokeSupabaseFunction, supabase } from "@/lib/supabase";
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
 import { useThemeMode } from "@/lib/theme";
+import { safeErrorMessage } from "@/lib/userFeedback";
 
 function Icon({ name }: { name: string }) {
   const paths: Record<string, string> = {
@@ -18,6 +19,7 @@ function Icon({ name }: { name: string }) {
     help: "M4 13a8 8 0 0 1 16 0v4M4 13v4a2 2 0 0 0 2 2h2v-6H4m16 0h-4v6h2a2 2 0 0 0 2-2",
     gift: "M20 12v8H4v-8M2 8h20v4H2zM12 8v12M12 8H8.5a2.5 2.5 0 1 1 2.5-2.5V8Zm0 0h3.5a2.5 2.5 0 1 0-2.5-2.5V8Z",
     logout: "M10 17l5-5-5-5M15 12H3M13 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6",
+    delete: "M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6",
     info: "M12 16v-4M12 8h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     palette: "M12 3v2M12 19v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
     sun: "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
@@ -43,7 +45,9 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
   const [showPinModal, setShowPinModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [pinStep, setPinStep] = useState<"current" | "new" | "confirm">("new");
   const [pin, setPin] = useState("");
   const [newPin, setNewPin] = useState("");
@@ -63,7 +67,7 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       setAppLock(response.user.app_lock_enabled === true);
       setPinStep(response.user.has_transaction_pin ? "current" : "new");
     }).catch((error) => {
-      if (!cancelled) setMessage(error instanceof ApiError ? error.message : "Could not load your profile.");
+      if (!cancelled) setMessage(safeErrorMessage(error, "Could not load your profile."));
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -81,7 +85,7 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       setBiometrics(hasPasskey && user?.biometrics_enabled !== false);
     }).catch((error) => {
       if (!cancelled) {
-        setMessage(error instanceof Error ? error.message : "Could not load passkey status.");
+        setMessage(safeErrorMessage(error, "Could not load passkey status."));
       }
     });
     return () => { cancelled = true; };
@@ -141,13 +145,13 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       }
     } catch (error) {
       if (error instanceof ApiError) {
-        setMessage(error.message);
+        setMessage(safeErrorMessage(error, "Could not save this security setting."));
       } else if (error instanceof Error && error.name === "NotAllowedError") {
         setMessage("Passkey setup was cancelled or unavailable. Try again and complete the browser prompt.");
       } else if (error instanceof Error && error.name === "SecurityError") {
         setMessage("Passkey setup is temporarily unavailable. Please try again later or contact support.");
       } else if (error instanceof Error && error.message) {
-        setMessage(error.message);
+        setMessage(safeErrorMessage(error, "Could not save this security setting."));
       } else {
         setMessage("Could not save this security setting. Please try again.");
       }
@@ -166,24 +170,58 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
     if (pinStep === "current") {
       if (!/^\d{4}$/.test(pin)) { setPinMessage("Enter your current 4-digit PIN."); return; }
       setSavingPin(true);
-      try { await invokeSupabaseFunction("verify-transaction-pin", { pin }); setPinStep("new"); } catch (error) { setPinMessage(error instanceof Error ? error.message : "Could not verify your current PIN."); } finally { setSavingPin(false); }
+      try { await invokeSupabaseFunction("verify-transaction-pin", { pin }); setPinStep("new"); } catch (error) { setPinMessage(safeErrorMessage(error, "Could not verify your current PIN.")); } finally { setSavingPin(false); }
       return;
     }
     if (pinStep === "new") { if (!/^\d{4}$/.test(newPin)) { setPinMessage("Enter a new 4-digit PIN."); return; } setPinStep("confirm"); return; }
     if (newPin !== confirmPin) { setPinMessage("PINs do not match. Please try again."); return; }
     setSavingPin(true);
-    try { await invokeSupabaseFunction("update-transaction-pin", { newPin, ...(pin ? { currentPin: pin } : {}) }); setShowPinModal(false); setUser((current) => current ? { ...current, has_transaction_pin: true } : current); setMessage("Transaction PIN changed successfully."); } catch (error) { setPinMessage(error instanceof Error ? error.message : "Could not save your transaction PIN."); } finally { setSavingPin(false); }
+    try { await invokeSupabaseFunction("update-transaction-pin", { newPin, ...(pin ? { currentPin: pin } : {}) }); setShowPinModal(false); setUser((current) => current ? { ...current, has_transaction_pin: true } : current); setMessage("Transaction PIN changed successfully."); } catch (error) { setPinMessage(safeErrorMessage(error, "Could not save your transaction PIN.")); } finally { setSavingPin(false); }
   }
 
   async function handleLogout() {
     setSigningOut(true);
     try {
-      await apiRequest("/logout", { method: "POST" });
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+      if (error) throw error;
     } catch (error) {
-      console.error("Could not sign out the customer", error);
-    } finally {
-      window.location.href = "/login";
+      console.error("Could not clear the customer's local Supabase session", error);
+      setMessage("Could not sign out of this browser. Please try again.");
+      setSigningOut(false);
+      return;
     }
+
+    try {
+      await apiRequest("/logout", { method: "POST" }, { showServiceErrorToast: false });
+    } catch (error) {
+      console.warn("Could not clear the customer's backend session; local sign-out succeeded", error);
+    }
+    router.replace("/login");
+  }
+
+  async function handleDeleteAccount() {
+    setDeletingAccount(true);
+    setMessage("");
+    try {
+      await invokeSupabaseFunction("delete-account", {});
+    } catch (error) {
+      setMessage(safeErrorMessage(error, "Could not delete your account. Please try again."));
+      setShowDeleteModal(false);
+      setDeletingAccount(false);
+      return;
+    }
+
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch (error) {
+      console.error("Could not clear the deleted customer's local session", error);
+    }
+    try {
+      await apiRequest("/logout", { method: "POST" }, { showServiceErrorToast: false });
+    } catch (error) {
+      console.error("Could not clear the deleted customer's web session", error);
+    }
+    router.replace("/login");
   }
 
   const name = user?.full_name || user?.fullName || "AbbaKano user";
@@ -196,8 +234,9 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
         {message && <div className="profile-message" role="status">{message}</div>}
         <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle="Earn N100 for each friend who signs up with your code" badge="N100 BONUS" onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
         <ProfileSection title="Security & Preferences"><ProfileRow icon="pin" title="Change Transaction PIN" subtitle="4-digit wallet security PIN" onClick={openPinModal} /><ProfileRow icon="fingerprint" title="Biometrics Login" subtitle="Face ID / Fingerprint unlock" control={<Toggle enabled={biometrics} disabled={savingSetting === "biometrics"} onChange={() => void saveSecuritySetting("biometrics", !biometrics)} />} /><ProfileRow icon="lock" title="App Lock PIN" subtitle="Screen lock security timeout" control={<Toggle enabled={appLock} disabled={savingSetting === "appLock"} onChange={() => void saveSecuritySetting("appLock", !appLock)} />} /><ProfileRow icon="palette" title="Theme & Appearance" subtitle={themePreference === "system" ? `Auto (${theme === "dark" ? "Dark" : "Light"})` : `${theme === "dark" ? "Dark" : "Light"} mode active`} badge={themePreference === "system" ? "AUTO" : theme.toUpperCase()} onClick={() => setShowThemeModal(true)} /></ProfileSection>
-        <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" onClick={() => router.push("/support")} /><ProfileRow icon="info" title="About AbbaKano" subtitle="About the platform and its services" onClick={() => router.push("/about")} /></ProfileSection>
+        <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" onClick={() => router.push("/support")} /><ProfileRow icon="shield" title="Privacy Policy" subtitle="How your personal information is handled" onClick={() => router.push("/privacy")} /><ProfileRow icon="info" title="Terms and Conditions" subtitle="The terms for using AbbaKano" onClick={() => router.push("/terms")} /><ProfileRow icon="info" title="About AbbaKano" subtitle="About the platform and its services" onClick={() => router.push("/about")} /></ProfileSection>
         <button className="profile-signout" type="button" onClick={() => setShowSignOutModal(true)} aria-haspopup="dialog"><span className="profile-signout-icon"><Icon name="logout" /></span><span className="profile-signout-copy"><strong>Sign Out</strong><small>Exit your wallet session safely</small></span></button>
+        <button className="profile-delete-account" type="button" onClick={() => setShowDeleteModal(true)} aria-haspopup="dialog"><span className="profile-signout-icon"><Icon name="delete" /></span><span className="profile-signout-copy"><strong>Delete Account</strong><small>Permanently delete your AbbaKano account</small></span></button>
       </section>
       {showSignOutModal && (
         <div className="data-modal-backdrop" onClick={() => !signingOut && setShowSignOutModal(false)}>
@@ -209,6 +248,20 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
             <div className="signout-actions">
               <button className="fund-cancel" type="button" onClick={() => setShowSignOutModal(false)} disabled={signingOut}>Cancel</button>
               <button className="signout-confirm" type="button" onClick={() => void handleLogout()} disabled={signingOut}>{signingOut ? "Signing out..." : "Sign Out"}</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {showDeleteModal && (
+        <div className="data-modal-backdrop" onClick={() => !deletingAccount && setShowDeleteModal(false)}>
+          <section className="data-modal signout-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" onClick={(event) => event.stopPropagation()}>
+            <button className="data-modal-close" type="button" onClick={() => setShowDeleteModal(false)} disabled={deletingAccount} aria-label="Close account deletion confirmation">x</button>
+            <p className="data-kicker">Permanent action</p>
+            <h2 id="delete-account-title">Delete your account?</h2>
+            <p className="signout-copy">This permanently removes your AbbaKano account and signs you out. Some transaction records may need to be retained for legal or accounting purposes. This action cannot be undone.</p>
+            <div className="signout-actions">
+              <button className="fund-cancel" type="button" onClick={() => setShowDeleteModal(false)} disabled={deletingAccount}>Cancel</button>
+              <button className="signout-confirm" type="button" onClick={() => void handleDeleteAccount()} disabled={deletingAccount}>{deletingAccount ? "Deleting..." : "Delete Account"}</button>
             </div>
           </section>
         </div>

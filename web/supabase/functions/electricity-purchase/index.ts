@@ -380,11 +380,16 @@ Deno.serve(async (req) => {
       }, 202);
     }
 
+    const token = String(providerData?.token || providerPayload?.token || "").trim();
+    const units = String(providerData?.units || providerPayload?.units || "").trim();
+
     return jsonResponse({
       status: "success",
       message: String(providerPayload.message || "Electricity purchase successful."),
       reference: providerReference,
       balance_kobo: settlement?.balance_after_kobo,
+      token: token || undefined,
+      units: units || undefined,
     });
   } catch (error) {
     console.error("electricity-purchase error:", error);

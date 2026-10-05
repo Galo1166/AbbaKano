@@ -39,6 +39,8 @@ function normalizeName(payload: Record<string, unknown>) {
     payload,
   ];
   const fields = [
+    "meter_name",
+    "meterName",
     "customer_name",
     "customerName",
     "name",
@@ -133,20 +135,43 @@ Deno.serve(async (req) => {
 
     const baseUrl = (Deno.env.get("VTU_GATE_BASE_URL") ||
       "https://api.vtugate.com/api/v1").replace(/\/$/, "");
-    const servicesPayload = await vtuGateRequest(
-      baseUrl,
-      apiKey,
-      "/fetchallservices",
-    );
-    const acceptedNames = providerAliases[provider];
-    const service = (servicesPayload.data || []).find(
-      (item: Record<string, unknown>) =>
-        item.service_type === "electricity" &&
-        acceptedNames.includes(
-          normalizeProvider(item.network_name || item.disco).toLowerCase(),
-        ),
-    );
-    const serviceId = String(service?.service_id || "");
+
+    const providerServiceMap: Record<string, string> = {
+      AEDC: "327",
+      IKEDC: "325",
+      KEDCO: "328",
+      PHED: "329",
+      JED: "330",
+    };
+
+    const providerDiscoMap: Record<string, string> = {
+      AEDC: "aedc",
+      IKEDC: "ikedc",
+      KEDCO: "kedco",
+      PHED: "portharcourt",
+      JED: "jos",
+    };
+
+    let serviceId = String(body?.serviceId || providerServiceMap[provider] || "").trim();
+    const disco = String(body?.disco || providerDiscoMap[provider] || provider.toLowerCase()).trim();
+
+    if (!/^\d+$/.test(serviceId)) {
+      const servicesPayload = await vtuGateRequest(
+        baseUrl,
+        apiKey,
+        "/fetchallservices",
+      );
+      const acceptedNames = providerAliases[provider] || [provider.toLowerCase()];
+      const service = (servicesPayload.data || []).find(
+        (item: Record<string, unknown>) =>
+          item.service_type === "electricity" &&
+          acceptedNames.includes(
+            normalizeProvider(item.network_name || item.disco).toLowerCase(),
+          ),
+      );
+      serviceId = String(service?.service_id || "");
+    }
+
     if (!/^\d+$/.test(serviceId)) {
       return jsonResponse(
         { message: `VTU Gate has no ${provider} electricity service configured.` },
@@ -173,7 +198,7 @@ Deno.serve(async (req) => {
       {
         service_id: serviceId,
         meter_no: meterNumber,
-        disco: provider.toLowerCase(),
+        disco: disco,
       },
     );
     const customerName = normalizeName(verification);

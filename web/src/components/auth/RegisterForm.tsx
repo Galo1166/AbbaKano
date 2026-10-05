@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import {supabase} from "@/lib/supabase";
+import {invokeSupabaseFunction} from "@/lib/supabase";
+import { safeErrorMessage } from "@/lib/userFeedback";
 
 function subscribeToLocation(callback: () => void) {
   window.addEventListener("popstate", callback);
@@ -80,13 +81,9 @@ if (!values.email.includes("@")) {
   setLoading(true);
 
   try {
-    const {
-      data,
-      error,
-    } = await supabase.functions.invoke(
+    await invokeSupabaseFunction(
       "register-user",
       {
-        body: {
           fullName:
             values.fullName.trim(),
 
@@ -104,27 +101,8 @@ if (!values.email.includes("@")) {
 
           referralCode:
             values.referralCode.trim() || referralCodeFromUrl,
-        },
       },
     );
-
-    if (error) {
-      console.error(
-        "Registration Edge Function error:",
-        error,
-      );
-
-      throw new Error(
-        error.message ||
-          "Could not create your account.",
-      );
-    }
-
-    if (!data) {
-      throw new Error(
-        "Could not create your account.",
-      );
-    }
 
     /*
      * The Edge Function has created the
@@ -147,11 +125,7 @@ if (!values.email.includes("@")) {
       error,
     );
 
-    setErrorMessage(
-      error instanceof Error
-        ? error.message
-        : "Could not create your account.",
-    );
+    setErrorMessage(safeErrorMessage(error, "Could not create your account."));
   } finally {
     setLoading(false);
   }

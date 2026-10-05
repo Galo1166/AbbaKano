@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useState } from "react";
 import { invokeSupabaseFunction, supabase } from "@/lib/supabase";
+import { GENERIC_SERVICE_ERROR, isServiceFailure, reportServiceFailure } from "@/lib/userFeedback";
 
 function normalizePhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
@@ -69,9 +70,17 @@ export function LoginForm() {
     } catch (error) {
       console.error("Supabase login error:", error);
 
+      if (error instanceof Error && (
+        error.message === GENERIC_SERVICE_ERROR ||
+        isServiceFailure(error.message)
+      )) {
+        if (error.message !== GENERIC_SERVICE_ERROR) reportServiceFailure(error);
+        setErrorMessage("");
+        return;
+      }
       setErrorMessage(
         error instanceof Error && error.message === "Invalid login credentials"
-          ? "Supabase could not verify this email and password. If your account was only created on the previous system, it may need to be registered or migrated before you can sign in."
+          ? "Email or password is incorrect."
           : error instanceof Error
             ? error.message
             : "Could not sign in."
@@ -102,9 +111,18 @@ export function LoginForm() {
       window.location.assign("/app");
     } catch (error) {
       console.error("Passkey sign-in error:", error);
+      if (error instanceof Error && (
+        error.message === GENERIC_SERVICE_ERROR ||
+        isServiceFailure(error.message)
+      )) {
+        if (error.message !== GENERIC_SERVICE_ERROR) reportServiceFailure(error);
+        setErrorMessage("");
+        setLoading(false);
+        return;
+      }
       setErrorMessage(
         error instanceof Error
-          ? error.message
+          ? error.message || GENERIC_SERVICE_ERROR
           : "Biometric sign-in could not be completed.",
       );
     } finally {

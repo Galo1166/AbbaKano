@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
+import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
@@ -124,7 +125,7 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
       } catch (error) {
         if (cancelled) return;
         setPlans([]);
-        setErrorMessage(error instanceof Error ? error.message : "Could not load plans right now.");
+        setErrorMessage(safeErrorMessage(error, "Could not load plans right now."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -194,14 +195,14 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
         ...(transactionAuthorization ? { transactionAuthorization } : { pin }),
       });
       setShowCheckout(false);
-      setReceipt({ status: result.status?.toLowerCase() === "pending" ? "pending" : "success", message: result.message || "Data purchase submitted successfully.", reference: result.reference, label: selectedPlan.label, network, phone });
+      setReceipt({ status: result.status?.toLowerCase() === "pending" ? "pending" : "success", message: sanitizeServiceMessage(result.message || "Data purchase submitted successfully."), reference: result.reference, label: selectedPlan.label, network, phone });
       if (typeof result.balance_kobo === "number") {
         setWalletBalance(result.balance_kobo / 100);
       }
       window.dispatchEvent(new Event("dashboard-refresh"));
       setPin("");
     } catch (error) {
-      setPurchaseMessage(error instanceof Error ? error.message : "Could not complete this purchase.");
+      setPurchaseMessage(safeErrorMessage(error, "Could not complete this purchase."));
     } finally {
       setPurchasing(false);
     }
@@ -234,7 +235,7 @@ export function DataPurchaseShell({ onTabChange }: { onTabChange?: (tab: "home" 
       );
       await executePurchase(authorization.transactionAuthorization);
     } catch (error) {
-      setPurchaseMessage(error instanceof Error ? error.message : "Biometric authorization was not completed.");
+      setPurchaseMessage(safeErrorMessage(error, "Biometric authorization was not completed."));
       setPurchasing(false);
     }
   }

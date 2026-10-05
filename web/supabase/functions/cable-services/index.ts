@@ -156,17 +156,28 @@ Deno.serve(async (req) => {
 
     const baseUrl = (Deno.env.get("VTU_GATE_BASE_URL") ||
       "https://api.vtugate.com/api/v1").replace(/\/$/, "");
-    const servicesPayload = await vtuGateRequest(
-      baseUrl,
-      apiKey,
-      "/fetchallservices",
-    );
-    const service = (servicesPayload.data || []).find(
-      (item: Record<string, unknown>) =>
-        item.service_type === "tv" &&
-        normalizeProvider(item.tv_name) === provider,
-    );
-    const serviceId = String(service?.service_id || "");
+
+    const providerServiceMap: Record<string, string> = {
+      DSTV: "344",
+      GOTV: "345",
+      STARTIMES: "277",
+    };
+
+    let serviceId = String(body?.serviceId || providerServiceMap[provider] || "").trim();
+    if (!/^\d+$/.test(serviceId)) {
+      const servicesPayload = await vtuGateRequest(
+        baseUrl,
+        apiKey,
+        "/fetchallservices",
+      );
+      const service = (servicesPayload.data || []).find(
+        (item: Record<string, unknown>) =>
+          item.service_type === "tv" &&
+          normalizeProvider(item.tv_name) === provider,
+      );
+      serviceId = String(service?.service_id || "");
+    }
+
     if (!/^\d+$/.test(serviceId)) {
       return jsonResponse({ message: `VTU Gate has no ${provider} service configured.` }, 502);
     }

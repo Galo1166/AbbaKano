@@ -50,6 +50,11 @@ verify_jwt = false
 import_map = "./functions/passkey-auth/deno.json"
 entrypoint = "./functions/passkey-auth/index.ts"
 
+[functions.delete-account]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/delete-account/index.ts"
+
 [functions.cable-services]
 enabled = true
 verify_jwt = false

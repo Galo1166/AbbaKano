@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { TransactionRecord } from '@/constants/mockData';
@@ -18,6 +19,10 @@ import { useApp } from '@/context/AppContext';
 interface TransactionDetailModalProps {
   transaction: TransactionRecord | null;
   onClose: () => void;
+}
+
+function breakLongReference(value: string): string {
+  return value.length > 18 ? value.replace(/(.{4})(?=.)/g, "$1\u200B") : value;
 }
 
 export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
@@ -34,16 +39,17 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const isCredit = transaction.type === 'FUND_WALLET';
   const isDataBundle = transaction.type === 'DATA';
 
-  const handleCopyRef = () => {
+  const handleCopyRef = async () => {
+    await Clipboard.setStringAsync(transaction.reference);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleCopyToken = () => {
-    if (transaction.token) {
-      setTokenCopied(true);
-      setTimeout(() => setTokenCopied(false), 2000);
-    }
+  const handleCopyToken = async () => {
+    if (!transaction.token) return;
+    await Clipboard.setStringAsync(transaction.token);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2000);
   };
 
   return (
@@ -129,7 +135,12 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               <View style={styles.row}>
                 <Text style={styles.label}>Reference</Text>
                 <Pressable style={styles.refBox} onPress={handleCopyRef}>
-                  <Text style={styles.value}>{transaction.reference}</Text>
+                  <Text
+                    style={styles.value}
+                    accessibilityLabel={transaction.reference}
+                  >
+                    {breakLongReference(transaction.reference)}
+                  </Text>
                   <Ionicons
                     name={copied ? 'checkmark' : 'copy-outline'}
                     size={14}
@@ -321,10 +332,16 @@ const getStyles = (Palette: PaletteType, isDark: boolean) =>
       fontSize: 12,
       fontWeight: '600',
       color: Palette.onSurface,
-      maxWidth: '65%',
+      flex: 1,
+      minWidth: 0,
+      flexShrink: 1,
+      maxWidth: '100%',
       textAlign: 'right',
+      flexWrap: 'wrap',
     },
     refBox: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,

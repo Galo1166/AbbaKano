@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { invokeSupabaseFunction } from "@/lib/supabase";
+import { safeErrorMessage } from "@/lib/userFeedback";
 import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
 
 type ReferralUser = { phone?: string; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
@@ -21,7 +22,7 @@ export function ReferEarnShell({ initialUser }: { initialUser?: ReferralUser }) 
       if (!cancelled) setUser(summary);
     }).catch((error) => {
       if (!cancelled) {
-        setMessage(error instanceof Error ? error.message : "Could not load referral rewards.");
+        setMessage(safeErrorMessage(error, "Could not load referral rewards."));
       }
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -55,7 +56,7 @@ export function ReferEarnShell({ initialUser }: { initialUser?: ReferralUser }) 
       window.dispatchEvent(new Event("dashboard-refresh"));
       setMessage(`N${result.amount} referral commission moved to your wallet successfully.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not withdraw referral commission.");
+      setMessage(safeErrorMessage(error, "Could not withdraw referral commission."));
     } finally { setWithdrawing(false); }
   }
 

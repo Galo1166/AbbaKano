@@ -16,6 +16,8 @@ type Transaction = {
   phoneNumber?: string;
   network?: string;
   accountNumber?: string;
+  token?: string;
+  units?: string;
 };
 
 type Status = "success" | "pending" | "failed";
@@ -170,6 +172,8 @@ useEffect(() => {
           network: string | null;
           plan_code: string | null;
           plan_label: string | null;
+          token?: string;
+          units?: string;
         }
       >();
       if (transactionIds.length > 0) {
@@ -228,6 +232,12 @@ useEffect(() => {
                     `${String(transaction.network).toUpperCase()}:${providerPlanCode}`,
                   ) || null
                 : null;
+          const token = typeof transaction.metadata?.token === "string"
+            ? transaction.metadata.token
+            : undefined;
+          const units = typeof transaction.metadata?.units === "string"
+            ? transaction.metadata.units
+            : undefined;
           transactionsById.set(Number(transaction.id), {
             transaction_type: transaction.transaction_type,
             status: transaction.status,
@@ -236,6 +246,8 @@ useEffect(() => {
             network: transaction.network,
             plan_code: planCode,
             plan_label: planLabel,
+            token,
+            units,
           });
         }
       }
@@ -271,6 +283,12 @@ useEffect(() => {
             typeof entry.metadata?.plan_label === "string"
               ? entry.metadata.plan_label
               : purchaseTransaction?.plan_label || null;
+          const token = typeof entry.metadata?.token === "string"
+            ? entry.metadata.token
+            : purchaseTransaction?.token || undefined;
+          const units = typeof entry.metadata?.units === "string"
+            ? entry.metadata.units
+            : purchaseTransaction?.units || undefined;
           return {
             id: entry.id,
             type: purchaseTransaction?.transaction_type || (planLabel ? "data" : entry.entry_type),
@@ -286,6 +304,8 @@ useEffect(() => {
                 : purchaseTransaction?.phone_number
                   ? { phone_number: purchaseTransaction.phone_number }
                   : {}),
+              ...(typeof entry.metadata?.token === "string" ? {} : token ? { token } : {}),
+              ...(typeof entry.metadata?.units === "string" ? {} : units ? { units } : {}),
               ...(planLabel ? { plan_label: planLabel } : {}),
               ...(typeof entry.metadata?.plan_code === "string"
                 ? {}
@@ -296,6 +316,8 @@ useEffect(() => {
             phoneNumber: purchaseTransaction?.phone_number || undefined,
             network: purchaseTransaction?.network || undefined,
             accountNumber: purchaseTransaction?.account_number || undefined,
+            token,
+            units,
           };
         });
 
@@ -510,15 +532,32 @@ useEffect(() => {
               </div>
 
               <div className="transaction-summary">
-                <div>
+                <div className="history-reference-row">
                   <span>Reference</span>
                   <strong>
-                    {String(selected.id)}
+                    <span>{String(selected.id)}</span>
                     <button className="copy-inline" type="button" onClick={() => void copyText(String(selected.id), "reference")}>
                       {copied === "reference" ? "Copied" : "Copy"}
                     </button>
                   </strong>
                 </div>
+                {selected.token && (
+                  <div>
+                    <span>Prepaid Meter Token</span>
+                    <strong>
+                      {selected.token}
+                      <button className="copy-inline" type="button" onClick={() => void copyText(selected.token || "", "token")}>
+                        {copied === "token" ? "Copied" : "Copy"}
+                      </button>
+                    </strong>
+                  </div>
+                )}
+                {selected.units && (
+                  <div>
+                    <span>Units</span>
+                    <strong>{selected.units}</strong>
+                  </div>
+                )}
                 <div>
                   <span>Service</span>
                   <strong>{transactionCategory(selected)}</strong>

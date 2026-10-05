@@ -1,4 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import {
+  GENERIC_SERVICE_ERROR,
+  isServiceFailure,
+  reportServiceFailure,
+} from "@/lib/userFeedback";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey =
@@ -16,17 +21,28 @@ export async function invokeSupabaseFunction<T>(
   const { data, error } = await supabase.functions.invoke<T>(functionName, { body });
   if (error) {
     const context = "context" in error ? error.context : undefined;
+    let message = error.message;
+    let status: number | undefined;
     if (context instanceof Response) {
+      status = context.status;
       const payload = await context.clone().json().catch(() => null) as
         | { message?: unknown }
         | null;
       if (typeof payload?.message === "string") {
-        throw new Error(payload.message);
+        message = payload.message;
       }
     }
-    throw new Error(error.message);
+    if (isServiceFailure(message, status)) {
+      reportServiceFailure(error);
+      throw new Error(GENERIC_SERVICE_ERROR);
+    }
+    throw new Error(message);
   }
-  if (data === null) throw new Error(`${functionName} returned no response.`);
+  if (data === null) {
+    const error = new Error(`${functionName} returned no response.`);
+    reportServiceFailure(error);
+    throw new Error(GENERIC_SERVICE_ERROR);
+  }
   return data;
 }
 

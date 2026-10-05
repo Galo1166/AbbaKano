@@ -32,6 +32,7 @@ interface AuthContextType {
   biometricLogin: () => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<string>;
   updatePassword: (password: string) => Promise<void>;
 }
@@ -191,6 +192,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    const { error } = await supabase.functions.invoke('delete-account');
+    if (error) {
+      const context = 'context' in error ? error.context : undefined;
+      if (context instanceof Response) {
+        const payload = await context.clone().json().catch(() => null) as
+          | { message?: unknown }
+          | null;
+        if (typeof payload?.message === 'string') throw new Error(payload.message);
+      }
+      throw error;
+    }
+
+    const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+    setUser(null);
+    if (signOutError) {
+      throw new Error('Your account was deleted, but this device could not clear its session. Please restart the app.');
+    }
+  }, []);
+
   const requestPasswordReset = useCallback(async (email: string): Promise<string> => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail.includes('@')) {
@@ -211,7 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isPasswordRecovery, hydrate, login, biometricLogin, register, logout, requestPasswordReset, updatePassword }}>
+    <AuthContext.Provider value={{ user, isLoading, isPasswordRecovery, hydrate, login, biometricLogin, register, logout, deleteAccount, requestPasswordReset, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

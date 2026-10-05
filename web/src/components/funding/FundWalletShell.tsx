@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { invokeSupabaseFunction, supabase } from "@/lib/supabase";
+import { safeErrorMessage } from "@/lib/userFeedback";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 
@@ -97,19 +98,10 @@ export function FundWalletShell() {
       return;
     }
 
-    const { data, error } = await supabase.functions.invoke(
+    const data = await invokeSupabaseFunction<{ authorizationUrl?: string }>(
       "initialize-paystack",
-      {
-        body: {
-          amount: value,
-        },
-      }
+      { amount: value },
     );
-
-    if (error) {
-      console.error("Edge Function error:", error);
-      throw error;
-    }
 
     if (!data?.authorizationUrl) {
       throw new Error("Paystack did not return a checkout URL.");
@@ -119,11 +111,7 @@ export function FundWalletShell() {
   } catch (error) {
     console.error("Paystack initialization error:", error);
 
-    setMessage(
-      error instanceof Error
-        ? error.message
-        : "Could not start Paystack payment."
-    );
+    setMessage(safeErrorMessage(error, "Could not start Paystack payment."));
     releaseFundingLock(attempt);
   }
 }
