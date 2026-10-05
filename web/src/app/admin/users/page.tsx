@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchCustomers } from "@admin/services/api";
+import { adjustCustomerWallet, fetchCustomers, updateCustomerStatus } from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
@@ -17,6 +17,12 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0);
   const [selectedUser, setSelectedUser] = useState<CustomerUser | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [adjustmentDirection, setAdjustmentDirection] = useState<"credit" | "debit">("credit");
+  const [adjustmentAmount, setAdjustmentAmount] = useState("");
+  const [adjustmentReason, setAdjustmentReason] = useState("");
   const PAGE_SIZE = 15;
   const requestKey = JSON.stringify([page, search, statusFilter]);
   const loading = loadedRequestKey !== requestKey;
@@ -47,7 +53,7 @@ export default function UsersPage() {
       });
 
     return () => { cancelled = true; };
-  }, [page, search, statusFilter, requestKey]);
+  }, [page, search, statusFilter, requestKey, refreshCount]);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -55,6 +61,47 @@ export default function UsersPage() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
+
+  async function handleStatusChange() {
+    if (!selectedUser) return;
+    const nextStatus = selectedUser.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await updateCustomerStatus(selectedUser.id, nextStatus);
+      setSelectedUser({ ...selectedUser, status: nextStatus });
+      showToast(`Account ${nextStatus === "BLOCKED" ? "blocked" : "unblocked"} successfully.`);
+      setRefreshCount((count) => count + 1);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not update account status.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleWalletAdjustment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedUser) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await adjustCustomerWallet(
+        selectedUser.id,
+        Number(adjustmentAmount),
+        adjustmentDirection,
+        adjustmentReason.trim(),
+      );
+      setSelectedUser({ ...selectedUser, walletBalance: result.balance });
+      setAdjustmentAmount("");
+      setAdjustmentReason("");
+      showToast(`Wallet ${adjustmentDirection} completed. New balance: ${formatNaira(result.balance)}.`);
+      setRefreshCount((count) => count + 1);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not adjust wallet balance.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -391,9 +438,72 @@ export default function UsersPage() {
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                Wallet adjustments and account blocking are temporarily unavailable while these admin actions are migrated to Supabase.
-              </div>
+              {actionError && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800" role="alert">
+                  {actionError}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void handleStatusChange()}
+                disabled={actionLoading}
+                className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border disabled:opacity-50 ${
+                  selectedUser.status === "ACTIVE"
+                    ? "text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100"
+                    : "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                }`}
+              >
+                {actionLoading ? "Please wait..." : selectedUser.status === "ACTIVE" ? "Block account" : "Unblock account"}
+              </button>
+
+              <form onSubmit={handleWalletAdjustment} className="space-y-2 border-t border-slate-100 pt-4">
+                <h4 className="text-xs font-bold text-slate-800">Adjust wallet balance</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[11px] text-slate-600">
+                    Action
+                    <select
+                      value={adjustmentDirection}
+                      onChange={(event) => setAdjustmentDirection(event.target.value as "credit" | "debit")}
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs"
+                    >
+                      <option value="credit">Credit</option>
+                      <option value="debit">Debit</option>
+                    </select>
+                  </label>
+                  <label className="text-[11px] text-slate-600">
+                    Amount (₦)
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      required
+                      value={adjustmentAmount}
+                      onChange={(event) => setAdjustmentAmount(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"
+                      placeholder="0.00"
+                    />
+                  </label>
+                </div>
+                <label className="block text-[11px] text-slate-600">
+                  Reason
+                  <input
+                    required
+                    maxLength={500}
+                    value={adjustmentReason}
+                    onChange={(event) => setAdjustmentReason(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"
+                    placeholder="Reason for adjustment"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {actionLoading ? "Processing..." : `${adjustmentDirection === "credit" ? "Credit" : "Debit"} wallet`}
+                </button>
+              </form>
             </div>
 
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">

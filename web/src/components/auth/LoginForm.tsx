@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useState } from "react";
-import { invokeSupabaseFunction, supabase } from "@/lib/supabase";
+import { invokeSupabaseFunction, setRememberDevicePreference, supabase } from "@/lib/supabase";
 import { GENERIC_SERVICE_ERROR, isServiceFailure, reportServiceFailure } from "@/lib/userFeedback";
 
 function normalizePhone(phone: string) {
@@ -44,6 +44,7 @@ export function LoginForm() {
     setLoading(true);
 
     try {
+      setRememberDevicePreference(rememberDevice);
       const credentials = value.includes("@")
         ? { email: value.toLowerCase(), password }
         : { phone: normalizePhone(value), password };

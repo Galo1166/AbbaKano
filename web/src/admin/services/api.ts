@@ -619,9 +619,10 @@ export async function updateCustomerStatus(
   customerId: string,
   status: "ACTIVE" | "BLOCKED"
 ): Promise<void> {
-  await apiRequest(`/admin/users/${customerId}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ status: status.toLowerCase() }),
+  await invokeSupabaseFunction("admin-users", {
+    action: "update_status",
+    userId: customerId,
+    status: status.toLowerCase(),
   });
 }
 
@@ -652,11 +653,19 @@ export async function adjustCustomerWallet(
   direction: "credit" | "debit",
   reason: string
 ): Promise<{ balance: number }> {
-  return apiRequest<{ balance: number }>(`/admin/users/${customerId}/ledger`, {
-    method: "POST",
-    headers: { "Idempotency-Key": `admin-ledger-${customerId}-${Date.now()}` },
-    body: JSON.stringify({ amount, direction, reason }),
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+    throw new Error("Enter a valid wallet adjustment amount.");
+  }
+
+  const response = await invokeSupabaseFunction<{ balance_kobo: number }>("admin-users", {
+    action: "adjust_wallet",
+    userId: customerId,
+    amountKobo: Math.round(amount * 100),
+    direction,
+    reason,
+    adjustmentId: crypto.randomUUID(),
   });
+  return { balance: response.balance_kobo / 100 };
 }
 
 // ─── Support Cases ────────────────────────────────────────────

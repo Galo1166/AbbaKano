@@ -79,6 +79,85 @@ Deno.serve(async (req) => {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+    const action = typeof body.action === "string" ? body.action : "";
+
+    if (action === "update_status") {
+      const userId = typeof body.userId === "string" ? body.userId : "";
+      const nextStatus = typeof body.status === "string" ? body.status.toLowerCase() : "";
+      if (!/^[0-9a-f-]{36}$/i.test(userId) || !["active", "blocked"].includes(nextStatus)) {
+        return jsonResponse({ message: "Invalid account status update." }, 400);
+      }
+
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("role, status")
+        .eq("id", userId)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      if (!profile || profile.role !== "user") {
+        return jsonResponse({ message: "Customer account not found." }, 404);
+      }
+
+      const banDuration = nextStatus === "blocked" ? "876000h" : "none";
+      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+        userId,
+        { ban_duration: banDuration },
+      );
+      if (authUpdateError) throw authUpdateError;
+
+      const { error: statusUpdateError } = await supabaseAdmin
+        .from("profiles")
+        .update({ status: nextStatus })
+        .eq("id", userId);
+      if (statusUpdateError) {
+        const rollbackDuration = profile.status === "blocked" ? "876000h" : "none";
+        const { error: rollbackError } = await supabaseAdmin.auth.admin.updateUserById(
+          userId,
+          { ban_duration: rollbackDuration },
+        );
+        if (rollbackError) {
+          console.error("Could not roll back customer auth ban after status update failed:", rollbackError);
+        }
+        throw statusUpdateError;
+      }
+
+      return jsonResponse({ status: nextStatus });
+    }
+
+    if (action === "adjust_wallet") {
+      const userId = typeof body.userId === "string" ? body.userId : "";
+      const amountKobo = body.amountKobo;
+      const direction = typeof body.direction === "string" ? body.direction : "";
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      const adjustmentId = typeof body.adjustmentId === "string" ? body.adjustmentId : "";
+      if (
+        !/^[0-9a-f-]{36}$/i.test(userId) ||
+        !Number.isSafeInteger(amountKobo) ||
+        Number(amountKobo) <= 0 ||
+        !["credit", "debit"].includes(direction) ||
+        !reason ||
+        reason.length > 500 ||
+        !/^[0-9a-f-]{36}$/i.test(adjustmentId)
+      ) {
+        return jsonResponse({ message: "Invalid wallet adjustment." }, 400);
+      }
+
+      const { data, error } = await supabaseAdmin.rpc("admin_adjust_user_wallet", {
+        p_user_id: userId,
+        p_admin_user_id: user.id,
+        p_amount_kobo: amountKobo,
+        p_direction: direction,
+        p_reason: reason,
+        p_adjustment_id: adjustmentId,
+      });
+      if (error) throw error;
+      return jsonResponse(data);
+    }
+
+    if (action) {
+      return jsonResponse({ message: "Unsupported admin user action." }, 400);
+    }
+
     const { data, error } = await supabaseAdmin.rpc("get_admin_users", {
       p_page: page,
       p_page_size: pageSize,

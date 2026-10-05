@@ -9,10 +9,56 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
+const rememberDeviceStorageKey = "abbakano-remember-device";
+
+function browserStorageAdapter() {
+  function selectedStorage(): Storage | null {
+    if (typeof window === "undefined") return null;
+    const shouldRemember = window.localStorage.getItem(rememberDeviceStorageKey);
+    return shouldRemember === "false" ? window.sessionStorage : window.localStorage;
+  }
+
+  return {
+    getItem(key: string) {
+      if (typeof window === "undefined") return null;
+      const preferred = selectedStorage();
+      const fallback = preferred === window.localStorage
+        ? window.sessionStorage
+        : window.localStorage;
+      const value = preferred?.getItem(key) ?? fallback.getItem(key);
+      if (value !== null && preferred && fallback.getItem(key) !== null) {
+        preferred.setItem(key, value);
+        fallback.removeItem(key);
+      }
+      return value;
+    },
+    setItem(key: string, value: string) {
+      const preferred = selectedStorage();
+      if (!preferred || typeof window === "undefined") return;
+      preferred.setItem(key, value);
+      const fallback = preferred === window.localStorage
+        ? window.sessionStorage
+        : window.localStorage;
+      fallback.removeItem(key);
+    },
+    removeItem(key: string) {
+      if (typeof window === "undefined") return;
+      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
+    },
+  };
+}
+
 export const supabase = createClient(
   supabaseUrl,
-  supabasePublishableKey
+  supabasePublishableKey,
+  { auth: { storage: browserStorageAdapter() } },
 );
+
+export function setRememberDevicePreference(remember: boolean): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(rememberDeviceStorageKey, String(remember));
+}
 
 export async function invokeSupabaseFunction<T>(
   functionName: string,
