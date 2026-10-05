@@ -102,11 +102,15 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       if (draft.planToken) body.planToken = draft.planToken;
-      if (draft.meterNumber && draft.type === 'ELECTRICITY') body.meterNumber = draft.meterNumber;
-      if (draft.meterNumber && draft.type === 'CABLE_TV') body.smartcardNumber = draft.meterNumber;
+      if (draft.meterNumber && draft.type === 'ELECTRICITY') body.meterNumber = String(draft.meterNumber).replace(/\D/g, '');
+      if (draft.meterNumber && draft.type === 'CABLE_TV') body.smartcardNumber = String(draft.meterNumber).replace(/\D/g, '');
       if (draft.meterType) body.meterType = draft.meterType;
-      if (draft.type === 'CABLE_TV' && draft.billerName) body.provider = draft.billerName;
-      if (draft.type === 'ELECTRICITY' && draft.network) body.provider = draft.network;
+      if (draft.type === 'CABLE_TV') {
+        body.provider = String(draft.network || draft.billerName || '').trim().toUpperCase() || undefined;
+      }
+      if (draft.type === 'ELECTRICITY') {
+        body.provider = String(draft.network || draft.billerName || '').trim().toUpperCase() || undefined;
+      }
 
       const { data: result, error } = await supabase.functions.invoke<{
         reference?: string;

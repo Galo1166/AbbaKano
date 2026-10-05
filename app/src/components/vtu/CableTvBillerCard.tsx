@@ -6,7 +6,7 @@ import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { api, ApiError } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 const CABLE_PROVIDERS = [
   { id: 'dstv', code: 'DSTV', name: 'DStv', brandColor: '#e60012' },
@@ -43,44 +43,61 @@ export const CableTvBillerCard: React.FC = () => {
   }, [paymentSuccessCount]);
 
   useEffect(() => {
-    if (smartcardNumber.length !== 10) {
+    const cleanSmartcardNumber = smartcardNumber.replace(/\D/g, '');
+    if (!/^\d{10}$/.test(cleanSmartcardNumber)) {
       setVerifiedCustomer(null);
       setPackages([]);
       setSelectedPackageId('');
       return;
     }
+
     let cancelled = false;
     setLoading(true);
     setErrorMessage(null);
-    void api.post<{ customerName?: string; plans?: Array<{ name: string; price: number; code: string; selectionToken: string }> }>('/vtu/verify-cable', {
-      provider: selectedProvider.id,
-      smartcardNumber,
-    }).then((response) => {
+
+    void supabase.functions.invoke<{ customerName?: string; plans?: Array<{ name: string; price: number; code: string; selectionToken: string }> }>('cable-services', {
+      body: {
+        provider: selectedProvider.code,
+        smartcardNumber: cleanSmartcardNumber,
+      },
+    }).then(({ data, error }) => {
       if (cancelled) return;
-      setVerifiedCustomer(response.customerName || null);
-      const nextPackages = (response.plans || []).map((plan) => ({ id: plan.code, name: plan.name, price: Number(plan.price), planToken: plan.selectionToken }));
+      if (error) throw error;
+      setVerifiedCustomer(data?.customerName || null);
+      const nextPackages = (data?.plans || []).map((plan) => ({
+        id: plan.code,
+        name: plan.name,
+        price: Number(plan.price),
+        planToken: plan.selectionToken,
+      }));
       setPackages(nextPackages);
       setSelectedPackageId(nextPackages[0]?.id || '');
     }).catch((error) => {
-      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this cable customer.');
+      if (!cancelled) {
+        const message = error instanceof Error ? error.message : 'Could not verify this cable customer.';
+        setErrorMessage(message);
+      }
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedProvider.id, smartcardNumber]);
+  }, [selectedProvider.code, smartcardNumber]);
 
   const activePackage = packages.find((p) => p.id === selectedPackageId) || packages[0];
 
   const handleSubscribe = () => {
-    if (!activePackage || smartcardNumber.length < 10) return;
+    const cleanSmartcardNumber = smartcardNumber.replace(/\D/g, '');
+    if (!activePackage || !/^\d{10}$/.test(cleanSmartcardNumber)) return;
 
     startCheckout({
       type: 'CABLE_TV',
       title: `${selectedProvider.code} ${activePackage.name}`,
       serviceName: `${selectedProvider.name}`,
-      recipient: smartcardNumber,
+      recipient: cleanSmartcardNumber,
       planName: activePackage.name,
       amount: activePackage.price,
       fee: 100,
-      billerName: selectedProvider.name,
+      billerName: selectedProvider.code,
+      meterNumber: cleanSmartcardNumber,
+      planToken: activePackage.planToken,
       onSuccess: clearInputs,
     });
   };

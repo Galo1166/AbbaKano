@@ -6,7 +6,7 @@ import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { api, ApiError } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 const ELECTRICITY_DISCOS = [
   { id: 'aedc', code: 'AEDC', name: 'Abuja Electricity' },
@@ -47,44 +47,68 @@ export const ElectricityBillerCard: React.FC = () => {
   }, [paymentSuccessCount]);
 
   useEffect(() => {
-    if (meterNumber.length < 8) {
+    const cleanMeterNumber = meterNumber.replace(/\D/g, '');
+    if (!/^\d{8,14}$/.test(cleanMeterNumber)) {
       setVerifiedCustomer(null);
       setPlanToken(null);
       return;
     }
+
     let cancelled = false;
     setLoading(true);
     setErrorMessage(null);
-    const meterTypeQuery = meterType === 'POSTPAID' ? 'postpaid' : 'prepaid';
+
     void Promise.all([
-      api.post<{ customerName?: string; customerAddress?: string }>('/vtu/verify-electricity', { provider: selectedDisCo.id, meterNumber }),
-      api.get<{ plans: Array<{ selectionToken?: string }> }>(`/vtu/service-plans?service=electricity&provider=${selectedDisCo.id}&meterType=${meterTypeQuery}`),
-    ]).then(([verification, plansResponse]) => {
+      supabase.functions.invoke<{ customerName?: string; customerAddress?: string; selectionToken?: string }>('electricity-services', {
+        body: {
+          action: 'verify-meter',
+          provider: selectedDisCo.code,
+          meterNumber: cleanMeterNumber,
+          disco: selectedDisCo.id,
+        },
+      }),
+      supabase.functions.invoke<{ plans?: Array<{ selectionToken?: string; code?: string }> }>('electricity-services', {
+        body: {
+          action: 'plans',
+          provider: selectedDisCo.code,
+        },
+      }),
+    ]).then(([verificationResult, plansResult]) => {
       if (cancelled) return;
-      setVerifiedCustomer(verification.customerName || verification.customerAddress || null);
-      setPlanToken(plansResponse.plans?.[0]?.selectionToken || null);
+      if (verificationResult.error) throw verificationResult.error;
+      if (plansResult.error) throw plansResult.error;
+      const verification = verificationResult.data;
+      const plans = plansResult.data;
+      setVerifiedCustomer(verification?.customerName || verification?.customerAddress || null);
+      setPlanToken(verification?.selectionToken || plans?.plans?.[0]?.selectionToken || null);
     }).catch((error) => {
-      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this meter.');
+      if (!cancelled) {
+        const message = error instanceof Error ? error.message : 'Could not verify this meter.';
+        setErrorMessage(message);
+      }
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [meterNumber, meterType, selectedDisCo.id]);
+  }, [meterNumber, selectedDisCo.code, selectedDisCo.id]);
 
   const presetAmounts = ['1000', '2000', '3000', '5000', '10000', '20000'];
 
   const handlePay = () => {
+    const cleanMeterNumber = meterNumber.replace(/\D/g, '');
     const numAmount = parseInt(amount, 10);
     if (isNaN(numAmount) || numAmount < 500) return;
-    if (meterNumber.length < 11) return;
+    if (!/^\d{8,14}$/.test(cleanMeterNumber)) return;
 
     startCheckout({
       type: 'ELECTRICITY',
       title: `${selectedDisCo.name} ${meterType}`,
       serviceName: `${selectedDisCo.name} Electricity Token`,
-      recipient: meterNumber,
+      recipient: cleanMeterNumber,
       amount: numAmount,
       fee: 100,
-      billerName: selectedDisCo.name,
+      billerName: selectedDisCo.code,
+      meterNumber: cleanMeterNumber,
       planToken: planToken || undefined,
+      meterType,
       units: `${(numAmount / 72.5).toFixed(1)} kWh`,
       onSuccess: clearInputs,
     });
@@ -147,7 +171,7 @@ export const ElectricityBillerCard: React.FC = () => {
         value={meterNumber}
         onChangeText={setMeterNumber}
         keyboardType="numeric"
-        maxLength={11}
+        maxLength={14}
         leftIcon={<MaterialCommunityIcons name="counter" size={18} color={Palette.onSurfaceMuted} />}
       />
 
