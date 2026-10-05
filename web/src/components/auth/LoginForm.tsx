@@ -156,7 +156,6 @@ export function LoginForm() {
           placeholder="Enter your phone number or email"
           autoComplete="username"
           type="text"
-          inputMode={identifier.includes("@") ? "email" : "tel"}
           autoCapitalize="none"
           autoCorrect="off"
         />
