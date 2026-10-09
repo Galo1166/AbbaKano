@@ -46,36 +46,41 @@ export default function SettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.allSettled([
-      fetchMarginSettings(),
-      fetchSystemSettings(),
-      fetchReferralProgramSettings(),
-    ]).then(([marginResult, systemResult, referralResult]) => {
-      if (marginResult.status === "fulfilled") {
-        setMargins(marginResult.value);
-      } else {
-        setMarginLoadError(marginResult.reason instanceof Error
-          ? marginResult.reason.message
-          : "Could not load pricing margins.");
-      }
-
-      if (systemResult.status === "fulfilled") {
-        setSettings(systemResult.value);
-      } else {
-        setSystemLoadError(systemResult.reason instanceof Error
-          ? systemResult.reason.message
-          : "Could not load general settings.");
-      }
-
-      if (referralResult.status === "fulfilled") {
-        setReferralSettings(referralResult.value);
-      } else {
-        setReferralLoadError(referralResult.reason instanceof Error
-          ? referralResult.reason.message
+    let cancelled = false;
+    void fetchReferralProgramSettings().then((result) => {
+      if (!cancelled) setReferralSettings(result);
+    }).catch((error) => {
+      if (!cancelled) {
+        setReferralLoadError(error instanceof Error
+          ? error.message
           : "Could not load referral settings.");
       }
-    }).finally(() => setLoading(false));
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "margins" && margins.length === 0 && !marginLoadError) {
+      void fetchMarginSettings().then(setMargins).catch((error) => {
+        setMarginLoadError(error instanceof Error
+          ? error.message
+          : "Could not load pricing margins.");
+      });
+    }
+    if (
+      (activeTab === "maintenance" || activeTab === "alerts") &&
+      !settings &&
+      !systemLoadError
+    ) {
+      void fetchSystemSettings().then(setSettings).catch((error) => {
+        setSystemLoadError(error instanceof Error
+          ? error.message
+          : "Could not load general settings.");
+      });
+    }
+  }, [activeTab, marginLoadError, margins.length, settings, systemLoadError]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -171,24 +176,7 @@ export default function SettingsPage() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-5 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-outline">
-              Average Net SME Spread
-            </span>
-            <span className="material-symbols-outlined text-primary text-[20px]">
-              trending_up
-            </span>
-          </div>
-          <div className="text-2xl sm:text-3xl font-extrabold text-on-surface font-mono">
-            ?15.00 <span className="text-xs text-outline font-normal font-sans">/ GB</span>
-          </div>
-          <p className="text-xs text-on-surface-variant mt-2 pt-2 border-t border-outline-variant/10">
-            Average profit margin across SME data plans
-          </p>
-        </div>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-outline">
