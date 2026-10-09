@@ -130,8 +130,8 @@ export default function SettingsPage() {
       {/* Header */}
       <PageHeader
         breadcrumbs={["Administration", "Settings"]}
-        title="Settings & Pricing Margins"
-        description="Configure wholesale pricing margins, app availability, and low balance alert contacts."
+        title="Administration Settings"
+        description="Manage referral rewards, pricing margins, app availability, and alert contacts."
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -234,7 +234,11 @@ export default function SettingsPage() {
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSaveError(null);
+              setSavedNotice(null);
+            }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               activeTab === tab.id
                 ? "bg-primary text-on-primary shadow-sm"
