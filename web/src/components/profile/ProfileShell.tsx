@@ -53,7 +53,24 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
   const [confirmPin, setConfirmPin] = useState("");
   const [pinMessage, setPinMessage] = useState("");
   const [savingPin, setSavingPin] = useState(false);
+  const [referralProgramEnabled, setReferralProgramEnabled] = useState(true);
+  const [referralRewardNaira, setReferralRewardNaira] = useState(100);
   const { theme, themePreference, setThemePreference } = useThemeMode();
+
+  useEffect(() => {
+    let cancelled = false;
+    void invokeSupabaseFunction<{ enabled: boolean; signupRewardKobo: number }>(
+      "referral-services",
+      { action: "program_settings" },
+    ).then((settings) => {
+      if (cancelled) return;
+      setReferralProgramEnabled(settings.enabled);
+      setReferralRewardNaira(settings.signupRewardKobo / 100);
+    }).catch((error) => {
+      console.error("Could not load referral program settings:", error);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -253,7 +270,7 @@ export function ProfileShell({ initialUser }: { initialUser?: ProfileUser }) {
       <section className="profile-content">
         <div className="profile-identity"><div className="profile-avatar">{name.slice(0, 1).toUpperCase()}</div><div><h2>{name}</h2><p>{user?.email || "Your AbbaKano wallet"}</p><p className="profile-phone">{user?.phone || "Phone number not added"}</p></div></div>
         {message && <div className="profile-message" role="status">{message}</div>}
-        <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle="Earn N100 for each friend who signs up with your code" badge="N100 BONUS" onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
+        <ProfileSection title="Referral & Rewards"><ProfileRow icon="gift" title="Refer & Earn" subtitle={referralProgramEnabled ? `Earn N${referralRewardNaira.toLocaleString()} for each friend who signs up with your code` : "Referrals paused · withdraw existing rewards"} badge={referralProgramEnabled ? `N${referralRewardNaira.toLocaleString()} BONUS` : "PAUSED"} onClick={() => window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "referral" }))} /></ProfileSection>
         <ProfileSection title="Security & Preferences"><ProfileRow icon="pin" title="Change Transaction PIN" subtitle="4-digit wallet security PIN" onClick={openPinModal} /><ProfileRow icon="fingerprint" title="Biometrics Login" subtitle="Face ID / Fingerprint unlock" control={<Toggle enabled={biometrics} disabled={savingSetting === "biometrics"} onChange={() => void saveSecuritySetting("biometrics", !biometrics)} />} /><ProfileRow icon="lock" title="App Lock PIN" subtitle="Screen lock security timeout" control={<Toggle enabled={appLock} disabled={savingSetting === "appLock"} onChange={() => void saveSecuritySetting("appLock", !appLock)} />} /><ProfileRow icon="palette" title="Theme & Appearance" subtitle={themePreference === "system" ? `Auto (${theme === "dark" ? "Dark" : "Light"})` : `${theme === "dark" ? "Dark" : "Light"} mode active`} badge={themePreference === "system" ? "AUTO" : theme.toUpperCase()} onClick={() => setShowThemeModal(true)} /></ProfileSection>
         <ProfileSection title="Help & Support"><ProfileRow icon="help" title="Contact Support" subtitle="24/7 WhatsApp & in-app chat" onClick={() => router.push("/support")} /><ProfileRow icon="shield" title="Privacy Policy" subtitle="How your personal information is handled" onClick={() => router.push("/privacy")} /><ProfileRow icon="info" title="Terms and Conditions" subtitle="The terms for using AbbaKano" onClick={() => router.push("/terms")} /><ProfileRow icon="info" title="About AbbaKano" subtitle="About the platform and its services" onClick={() => router.push("/about")} /></ProfileSection>
         <button className="profile-signout" type="button" onClick={() => setShowSignOutModal(true)} aria-haspopup="dialog"><span className="profile-signout-icon"><Icon name="logout" /></span><span className="profile-signout-copy"><strong>Sign Out</strong><small>Exit your wallet session safely</small></span></button>

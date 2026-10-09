@@ -133,6 +133,12 @@ verify_jwt = false
 import_map = "./functions/admin-vtu-plans/deno.json"
 entrypoint = "./functions/admin-vtu-plans/index.ts"
 
+[functions.admin-referral-settings]
+enabled = true
+verify_jwt = false
+import_map = "./functions/admin-referral-settings/deno.json"
+entrypoint = "./functions/admin-referral-settings/index.ts"
+
 [functions.vtugate-services]
 enabled = true
 verify_jwt = false

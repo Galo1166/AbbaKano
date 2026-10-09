@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState, useSyncExternalStore } from "react";
+import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {invokeSupabaseFunction} from "@/lib/supabase";
 import { safeErrorMessage, showErrorToast, showSuccessToast } from "@/lib/userFeedback";
@@ -40,6 +40,22 @@ export function RegisterForm() {
   const [showConfirmPin, setShowConfirmPin] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [referralSettings, setReferralSettings] = useState({
+    enabled: true,
+    signupRewardKobo: 10000,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    void invokeSupabaseFunction<typeof referralSettings>("referral-services", {
+      action: "program_settings",
+    }).then((settings) => {
+      if (!cancelled) setReferralSettings(settings);
+    }).catch((error) => {
+      console.error("Could not load referral program settings:", error);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   function updateValue(name: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -99,8 +115,9 @@ if (!values.email.includes("@")) {
           pin:
             values.pin,
 
-          referralCode:
-            values.referralCode.trim() || referralCodeFromUrl,
+          referralCode: referralSettings.enabled
+            ? values.referralCode.trim() || referralCodeFromUrl
+            : "",
       },
     );
 
@@ -133,8 +150,12 @@ if (!values.email.includes("@")) {
       <label>Confirm Password<div className="auth-input-wrap"><input type={showConfirmPassword ? "text" : "password"} value={values.confirmPassword} onChange={(event) => updateValue("confirmPassword", event.target.value)} placeholder="Re-enter password" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowConfirmPassword((current) => !current)} aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}><VisibilityIcon visible={showConfirmPassword} /></button></div></label>
       <label>Transaction PIN <small>4 digits for wallet security</small><div className="auth-input-wrap"><input type={showPin ? "text" : "password"} inputMode="numeric" maxLength={4} value={values.pin} onChange={(event) => updateValue("pin", event.target.value.replace(/\D/g, ""))} placeholder="Enter 4-digit PIN" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowPin((current) => !current)} aria-label={showPin ? "Hide transaction PIN" : "Show transaction PIN"}><VisibilityIcon visible={showPin} /></button></div></label>
       <label>Confirm Transaction PIN<div className="auth-input-wrap"><input type={showConfirmPin ? "text" : "password"} inputMode="numeric" maxLength={4} value={values.confirmPin} onChange={(event) => updateValue("confirmPin", event.target.value.replace(/\D/g, ""))} placeholder="Re-enter 4-digit PIN" autoComplete="new-password" /><button className="input-action" type="button" onClick={() => setShowConfirmPin((current) => !current)} aria-label={showConfirmPin ? "Hide confirmed transaction PIN" : "Show confirmed transaction PIN"}><VisibilityIcon visible={showConfirmPin} /></button></div></label>
-      <button className="referral-toggle" type="button" onClick={() => setShowReferral((current) => !current)}>{showReferral ? "Hide referral code" : "Have a Referral Code (Phone No)?"}</button>
-      {(showReferral || referralCodeFromUrl) && <label>Referral Code <small className="bonus">N100 BONUS</small><input value={values.referralCode || referralCodeFromUrl} onChange={(event) => updateValue("referralCode", event.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="Enter referrer's phone number" inputMode="numeric" maxLength={11} /></label>}
+      {referralSettings.enabled && (
+        <>
+          <button className="referral-toggle" type="button" onClick={() => setShowReferral((current) => !current)}>{showReferral ? "Hide referral code" : "Have a Referral Code (Phone No)?"}</button>
+          {(showReferral || referralCodeFromUrl) && <label>Referral Code <small className="bonus">₦{(referralSettings.signupRewardKobo / 100).toLocaleString()} BONUS</small><input value={values.referralCode || referralCodeFromUrl} onChange={(event) => updateValue("referralCode", event.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="Enter referrer's phone number" inputMode="numeric" maxLength={11} /></label>}
+        </>
+      )}
       <label className="check-label terms"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} /> I agree to the <Link href="/terms?from=auth">Terms of Service</Link> and <Link href="/privacy?from=auth">Privacy Policy</Link>.</label>
       <button className="auth-primary" type="submit" disabled={loading}>{loading ? "Creating Account..." : "Register & Get Started"}</button>
       <p className="security-note">256-bit secure registration. We never share your data.</p>

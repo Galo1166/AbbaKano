@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   fetchMarginSettings,
+  fetchReferralProgramSettings,
   fetchSystemSettings,
+  updateReferralProgramSettings,
   updateSystemSettings,
 } from "@admin/services/api";
 import PageHeader from "@admin/components/layout/PageHeader";
 import Toggle from "@admin/components/ui/Toggle";
+import type { ReferralProgramSettings } from "@admin/services/api";
 import type { MarginSetting, SystemSettings } from "@admin/types/telecom";
 
 const CARRIER_IMAGES: Record<string, string> = {
@@ -32,25 +35,71 @@ const resolveCarrierImage = (carrier: string) => CARRIER_IMAGES[String(carrier |
 export default function SettingsPage() {
   const [margins, setMargins] = useState<MarginSetting[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [referralSettings, setReferralSettings] = useState<ReferralProgramSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("margins");
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([fetchMarginSettings(), fetchSystemSettings()]).then(([m, s]) => {
-      setMargins(m);
-      setSettings(s);
-      setLoading(false);
-    });
+    Promise.allSettled([
+      fetchMarginSettings(),
+      fetchSystemSettings(),
+      fetchReferralProgramSettings(),
+    ]).then(([marginResult, systemResult, referralResult]) => {
+      const errors: string[] = [];
+
+      if (marginResult.status === "fulfilled") {
+        setMargins(marginResult.value);
+      } else {
+        errors.push(`Pricing margins: ${marginResult.reason instanceof Error ? marginResult.reason.message : "Could not load pricing margins."}`);
+      }
+
+      if (systemResult.status === "fulfilled") {
+        setSettings(systemResult.value);
+      } else {
+        errors.push(`General settings: ${systemResult.reason instanceof Error ? systemResult.reason.message : "Could not load general settings."}`);
+      }
+
+      if (referralResult.status === "fulfilled") {
+        setReferralSettings(referralResult.value);
+      } else {
+        errors.push(`Referral settings: ${referralResult.reason instanceof Error ? referralResult.reason.message : "Could not load referral settings."}`);
+      }
+
+      if (marginResult.status === "rejected" && systemResult.status === "rejected") {
+        setActiveTab("referrals");
+      }
+      if (errors.length > 0) {
+        setLoadingError(errors.join(" "));
+      }
+    }).finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
-    await updateSystemSettings(settings || {});
-    setSaving(false);
-    setSavedNotice("Settings saved successfully.");
-    setTimeout(() => setSavedNotice(null), 3500);
+    setSaveError(null);
+    try {
+      if (activeTab === "referrals") {
+        if (!referralSettings) {
+          throw new Error("Referral settings are not available to save.");
+        }
+        await updateReferralProgramSettings(referralSettings);
+      } else {
+        if (!settings) {
+          throw new Error("General settings could not be loaded. Check the legacy backend connection.");
+        }
+        await updateSystemSettings(settings);
+      }
+      setSavedNotice("Settings saved successfully.");
+      setTimeout(() => setSavedNotice(null), 3500);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save settings.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateMargin = (carrier: string, field: keyof MarginSetting, value: unknown) => {
@@ -103,6 +152,16 @@ export default function SettingsPage() {
         <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-semibold text-emerald-800 flex items-center gap-2">
           <span className="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
           <span>{savedNotice}</span>
+        </div>
+      )}
+      {saveError && (
+        <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs font-semibold text-red-800" role="alert">
+          {saveError}
+        </div>
+      )}
+      {loadingError && (
+        <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs font-semibold text-red-800" role="alert">
+          {loadingError}
         </div>
       )}
 
@@ -178,6 +237,7 @@ export default function SettingsPage() {
           { id: "margins", label: "Wholesale Margins", icon: "cell_tower" },
           { id: "maintenance", label: "App Maintenance", icon: "build" },
           { id: "alerts", label: "Alert Contacts", icon: "contact_phone" },
+          { id: "referrals", label: "Referrals & Rewards", icon: "card_giftcard" },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -431,6 +491,58 @@ export default function SettingsPage() {
                 />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "referrals" && referralSettings && (
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-outline-variant/20">
+            <div>
+              <h2 className="font-bold text-base text-on-surface">Referral Program</h2>
+              <p className="text-xs sm:text-sm text-on-surface-variant mt-1 leading-relaxed max-w-xl">
+                Control whether new signups can earn referral commissions and set the amount credited for each valid referral.
+                Disabling referrals does not remove existing commission balances or prevent withdrawals.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className={`text-xs font-bold ${referralSettings.enabled ? "text-emerald-700" : "text-red-700"}`}>
+                {referralSettings.enabled ? "Referrals On" : "Referrals Off"}
+              </span>
+              <Toggle
+                checked={referralSettings.enabled}
+                onChange={(checked) =>
+                  setReferralSettings((current) => current ? { ...current, enabled: checked } : current)
+                }
+                id="btn-toggle-referral-program"
+                label="Toggle referral program"
+              />
+            </div>
+          </div>
+
+          <div className="max-w-sm">
+            <label htmlFor="referral-signup-reward" className="block text-xs font-bold text-on-surface mb-1.5">
+              Signup Reward (₦)
+            </label>
+            <input
+              id="referral-signup-reward"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={(referralSettings.signupRewardKobo / 100).toFixed(2)}
+              onChange={(event) => {
+                const naira = Number(event.target.value);
+                setReferralSettings((current) =>
+                  current && Number.isFinite(naira)
+                    ? { ...current, signupRewardKobo: Math.round(naira * 100) }
+                    : current
+                );
+              }}
+              className="w-full h-11 px-4 bg-surface-container-low rounded-xl text-sm font-mono text-on-surface outline-none border border-outline-variant/30 focus:border-primary"
+            />
+            <p className="text-xs text-on-surface-variant mt-2">
+              This amount is credited to the referrer’s commission balance after a referred account is created.
+            </p>
           </div>
         </div>
       )}

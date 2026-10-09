@@ -73,6 +73,11 @@ export type MtnGeneralDataPlan = {
   enabled: boolean;
 };
 
+export type ReferralProgramSettings = {
+  enabled: boolean;
+  signupRewardKobo: number;
+};
+
 function normalizeCarrierName(value: string | null | undefined): Carrier {
   const normalized = String(value || "").trim().toUpperCase();
   if (["MTN", "AIRTEL", "GLO", "9MOBILE"].includes(normalized)) return normalized as Carrier;
@@ -685,6 +690,22 @@ export async function updateSystemSettings(
   return apiRequest<ApiResponse<SystemSettings>>("/admin/settings", {
     method: "PATCH",
     body: JSON.stringify(updates),
+  });
+}
+
+export async function fetchReferralProgramSettings(): Promise<ReferralProgramSettings> {
+  return invokeSupabaseFunction<ReferralProgramSettings>("admin-referral-settings", {
+    action: "get",
+  });
+}
+
+export async function updateReferralProgramSettings(
+  settings: ReferralProgramSettings
+): Promise<ReferralProgramSettings> {
+  return invokeSupabaseFunction<ReferralProgramSettings>("admin-referral-settings", {
+    action: "update",
+    enabled: settings.enabled,
+    signupRewardKobo: settings.signupRewardKobo,
   });
 }
 

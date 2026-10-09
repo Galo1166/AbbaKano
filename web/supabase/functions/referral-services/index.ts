@@ -23,9 +23,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return jsonResponse({ message: "Missing authorization." }, 401);
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
@@ -40,21 +37,42 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Referral services are unavailable." }, 500);
     }
 
+    const body = await req.json();
+    const action = String(body?.action || "summary");
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+
+    if (action === "program_settings") {
+      const { data, error } = await supabaseAdmin
+        .from("referral_program_settings")
+        .select("enabled, signup_reward_kobo")
+        .eq("id", true)
+        .single();
+      if (error) throw error;
+      return jsonResponse({
+        enabled: data.enabled,
+        signupRewardKobo: Number(data.signup_reward_kobo),
+      });
+    }
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return jsonResponse({ message: "Missing authorization." }, 401);
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return jsonResponse({ message: "Unauthorized." }, 401);
 
-    const body = await req.json();
-    const action = String(body?.action || "summary");
-    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
-
     if (action === "summary") {
-      const { data, error } = await supabaseAdmin.rpc("get_referral_summary", {
-        p_user_id: user.id,
-      });
+      const [{ data, error }, { data: settings, error: settingsError }] = await Promise.all([
+        supabaseAdmin.rpc("get_referral_summary", { p_user_id: user.id }),
+        supabaseAdmin
+          .from("referral_program_settings")
+          .select("enabled, signup_reward_kobo")
+          .eq("id", true)
+          .single(),
+      ]);
       if (error) throw error;
+      if (settingsError) throw settingsError;
       if (!data) return jsonResponse({ message: "Referral profile not found." }, 404);
       return jsonResponse({
         phone: data.phone || "",
@@ -62,6 +80,8 @@ Deno.serve(async (req) => {
         referralEarnings: Number(data.referral_earnings_kobo || 0) / 100,
         referralCommissionBalance:
           Number(data.referral_commission_balance_kobo || 0) / 100,
+        referralsEnabled: settings.enabled,
+        referralRewardNaira: Number(settings.signup_reward_kobo) / 100,
       });
     }
 
