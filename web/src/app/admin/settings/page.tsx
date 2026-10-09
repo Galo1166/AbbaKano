@@ -37,8 +37,10 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [referralSettings, setReferralSettings] = useState<ReferralProgramSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingError, setLoadingError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("margins");
+  const [marginLoadError, setMarginLoadError] = useState<string | null>(null);
+  const [systemLoadError, setSystemLoadError] = useState<string | null>(null);
+  const [referralLoadError, setReferralLoadError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("referrals");
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -49,31 +51,28 @@ export default function SettingsPage() {
       fetchSystemSettings(),
       fetchReferralProgramSettings(),
     ]).then(([marginResult, systemResult, referralResult]) => {
-      const errors: string[] = [];
-
       if (marginResult.status === "fulfilled") {
         setMargins(marginResult.value);
       } else {
-        errors.push(`Pricing margins: ${marginResult.reason instanceof Error ? marginResult.reason.message : "Could not load pricing margins."}`);
+        setMarginLoadError(marginResult.reason instanceof Error
+          ? marginResult.reason.message
+          : "Could not load pricing margins.");
       }
 
       if (systemResult.status === "fulfilled") {
         setSettings(systemResult.value);
       } else {
-        errors.push(`General settings: ${systemResult.reason instanceof Error ? systemResult.reason.message : "Could not load general settings."}`);
+        setSystemLoadError(systemResult.reason instanceof Error
+          ? systemResult.reason.message
+          : "Could not load general settings.");
       }
 
       if (referralResult.status === "fulfilled") {
         setReferralSettings(referralResult.value);
       } else {
-        errors.push(`Referral settings: ${referralResult.reason instanceof Error ? referralResult.reason.message : "Could not load referral settings."}`);
-      }
-
-      if (marginResult.status === "rejected" && systemResult.status === "rejected") {
-        setActiveTab("referrals");
-      }
-      if (errors.length > 0) {
-        setLoadingError(errors.join(" "));
+        setReferralLoadError(referralResult.reason instanceof Error
+          ? referralResult.reason.message
+          : "Could not load referral settings.");
       }
     }).finally(() => setLoading(false));
   }, []);
@@ -107,6 +106,12 @@ export default function SettingsPage() {
       prev.map((m) => (m.carrier === carrier ? { ...m, [field]: value } : m))
     );
   };
+
+  const activeTabLoadError = activeTab === "margins"
+    ? marginLoadError
+    : activeTab === "maintenance" || activeTab === "alerts"
+      ? systemLoadError
+      : referralLoadError;
 
   if (loading)
     return (
@@ -159,9 +164,9 @@ export default function SettingsPage() {
           {saveError}
         </div>
       )}
-      {loadingError && (
+      {activeTabLoadError && (
         <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs font-semibold text-red-800" role="alert">
-          {loadingError}
+          {activeTabLoadError}
         </div>
       )}
 

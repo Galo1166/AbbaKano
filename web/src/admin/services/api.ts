@@ -556,7 +556,11 @@ export async function updateStaffMember(
 
 // ─── Margin Settings ──────────────────────────────────────────
 export async function fetchMarginSettings(): Promise<MarginSetting[]> {
-  const response = await apiRequest<{ margins: MarginSetting[] }>("/admin/settings/margins");
+  const response = await apiRequest<{ margins: MarginSetting[] }>(
+    "/admin/settings/margins",
+    {},
+    { showServiceErrorToast: false },
+  );
   return response.margins;
 }
 
@@ -567,7 +571,7 @@ export async function updateMargins(
   return apiRequest<ApiResponse<MarginSetting>>(`/admin/settings/margins/${carrier}`, {
     method: "PATCH",
     body: JSON.stringify(update),
-  });
+  }, { showServiceErrorToast: false });
 }
 
 // ─── Customers ────────────────────────────────────────────────
@@ -681,7 +685,11 @@ export async function fetchSupportCases(): Promise<SupportCase[]> {
 
 // ─── System Settings ──────────────────────────────────────────
 export async function fetchSystemSettings(): Promise<SystemSettings> {
-  return apiRequest<SystemSettings>("/admin/settings");
+  return apiRequest<SystemSettings>(
+    "/admin/settings",
+    {},
+    { showServiceErrorToast: false },
+  );
 }
 
 export async function updateSystemSettings(
@@ -690,7 +698,7 @@ export async function updateSystemSettings(
   return apiRequest<ApiResponse<SystemSettings>>("/admin/settings", {
     method: "PATCH",
     body: JSON.stringify(updates),
-  });
+  }, { showServiceErrorToast: false });
 }
 
 export async function fetchReferralProgramSettings(): Promise<ReferralProgramSettings> {
