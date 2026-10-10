@@ -1,13 +1,12 @@
-import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
-import { WebBottomNav } from "@/components/navigation/WebBottomNav";
-import { DashboardBackButton } from "@/components/navigation/DashboardBackButton";
-import { shouldHideDashboardNavigation } from "@/lib/publicPageNavigation";
+"use client";
+
+import { PublicDocLayout } from "@/components/navigation/PublicDocLayout";
 
 const faqs = [
   {
     question: "Data bundle not received after debit?",
     answer:
-      "Most VTU data deliveries complete within 5 to 30 seconds. If delayed beyond 5 minutes due to telco network congestion, click the WhatsApp button with your Transaction Reference ID for instant escalation.",
+      "Most VTU data deliveries complete within 5 to 30 seconds. If delayed beyond 5 minutes due to telco network congestion, contact our WhatsApp desk with your Transaction Reference ID for instant resolution.",
   },
   {
     question: "Wallet auto-funding transfer pending?",
@@ -22,150 +21,129 @@ const faqs = [
   {
     question: "What are the customer service operating hours?",
     answer:
-      "Our dedicated customer support and automated resolution desk operates 24 hours a day, 7 days a week, 365 days a year.",
+      "Our dedicated customer support and automated resolution desk operates 24 hours a day, 7 days a week, 365 days a year without downtime.",
   },
 ];
 
 const supportChannels = [
   {
-    title: "WhatsApp Direct",
-    value: "+2348166774566",
-    detail: "1-Tap Agent Chat",
-    href: "https://wa.me/2348166774566?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20with%20my%20account.",
-    tone: "green",
+    title: "Official WhatsApp Support",
+    value: "+234 813 333 9850",
+    detail: "Fastest response time (< 2 mins)",
+    href: "https://wa.me/2348133339850?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20with%20my%20account.",
+    action: "Chat on WhatsApp",
+    badge: "Recommended",
   },
   {
-    title: "Hotline 1 (Primary)",
-    value: "+2348133339850",
-    detail: "Direct Phone Call",
+    title: "Direct Telephone Line",
+    value: "+234 813 333 9850",
+    detail: "Direct Phone Call to Kano Desk",
     href: "tel:+2348133339850",
-    tone: "blue",
+    action: "Place Call",
   },
   {
-    title: "Hotline 2 (Agent Desk)",
-    value: "Wholesale & KYC Agent Desk",
-    detail: "Available Soon",
-    href: "#",
-    tone: "amber",
+    title: "Official Support Email",
+    value: "abbakanocommunicationcenter@gmail.com",
+    detail: "Disputes, receipts & compliance",
+    href: "mailto:abbakanocommunicationcenter@gmail.com?subject=AbbaKano%20Support%20Request",
+    action: "Send Email",
   },
   {
-    title: "Email Inquiries",
-    value: "support@abbakano.com",
-    detail: "In-depth receipts",
-    href: "mailto:support@abbakano.com?subject=AbbaKano%20Support%20Request",
-    tone: "violet",
+    title: "VIP WhatsApp Community",
+    value: "Join 10,000+ Members",
+    detail: "Network status & instant updates",
+    href: "https://chat.whatsapp.com/DEpJ8XD2yWy1lKyLEHj4Di",
+    action: "Join Channel",
   },
 ];
 
-export default async function SupportPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ from?: string | string[] }>;
-}) {
-  const hideDashboardNavigation = await shouldHideDashboardNavigation(searchParams);
-
+export default function SupportPage() {
   return (
-    <main className={`support-page${hideDashboardNavigation ? " public-info-page" : ""}`}>
-      {!hideDashboardNavigation && <WebDesktopSidebar active="profile" />}
-
-      <div className="support-shell">
-        <header className="support-header">
-          {!hideDashboardNavigation && <DashboardBackButton />}
-          <p className="data-kicker">Customer Support</p>
-          <h1>Customer Support</h1>
-          <p className="support-intro">24/7 Multi-Channel Resolution Desk</p>
-        </header>
-
-        <section className="support-status-card">
-          <div className="support-status-header">
-            <div className="support-live-row">
-              <span className="support-live-dot" />
-              <span className="support-status-badge">DESK ONLINE</span>
-            </div>
-            <span className="support-status-eta">Avg. Response: &lt; 3 mins</span>
-          </div>
-          <h2>Need help with a transaction?</h2>
-          <p>
-            Our dedicated technical support team is standing by to assist with data topups, airtime, bills, and wallet funding.
-          </p>
-        </section>
-
-        <section className="support-community-card">
-          <div className="support-community-header">
-            <div className="support-community-icon">💬</div>
-            <div className="support-community-heading">
-              <div className="support-community-title-row">
-                <h3>WhatsApp Community</h3>
-                <span className="support-community-badge">UPDATES &amp; ALERTS</span>
-              </div>
-              <p>Official Announcements &amp; Real-Time Broadcasts</p>
-            </div>
-          </div>
-          <p className="support-community-copy">
-            Join our official reseller community to receive instant broadcast alerts on data bundle price drops, server maintenance schedules, and VTU availability.
-          </p>
-          <div className="support-community-perks">
-            <span>Instant Price Drops</span>
-            <span>Network Status</span>
-          </div>
-          <a href="https://chat.whatsapp.com/DEpJ8XD2yWy1lKyLEHj4Di" className="support-community-button" target="_blank" rel="noreferrer">
-            Join WhatsApp Community
-            <span>Available Soon</span>
-          </a>
-        </section>
-
-        <section className="support-channel-section">
-          <h2>Direct Support Channels</h2>
-          <div className="support-grid">
-            {supportChannels.map((item) => (
-              item.href === "#" ? (
-                <div key={item.title} className={`support-channel-card ${item.tone}`}>
-                  <div className="support-channel-icon">{item.tone === "green" ? "💬" : item.tone === "blue" ? "☎" : item.tone === "amber" ? "👨‍💼" : "✉️"}</div>
-                  <div className="support-channel-copy">
-                    <div className="support-channel-row">
-                      <strong>{item.title}</strong>
-                      {item.detail === "Available Soon" && <span className="support-soon-tag">AVAILABLE SOON</span>}
-                    </div>
-                    <small>{item.value}</small>
-                    <span>{item.detail}</span>
-                  </div>
+    <PublicDocLayout
+      eyebrow="24/7 Resolution Desk"
+      title="Customer Support & Help Desk"
+      subtitle="Kano-based human support standing by 24/7/365 to resolve transactions, top-ups, and inquiries."
+      lastUpdated="October 2026"
+    >
+      {/* Support Channels Grid */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-[var(--text)]">Official Support Channels</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {supportChannels.map((channel) => (
+            <div
+              key={channel.title}
+              className="rounded-2xl border border-[var(--border-high)] bg-[var(--surface-high)] p-5 flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    {channel.title}
+                  </span>
+                  {channel.badge && (
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
+                      {channel.badge}
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <a key={item.title} href={item.href} className={`support-channel-card ${item.tone}`} target={item.href.startsWith("http") ? "_blank" : undefined} rel={item.href.startsWith("http") ? "noreferrer" : undefined}>
-                  <div className="support-channel-icon">{item.tone === "green" ? "💬" : item.tone === "blue" ? "☎" : item.tone === "amber" ? "👨‍💼" : "✉️"}</div>
-                  <div className="support-channel-copy">
-                    <div className="support-channel-row">
-                      <strong>{item.title}</strong>
-                      {item.detail === "Available Soon" && <span className="support-soon-tag">AVAILABLE SOON</span>}
-                    </div>
-                    <small>{item.value}</small>
-                    <span>{item.detail}</span>
-                  </div>
+                <div className="mt-2 text-sm sm:text-base font-extrabold text-[var(--text)] break-all min-w-0">
+                  {channel.value}
+                </div>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  {channel.detail}
+                </p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[var(--border)]">
+                <a
+                  href={channel.href}
+                  target={channel.href.startsWith("http") ? "_blank" : undefined}
+                  rel={channel.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--primary)] hover:underline"
+                >
+                  <span>{channel.action}</span>
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeWidth="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
                 </a>
-              )
-            ))}
-          </div>
-        </section>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-        <section className="support-faq-section">
-          <h2>Frequently Asked Questions</h2>
-          <div className="support-faq-list">
-            {faqs.map((faq) => (
-              <details key={faq.question} className="support-faq-item" open={faq.question === "Data bundle not received after debit?"}>
-                <summary>{faq.question}</summary>
-                <p>{faq.answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
+      {/* Operational Headquarters */}
+      <section className="space-y-3 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Physical Operations Base</h2>
+        <div className="rounded-2xl border border-[var(--border-high)] bg-[var(--surface-high)] p-5">
+          <p className="text-sm font-semibold text-[var(--text)]">
+            AbbaKano DataSub Operations Center
+          </p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            Kano State, Nigeria • Operating 24 Hours Daily, 7 Days a Week, 365 Days a Year
+          </p>
+        </div>
+      </section>
 
-        <footer className="support-footer-box">
-          <span>💬</span>
-          <p>AbbaKano Data Sub • Kano State, Nigeria<br />Dedicated to 24/7 VTU Uptime &amp; Support</p>
-        </footer>
-      </div>
-
-      {!hideDashboardNavigation && <WebBottomNav active="profile" />}
-    </main>
+      {/* Frequently Asked Questions */}
+      <section className="space-y-4 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Frequently Asked Questions</h2>
+        <div className="space-y-3">
+          {faqs.map((faq) => (
+            <details
+              key={faq.question}
+              className="group rounded-2xl border border-[var(--border)] bg-[var(--surface-low)] p-4 transition-colors open:bg-[var(--surface-high)]"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-[var(--text)]">
+                <span>{faq.question}</span>
+                <svg className="h-4 w-4 text-[var(--text-muted)] transition-transform group-open:rotate-180 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </summary>
+              <p className="mt-3 text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed">
+                {faq.answer}
+              </p>
+            </details>
+          ))}
+        </div>
+      </section>
+    </PublicDocLayout>
   );
 }

@@ -30,6 +30,13 @@ export function applyThemeMode(mode: ThemeMode) {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.theme = mode;
   document.documentElement.style.colorScheme = mode;
+  if (mode === "dark") {
+    document.documentElement.classList.add("dark");
+    document.documentElement.classList.remove("light");
+  } else {
+    document.documentElement.classList.remove("dark");
+    document.documentElement.classList.add("light");
+  }
 }
 
 function syncThemeStateFromPreference(nextPreference: ThemePreference) {

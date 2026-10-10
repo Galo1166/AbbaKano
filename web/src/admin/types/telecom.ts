@@ -1,5 +1,5 @@
 // ============================================================
-// AbbaKano Admin Console — TypeScript Domain Models
+// AbbaKano Admin Console  -  TypeScript Domain Models
 // Shared domain models for the live admin API.
 // ============================================================
 

@@ -415,7 +415,7 @@ export default function TransactionsPage() {
         {/* Pagination Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-outline-variant/20 bg-surface-container-low/50">
           <span className="text-xs text-on-surface-variant font-mono">
-            Showing {Math.min((page - 1) * PAGE_SIZE + 1, total)}–{Math.min(page * PAGE_SIZE, total)} of {total} orders
+            Showing {Math.min((page - 1) * PAGE_SIZE + 1, total)}-{Math.min(page * PAGE_SIZE, total)} of {total} orders
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -463,7 +463,7 @@ export default function TransactionsPage() {
                 />
                 <div>
                   <p className="font-bold text-on-surface">
-                    {selectedTxn.carrier} — {selectedTxn.plan}
+                    {selectedTxn.carrier}  -  {selectedTxn.plan}
                   </p>
                   <p className="text-xs text-on-surface-variant font-mono">
                     {formatDate(selectedTxn.timestamp)}

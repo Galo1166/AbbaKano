@@ -1,72 +1,63 @@
-import { CustomerPageLayout } from "@/components/navigation/CustomerPageLayout";
-import { shouldHideDashboardNavigation } from "@/lib/publicPageNavigation";
+"use client";
 
-export default async function TermsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ from?: string | string[] }>;
-}) {
-  const hideDashboardNavigation = await shouldHideDashboardNavigation(searchParams);
+import { PublicDocLayout } from "@/components/navigation/PublicDocLayout";
 
+export default function TermsPage() {
   return (
-    <CustomerPageLayout active="profile" eyebrow="Legal" title="Terms and Conditions" subtitle="The terms that apply when you use AbbaKano DataSub." className="profile-page" headerClassName="profile-header" hideDashboardNavigation={hideDashboardNavigation}>
-      <div className="profile-content about-content">
-        <section className="profile-section">
-          <h2>Acceptance and Eligibility</h2>
-          <p className="about-copy">
-            By creating an account or using AbbaKano, you agree to these Terms and Conditions and our Privacy Policy. You must provide accurate, current information and be legally able to enter into this agreement. If you do not agree, do not use the service.
-          </p>
-        </section>
+    <PublicDocLayout
+      eyebrow="Legal & Terms of Service"
+      title="Terms and Conditions"
+      subtitle="The official terms and conditions governing the use of AbbaKano DataSub."
+      lastUpdated="October 2026"
+    >
+      <section className="space-y-3">
+        <h2 className="text-xl font-bold text-[var(--text)]">Acceptance and Eligibility</h2>
+        <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
+          By registering an account or initiating any transaction on AbbaKano DataSub, you explicitly agree to these Terms and Conditions and our Privacy Policy. You must provide truthful, current identification details and be of legal age to enter into binding agreements.
+        </p>
+      </section>
 
-        <section className="profile-section">
-          <h2>Your Account and Security</h2>
-          <p className="about-copy">
-            Keep your sign-in credentials and transaction PIN confidential. You are responsible for activity carried out through your account and must promptly contact support if you suspect unauthorized access. We may restrict access where necessary to protect you, other users, or the service.
-          </p>
-        </section>
+      <section className="space-y-3 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Account Security and Credentials</h2>
+        <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
+          You are entirely responsible for safeguarding your login credentials and transaction PIN. All transactions authorized using your security PIN or biometric passkeys are considered authorized by you. If you suspect compromise, contact customer support immediately.
+        </p>
+      </section>
 
-        <section className="profile-section">
-          <h2>Services and Transactions</h2>
-          <p className="about-copy">
-            AbbaKano provides access to airtime, data, electricity, cable TV, wallet, and related services, subject to provider availability. Check the recipient details and service selection before confirming a transaction. Delivery times can depend on external network, payment, or utility providers. A transaction successfully delivered by the relevant provider is generally not reversible by AbbaKano.
-          </p>
-        </section>
+      <section className="space-y-3 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Services and Transaction Finality</h2>
+        <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
+          AbbaKano DataSub executes top-ups for data, airtime, electricity utility tokens, and cable television renewals via direct telecommunications gateways. Always verify recipient telephone numbers, meter numbers, or decoder smartcard numbers prior to authorization. Transactions successfully fulfilled by network providers cannot be reversed.
+        </p>
+      </section>
 
-        <section className="profile-section">
-          <h2>Wallet Funding and Balances</h2>
-          <p className="about-copy">
-            Wallet funding is subject to payment-provider processing and settlement. Your available balance may be used for supported AbbaKano transactions. Keep your payment references and contact support if a settled deposit or transaction is not reflected correctly. Any applicable fees or transaction limits will be shown or communicated as part of the relevant service.
-          </p>
-        </section>
+      <section className="space-y-3 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Automated Virtual Accounts & Wallet Liquidity</h2>
+        <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
+          Wallet funding via assigned dedicated virtual accounts (Monnify multi-bank integration) is credited automatically upon interbank clearing. Retain bank transaction session IDs and contact support if a deposit does not reflect within standard clearing windows.
+        </p>
+      </section>
 
-        <section className="profile-section">
-          <h2>Acceptable Use</h2>
-          <p className="about-copy">
-            Do not use AbbaKano for unlawful activity, fraud, unauthorized payments, attempts to disrupt or gain unauthorized access to the service, or infringement of another person&apos;s rights. We may investigate suspected misuse and restrict or suspend accounts when reasonably necessary or required by law.
-          </p>
-        </section>
+      <section className="space-y-3 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Prohibited Activities</h2>
+        <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
+          You may not use the platform for fraudulent transfers, unauthorized laundering, cyber-attacks, or intentional network interference. Accounts involved in fraudulent operations will be frozen and reported to relevant regulatory authorities.
+        </p>
+      </section>
 
-        <section className="profile-section">
-          <h2>Availability and Third-Party Providers</h2>
-          <p className="about-copy">
-            AbbaKano relies on third-party payment, telecom, and utility providers. Their systems may be delayed, unavailable, or subject to separate terms. We will make reasonable efforts to provide the service, but cannot guarantee uninterrupted availability or control provider systems.
-          </p>
-        </section>
-
-        <section className="profile-section">
-          <h2>Changes and Account Closure</h2>
-          <p className="about-copy">
-            We may update these terms as the service or legal requirements change. Updated terms will be posted on this page with a revised effective date where appropriate. You may stop using AbbaKano and request account deletion through your profile. We may suspend or close access for serious or repeated violations or where required to protect the service or comply with law.
-          </p>
-        </section>
-
-        <section className="profile-section">
-          <h2>Support and Disputes</h2>
-          <p className="about-copy">
-            For help with a transaction or these terms, contact support@abbakano.com. Please include relevant transaction details, but never send your password or transaction PIN. These terms are subject to applicable laws and do not limit rights that cannot legally be excluded.
-          </p>
-        </section>
-      </div>
-    </CustomerPageLayout>
+      <section className="space-y-3 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Support & Resolution Desk</h2>
+        <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
+          For transaction questions or dispute resolution, contact our Kano-based support team at{" "}
+          <a href="mailto:abbakanocommunicationcenter@gmail.com" className="font-bold text-[var(--primary)] hover:underline">
+            abbakanocommunicationcenter@gmail.com
+          </a>{" "}
+          or WhatsApp desk{" "}
+          <a href="https://wa.me/2348133339850" className="font-bold text-[var(--primary)] hover:underline">
+            +234 813 333 9850
+          </a>.
+        </p>
+      </section>
+    </PublicDocLayout>
   );
 }

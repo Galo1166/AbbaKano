@@ -4,14 +4,11 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   fetchMarginSettings,
-  fetchReferralProgramSettings,
   fetchSystemSettings,
-  updateReferralProgramSettings,
   updateSystemSettings,
 } from "@admin/services/api";
 import PageHeader from "@admin/components/layout/PageHeader";
 import Toggle from "@admin/components/ui/Toggle";
-import type { ReferralProgramSettings } from "@admin/services/api";
 import type { MarginSetting, SystemSettings } from "@admin/types/telecom";
 
 const CARRIER_IMAGES: Record<string, string> = {
@@ -35,75 +32,25 @@ const resolveCarrierImage = (carrier: string) => CARRIER_IMAGES[String(carrier |
 export default function SettingsPage() {
   const [margins, setMargins] = useState<MarginSetting[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
-  const [referralSettings, setReferralSettings] = useState<ReferralProgramSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [marginLoadError, setMarginLoadError] = useState<string | null>(null);
-  const [systemLoadError, setSystemLoadError] = useState<string | null>(null);
-  const [referralLoadError, setReferralLoadError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("referrals");
+  const [activeTab, setActiveTab] = useState("margins");
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void fetchReferralProgramSettings().then((result) => {
-      if (!cancelled) setReferralSettings(result);
-    }).catch((error) => {
-      if (!cancelled) {
-        setReferralLoadError(error instanceof Error
-          ? error.message
-          : "Could not load referral settings.");
-      }
-    }).finally(() => {
-      if (!cancelled) setLoading(false);
+    Promise.all([fetchMarginSettings(), fetchSystemSettings()]).then(([m, s]) => {
+      setMargins(m);
+      setSettings(s);
+      setLoading(false);
     });
-    return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    if (activeTab === "margins" && margins.length === 0 && !marginLoadError) {
-      void fetchMarginSettings().then(setMargins).catch((error) => {
-        setMarginLoadError(error instanceof Error
-          ? error.message
-          : "Could not load pricing margins.");
-      });
-    }
-    if (
-      (activeTab === "maintenance" || activeTab === "alerts") &&
-      !settings &&
-      !systemLoadError
-    ) {
-      void fetchSystemSettings().then(setSettings).catch((error) => {
-        setSystemLoadError(error instanceof Error
-          ? error.message
-          : "Could not load general settings.");
-      });
-    }
-  }, [activeTab, marginLoadError, margins.length, settings, systemLoadError]);
 
   const handleSave = async () => {
     setSaving(true);
-    setSaveError(null);
-    try {
-      if (activeTab === "referrals") {
-        if (!referralSettings) {
-          throw new Error("Referral settings are not available to save.");
-        }
-        await updateReferralProgramSettings(referralSettings);
-      } else {
-        if (!settings) {
-          throw new Error("General settings could not be loaded. Check the legacy backend connection.");
-        }
-        await updateSystemSettings(settings);
-      }
-      setSavedNotice("Settings saved successfully.");
-      setTimeout(() => setSavedNotice(null), 3500);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Could not save settings.");
-    } finally {
-      setSaving(false);
-    }
+    await updateSystemSettings(settings || {});
+    setSaving(false);
+    setSavedNotice("Settings saved successfully.");
+    setTimeout(() => setSavedNotice(null), 3500);
   };
 
   const updateMargin = (carrier: string, field: keyof MarginSetting, value: unknown) => {
@@ -111,12 +58,6 @@ export default function SettingsPage() {
       prev.map((m) => (m.carrier === carrier ? { ...m, [field]: value } : m))
     );
   };
-
-  const activeTabLoadError = activeTab === "margins"
-    ? marginLoadError
-    : activeTab === "maintenance" || activeTab === "alerts"
-      ? systemLoadError
-      : referralLoadError;
 
   if (loading)
     return (
@@ -130,8 +71,8 @@ export default function SettingsPage() {
       {/* Header */}
       <PageHeader
         breadcrumbs={["Administration", "Settings"]}
-        title="Administration Settings"
-        description="Manage referral rewards, pricing margins, app availability, and alert contacts."
+        title="Settings & Pricing Margins"
+        description="Configure wholesale pricing margins, app availability, and low balance alert contacts."
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -164,19 +105,26 @@ export default function SettingsPage() {
           <span>{savedNotice}</span>
         </div>
       )}
-      {saveError && (
-        <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs font-semibold text-red-800" role="alert">
-          {saveError}
-        </div>
-      )}
-      {activeTabLoadError && (
-        <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs font-semibold text-red-800" role="alert">
-          {activeTabLoadError}
-        </div>
-      )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-outline">
+              Average Net SME Spread
+            </span>
+            <span className="material-symbols-outlined text-primary text-[20px]">
+              trending_up
+            </span>
+          </div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-on-surface font-mono">
+            ?15.00 <span className="text-xs text-outline font-normal font-sans">/ GB</span>
+          </div>
+          <p className="text-xs text-on-surface-variant mt-2 pt-2 border-t border-outline-variant/10">
+            Average profit margin across SME data plans
+          </p>
+        </div>
+
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-outline">
@@ -230,15 +178,10 @@ export default function SettingsPage() {
           { id: "margins", label: "Wholesale Margins", icon: "cell_tower" },
           { id: "maintenance", label: "App Maintenance", icon: "build" },
           { id: "alerts", label: "Alert Contacts", icon: "contact_phone" },
-          { id: "referrals", label: "Referrals & Rewards", icon: "card_giftcard" },
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => {
-              setActiveTab(tab.id);
-              setSaveError(null);
-              setSavedNotice(null);
-            }}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               activeTab === tab.id
                 ? "bg-primary text-on-primary shadow-sm"
@@ -488,58 +431,6 @@ export default function SettingsPage() {
                 />
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === "referrals" && referralSettings && (
-        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-outline-variant/20">
-            <div>
-              <h2 className="font-bold text-base text-on-surface">Referral Program</h2>
-              <p className="text-xs sm:text-sm text-on-surface-variant mt-1 leading-relaxed max-w-xl">
-                Control whether new signups can earn referral commissions and set the amount credited for each valid referral.
-                Disabling referrals does not remove existing commission balances or prevent withdrawals.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <span className={`text-xs font-bold ${referralSettings.enabled ? "text-emerald-700" : "text-red-700"}`}>
-                {referralSettings.enabled ? "Referrals On" : "Referrals Off"}
-              </span>
-              <Toggle
-                checked={referralSettings.enabled}
-                onChange={(checked) =>
-                  setReferralSettings((current) => current ? { ...current, enabled: checked } : current)
-                }
-                id="btn-toggle-referral-program"
-                label="Toggle referral program"
-              />
-            </div>
-          </div>
-
-          <div className="max-w-sm">
-            <label htmlFor="referral-signup-reward" className="block text-xs font-bold text-on-surface mb-1.5">
-              Signup Reward (₦)
-            </label>
-            <input
-              id="referral-signup-reward"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={(referralSettings.signupRewardKobo / 100).toFixed(2)}
-              onChange={(event) => {
-                const naira = Number(event.target.value);
-                setReferralSettings((current) =>
-                  current && Number.isFinite(naira)
-                    ? { ...current, signupRewardKobo: Math.round(naira * 100) }
-                    : current
-                );
-              }}
-              className="w-full h-11 px-4 bg-surface-container-low rounded-xl text-sm font-mono text-on-surface outline-none border border-outline-variant/30 focus:border-primary"
-            />
-            <p className="text-xs text-on-surface-variant mt-2">
-              This amount is credited to the referrer’s commission balance after a referred account is created.
-            </p>
           </div>
         </div>
       )}

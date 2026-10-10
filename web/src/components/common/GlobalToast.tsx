@@ -34,7 +34,7 @@ export function GlobalToast() {
   if (!toast) return null;
   return (
     <div className={`global-toast global-toast-${toast.type}`} role={toast.type === "error" ? "alert" : "status"} aria-live={toast.type === "error" ? "assertive" : "polite"}>
-      <span className="global-toast-icon" aria-hidden="true">{toast.type === "error" ? "!" : "✓"}</span>
+      <span className="global-toast-icon" aria-hidden="true">{toast.type === "error" ? "!" : "OK"}</span>
       <span>{toast.message}</span>
       <button type="button" onClick={() => setToast(null)} aria-label="Dismiss notification">×</button>
     </div>

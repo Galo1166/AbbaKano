@@ -1,5 +1,18 @@
 "use client";
 
+export function DashboardLoadingSkeleton() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0b0e14] text-white">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+        <span className="text-xs font-semibold text-slate-400">Loading wallet...</span>
+      </div>
+    </div>
+  );
+}
+
+
+
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -18,360 +31,531 @@ import { ReferEarnShell } from "@/components/referral/ReferEarnShell";
 import { useThemeMode } from "@/lib/theme";
 
 type DashboardData = {
-    user: { full_name?: string; fullName?: string; email?: string; phone?: string; biometrics_enabled?: boolean; app_lock_enabled?: boolean; has_transaction_pin?: boolean; has_passkey?: boolean; referralCount?: number; referralEarnings?: number; referralCommissionBalance?: number };
-    balance: number;
-    transactions: Array<{ id?: string | number; type?: string; label?: string; status?: string; amount?: number; date?: string }>;
+  user: {
+    full_name?: string;
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    biometrics_enabled?: boolean;
+    app_lock_enabled?: boolean;
+    has_transaction_pin?: boolean;
+    has_passkey?: boolean;
+    referralCount?: number;
+    referralEarnings?: number;
+    referralCommissionBalance?: number;
+  };
+  balance: number;
+  transactions: Array<{
+    id?: string | number;
+    type?: string;
+    label?: string;
+    status?: string;
+    amount?: number;
+    date?: string;
+  }>;
 };
 
-const navigation = [
-    ["home", "Home"],
-    ["spark", "Buy Data"],
-    ["history", "History"],
-    ["profile", "Profile"],
+const VTU_HUB_ITEMS = [
+  {
+    key: "data",
+    title: "Data Bundles",
+    subtitle: "SME, Gifting & Corp",
+    tab: "bolt",
+  },
+  {
+    key: "airtime",
+    title: "Airtime Topup",
+    subtitle: "Instant Topup",
+    tab: "airtime",
+  },
+  {
+    key: "electricity",
+    title: "Electricity",
+    subtitle: "AEDC/IKEDC",
+    tab: "power",
+  },
+  {
+    key: "cable",
+    title: "Cable TV",
+    subtitle: "DSTV, GOTV & Star",
+    tab: "tv",
+  },
 ];
-
-const services = [
-    ["data", "Data Bundles", "SME, Gifting & Corp", "/data", "2% OFF"],
-    ["airtime", "Airtime Topup", "Instant Topup", "/airtime", "HOT"],
-    ["power", "Electricity", "AEDC/IKEDC", "/electricity", "Instant"],
-    ["tv", "Cable TV", "DSTV, GOTV & Star", "/cable-tv", "Instant"],
-];
-
-function Icon({ name }: { name: string }) {
-    const paths: Record<string, string> = {
-        home: "M3 10.5 12 3l9 7.5M5 9v11h14V9M9 20v-6h6v6",
-        data: "M4 7h16M4 12h16M4 17h10",
-        history: "M4 6h16M4 12h16M4 18h10",
-        profile: "M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",
-        airtime: "M12 3v18M5 8.5a10 10 0 0 1 14 0M8 12a6 6 0 0 1 8 0",
-        power: "m13 2-8 12h6l-1 8 8-12h-6l1-8Z",
-        spark: "m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z",
-        tv: "M3 6h18v13H3zM8 3l4 3 4-3M10 10l5 3-5 3v-6Z",
-        wallet: "M3 7h18v13H3zM3 7l2-4h14l2 4M16 13h5",
-        support: "M4 13a8 8 0 0 1 16 0v4M4 13v4a2 2 0 0 0 2 2h2v-6H4m16 0h-4v6h2a2 2 0 0 0 2-2",
-        eye: "M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Zm10 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
-    };
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d={paths[name] || paths.home} /></svg>;
-}
-
-function formatNaira(amount: number) {
-    return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 2 }).format(amount || 0);
-}
-
-function ThemeIcon({ light }: { light: boolean }) {
-    return light
-        ? <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
-        : <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.7A8.5 8.5 0 0 1 9.3 3.5 8.5 8.5 0 1 0 20.5 14.7Z" /></svg>;
-}
-
-function transactionLabel(transaction: DashboardData["transactions"][number]) {
-    return transaction.label || transaction.type?.replaceAll("_", " ") || "Wallet transaction";
-}
-
-export function DashboardLoadingSkeleton() {
-    return (
-        <main className="dashboard-shell dashboard-loading-shell" aria-busy="true">
-            <aside className="dashboard-sidebar dashboard-loading-sidebar" aria-hidden="true">
-                <div className="dashboard-loading-brand">
-                    <span className="dashboard-skeleton-block dashboard-loading-logo" />
-                    <span className="dashboard-loading-brand-copy">
-                        <span className="dashboard-skeleton-block" />
-                        <span className="dashboard-skeleton-block" />
-                    </span>
-                </div>
-                <div className="dashboard-loading-nav">
-                    {[0, 1, 2, 3].map((item) => (
-                        <span className="dashboard-skeleton-block" key={item} />
-                    ))}
-                </div>
-                <span className="dashboard-skeleton-block dashboard-loading-bottom" />
-            </aside>
-
-            <section className="dashboard-main">
-                <header className="dashboard-header dashboard-loading-header" aria-hidden="true">
-                    <div className="dashboard-loading-heading">
-                        <span className="dashboard-skeleton-block" />
-                        <span className="dashboard-skeleton-block" />
-                        <span className="dashboard-skeleton-block" />
-                    </div>
-                    <div className="dashboard-loading-actions">
-                        {[0, 1, 2].map((item) => (
-                            <span className="dashboard-skeleton-block" key={item} />
-                        ))}
-                    </div>
-                </header>
-
-                <div className="dashboard-content" aria-hidden="true">
-                    <section className="dashboard-loading-balance">
-                        <span className="dashboard-skeleton-block" />
-                        <span className="dashboard-skeleton-block" />
-                        <span className="dashboard-skeleton-block" />
-                    </section>
-
-                    <section className="dashboard-section">
-                        <div className="dashboard-loading-section-heading">
-                            <span className="dashboard-skeleton-block" />
-                            <span className="dashboard-skeleton-block" />
-                        </div>
-                        <div className="service-grid">
-                            {[0, 1, 2, 3].map((item) => (
-                                <div className="dashboard-loading-service" key={item}>
-                                    <span className="dashboard-skeleton-block" />
-                                    <span className="dashboard-skeleton-block" />
-                                    <span className="dashboard-skeleton-block" />
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-
-                    <section className="dashboard-loading-support">
-                        <span className="dashboard-skeleton-block" />
-                        <span className="dashboard-skeleton-block" />
-                        <span className="dashboard-skeleton-block" />
-                    </section>
-
-                    <section className="dashboard-section">
-                        <div className="dashboard-loading-section-heading">
-                            <span className="dashboard-skeleton-block" />
-                            <span className="dashboard-skeleton-block" />
-                        </div>
-                        <div className="dashboard-loading-transactions">
-                            {[0, 1, 2].map((item) => (
-                                <div className="dashboard-loading-transaction" key={item}>
-                                    <span className="dashboard-skeleton-block" />
-                                    <span className="dashboard-skeleton-block" />
-                                    <span className="dashboard-skeleton-block" />
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                </div>
-            </section>
-            <nav className="dashboard-loading-mobile-nav" aria-hidden="true">
-                {[0, 1, 2, 3].map((item) => (
-                    <span className="dashboard-skeleton-block" key={item} />
-                ))}
-            </nav>
-        </main>
-    );
-}
 
 export function DashboardShell() {
-    const router = useRouter();
-    const [data, setData] = useState<DashboardData | null>(null);
-    const [hiddenBalance, setHiddenBalance] = useState(false);
-    const [errorMessage, setErrorMessage] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [reloadKey, setReloadKey] = useState(0);
-    const { theme, toggleTheme } = useThemeMode();
-    const [activeTab, setActiveTab] = useState("home");
-    const lightMode = theme === "light";
+  const router = useRouter();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [hiddenBalance, setHiddenBalance] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const { theme, toggleTheme } = useThemeMode();
+  const [activeTab, setActiveTab] = useState("home");
+  const isDark = theme === "dark";
 
-   async function handleLogout() {
+  async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/login");
-}
+  }
 
-   useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
 
     async function hydrateDashboard() {
-        try {
-            const {
-                data: { session },
-                error: sessionError,
-            } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-            if (sessionError) {
-                throw sessionError;
-            }
+        if (sessionError) throw sessionError;
 
-            if (!session) {
-                setErrorMessage("Your login session has expired. Please sign in again.");
-                return;
-            }
-
-            const {
-                data: { user },
-                error: authError,
-            } = await supabase.auth.getUser();
-
-            if (authError) {
-                throw authError;
-            }
-
-            if (!user) {
-                setErrorMessage("Your login session is not available. Please sign in again.");
-                return;
-            }
-
-            const [profileResult, walletResult, transactionsResult] =
-                await Promise.all([
-                    supabase
-                        .from("profiles")
-                        .select(`
-                            full_name,
-                            phone,
-                            role,
-                            status,
-                            biometrics_enabled,
-                            app_lock_enabled
-                        `)
-                        .eq("id", user.id)
-                        .single(),
-
-                    supabase
-                        .from("wallets")
-                        .select("balance_kobo, currency")
-                        .eq("user_id", user.id)
-                        .single(),
-
-                   supabase
-    .from("wallet_ledger")
-    .select(`
-        id,
-        entry_type,
-        amount_kobo,
-        balance_before_kobo,
-        balance_after_kobo,
-        description,
-        metadata,
-        created_at
-    `)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(20),
-                ]);
-
-            if (profileResult.error) {
-                throw profileResult.error;
-            }
-
-            if (walletResult.error) {
-                throw walletResult.error;
-            }
-
-            if (transactionsResult.error) {
-                throw transactionsResult.error;
-            }
-
-            if (cancelled) return;
-
-            const profile = profileResult.data;
-            const wallet = walletResult.data;
-
-            const transactions =
-    (transactionsResult.data || []).map((transaction) => ({
-        id: transaction.id,
-        type: transaction.entry_type,
-        label: transaction.description || transaction.entry_type,
-        status: "completed",
-        amount: Number(transaction.amount_kobo) / 100,
-        date: new Date(transaction.created_at).toLocaleString(
-            "en-NG",
-            {
-                dateStyle: "medium",
-                timeStyle: "short",
-            }
-        ),
-    }));
-
-            setData({
-                user: {
-                    full_name: profile.full_name || "",
-                    email: user.email || "",
-                    phone: profile.phone || "",
-                    biometrics_enabled: profile.biometrics_enabled,
-                    app_lock_enabled: profile.app_lock_enabled,
-                },
-
-                balance: Number(wallet.balance_kobo) / 100,
-
-                transactions,
-            });
-        } catch (error) {
-            if (cancelled) return;
-
-            console.error("Dashboard loading error:", error);
-
-            setErrorMessage(
-                error instanceof Error
-                    ? error.message
-                    : "Could not load your wallet."
-            );
-        } finally {
-            if (!cancelled) {
-                setLoading(false);
-            }
+        if (!session) {
+          setErrorMessage("Your login session has expired. Please sign in again.");
+          return;
         }
+
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError) throw authError;
+        if (!user) {
+          setErrorMessage("Your login session is not available. Please sign in again.");
+          return;
+        }
+
+        const [profileResult, walletResult, transactionsResult] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select(`
+              full_name,
+              phone,
+              role,
+              status,
+              biometrics_enabled,
+              app_lock_enabled
+            `)
+            .eq("id", user.id)
+            .maybeSingle(),
+
+          supabase
+            .from("wallets")
+            .select("balance_kobo, currency")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+
+          supabase
+            .from("wallet_ledger")
+            .select(`
+              id,
+              entry_type,
+              amount_kobo,
+              balance_before_kobo,
+              balance_after_kobo,
+              description,
+              metadata,
+              created_at
+            `)
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+            .limit(20),
+        ]);
+
+        if (cancelled) return;
+
+        const profile = profileResult.data;
+        const wallet = walletResult.data;
+
+        const transactions = (transactionsResult.data || []).map((transaction) => ({
+          id: transaction.id,
+          type: transaction.entry_type,
+          label: transaction.description || transaction.entry_type,
+          status: "completed",
+          amount: Number(transaction.amount_kobo) / 100,
+          date: new Date(transaction.created_at).toLocaleString("en-NG", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          }),
+        }));
+
+        setData({
+          user: {
+            full_name: profile?.full_name || "",
+            email: user.email || "",
+            phone: profile?.phone || "",
+            biometrics_enabled: profile?.biometrics_enabled,
+            app_lock_enabled: profile?.app_lock_enabled,
+          },
+          balance: Number(wallet?.balance_kobo || 0) / 100,
+          transactions,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Dashboard loading error:", error);
+        setErrorMessage(
+          error instanceof Error ? error.message : "Could not load your wallet."
+        );
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
 
     void hydrateDashboard();
 
     return () => {
-        cancelled = true;
+      cancelled = true;
     };
-}, [reloadKey, router]);
+  }, [reloadKey, router]);
 
-    useEffect(() => {
-        function handleTabChange(event: Event) {
-            const tab = (event as CustomEvent<string>).detail;
-            if (tab === "data") setActiveTab("bolt");
-            else if (tab === "electricity") setActiveTab("power");
-            else if (tab === "cable-tv") setActiveTab("tv");
-            else if (tab === "fund-wallet") setActiveTab("funding");
-            else setActiveTab(tab);
-        }
-        window.addEventListener("app-tab-change", handleTabChange);
-        return () => window.removeEventListener("app-tab-change", handleTabChange);
-    }, []);
-
-    useEffect(() => {
-        function refreshDashboard() {
-            setReloadKey((current) => current + 1);
-        }
-        window.addEventListener("dashboard-refresh", refreshDashboard);
-        return () => window.removeEventListener("dashboard-refresh", refreshDashboard);
-    }, []);
-
-    const firstName = data?.user.full_name?.split(" ")[0] || data?.user.fullName?.split(" ")[0] || "there";
-
-    if (loading) {
-        return <DashboardLoadingSkeleton />;
+  useEffect(() => {
+    function handleTabChange(event: Event) {
+      const tab = (event as CustomEvent<string>).detail;
+      if (tab === "data" || tab === "vtu") setActiveTab("bolt");
+      else if (tab === "electricity") setActiveTab("power");
+      else if (tab === "cable-tv") setActiveTab("tv");
+      else if (tab === "fund-wallet") setActiveTab("funding");
+      else if (tab === "account") setActiveTab("profile");
+      else if (tab === "ledger") setActiveTab("history");
+      else setActiveTab(tab);
     }
+    window.addEventListener("app-tab-change", handleTabChange);
+    return () => window.removeEventListener("app-tab-change", handleTabChange);
+  }, []);
 
-    if (errorMessage || !data) {
-        return <main className="dashboard-state"><div className="dashboard-state-icon"><Icon name="wallet" /></div><h1>We could not load your wallet</h1><p>{errorMessage || "Your session data is not available yet."}</p><button className="dashboard-primary" type="button" onClick={() => { setLoading(true); setErrorMessage(""); setReloadKey((current) => current + 1); }}>Try again</button></main>;
+  useEffect(() => {
+    function refreshDashboard() {
+      setReloadKey((current) => current + 1);
     }
+    window.addEventListener("dashboard-refresh", refreshDashboard);
+    return () => window.removeEventListener("dashboard-refresh", refreshDashboard);
+  }, []);
 
-    if (activeTab === "bolt") return <DataPurchaseShell />;
-    if (activeTab === "airtime") return <AirtimeShell />;
-    if (activeTab === "power" || activeTab === "electricity") return <ElectricityShell />;
-    if (activeTab === "tv" || activeTab === "cable-tv") return <CableTVShell />;
-    if (activeTab === "funding" || activeTab === "fund-wallet") return <FundWalletShell />;
-    if (activeTab === "history") return <HistoryShell initialTransactions={data.transactions} />;
-    if (activeTab === "profile") return <ProfileShell initialUser={data.user} />;
-    if (activeTab === "referral") return <ReferEarnShell initialUser={data.user} />;
+  const firstName =
+    data?.user.full_name?.split(" ")[0] ||
+    data?.user.fullName?.split(" ")[0] ||
+    "Tester";
 
+  const formattedBalance = (data?.balance || 0).toLocaleString("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  if (loading) {
     return (
-        <main className={`dashboard-shell${lightMode ? " light" : ""}`}>
-            <WebDesktopSidebar active="home" onNavigate={(tab) => setActiveTab(tab === "data" ? "bolt" : tab)} onLogout={handleLogout} />
-            <section className="dashboard-main" id="main-content">
-                <header className="dashboard-header"><Link className="dashboard-mobile-brand" href="/app"><span className="dashboard-logo"><Image src="/branding/logo.png" alt="AbbaKano" width={34} height={34} /></span><span>ABBAKANO<small>DATA SUB</small></span></Link><div className="dashboard-header-spacer" aria-hidden="true" />
-                <div className="dashboard-header-actions"><button className="dashboard-icon-button" type="button" onClick={toggleTheme} aria-label={`Switch to ${lightMode ? "dark" : "light"} mode`}><ThemeIcon light={lightMode} /></button><Link href="/support" className="dashboard-icon-button" aria-label="Contact Support"><Icon name="support" /></Link><button className="dashboard-avatar" type="button" onClick={() => setActiveTab("profile")} aria-label="Open profile">{firstName.slice(0, 1).toUpperCase()}</button></div></header>
-
-                <div className="dashboard-content">
-                    <section className="balance-card"><div className="balance-card-top"><div><span className="balance-label">Wallet Balance</span><span className="balance-status"><i />Instant Active</span></div><button className="balance-visibility" type="button" onClick={() => setHiddenBalance((current) => !current)} aria-label={hiddenBalance ? "Show wallet balance" : "Hide wallet balance"}><Icon name="eye" /></button></div><strong className="balance-value">{hiddenBalance ? "••••••••" : formatNaira(data.balance)}</strong><div className="balance-actions"><button type="button" onClick={() => setActiveTab("funding")} className="dashboard-primary"><Icon name="wallet" />Fund Wallet</button><button type="button" onClick={() => setActiveTab("bolt")} className="balance-link">Instant Sub</button></div></section>
-
-                    <section className="dashboard-section"><div className="dashboard-section-heading"><div><span className="dashboard-kicker">Services</span><h2>VTU Hub</h2></div><button className="dashboard-section-link" type="button" onClick={() => setActiveTab("bolt")}>View all</button></div><div className="service-grid">{services.map(([icon, title, description, href, badge]) => <button className="dashboard-service" type="button" onClick={() => { if (title === "Data Bundles") setActiveTab("bolt"); else if (title === "Airtime Topup") setActiveTab("airtime"); else if (title === "Electricity") setActiveTab("power"); else if (title === "Cable TV") setActiveTab("tv"); else router.push(href); }} key={title}><span className={`service-icon ${icon}`}><Icon name={icon} /></span><span className="service-copy"><strong>{title}</strong><small>{description}</small></span><span className="service-badge">{badge}</span></button>)}</div></section>
-
-                    <section className="support-card"><div className="support-card-icon"><Icon name="support" /></div><div><span className="dashboard-kicker">Need a hand?</span><h2>24/7 Resolution Desk</h2><p>WhatsApp, Phone Calls &amp; Email Support</p></div><Link href="/support" className="support-link">Help <span aria-hidden="true">-&gt;</span></Link></section>
-
-                    <section className="dashboard-section transactions-section"><div className="dashboard-section-heading"><div><span className="dashboard-kicker">Activity</span><h2>Recent Transactions</h2></div><button className="dashboard-section-link" type="button" onClick={() => setActiveTab("history")}>View All ({data.transactions.length})</button></div>{data.transactions.length === 0 ? <div className="transactions-empty"><Icon name="history" /><p>No transactions yet</p><span>Your completed wallet activity will appear here.</span></div> : <div className="transaction-list">{data.transactions.slice(0, 5).map((transaction, index) => <div className="transaction-row" key={transaction.id || `${transaction.date}-${index}`}><span className="transaction-icon"><Icon name={transaction.type?.toLowerCase() === "airtime" ? "airtime" : transaction.type?.toLowerCase() === "data" ? "data" : "wallet"} /></span><span className="transaction-copy"><strong>{transactionLabel(transaction)}</strong><small>{transaction.date || "Recent activity"}</small></span><span className={`transaction-amount ${transaction.status?.toLowerCase() === "failed" ? "failed" : ""}`}>{formatNaira(Number(transaction.amount) || 0)}</span></div>)}</div>}</section>
-                </div>
-            </section>
-
-            <WebBottomNav active={activeTab === "bolt" ? "data" : activeTab as "home" | "data" | "history" | "profile"} />
-        </main>
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-[#0b0e14] text-white" : "bg-[#f8fafc] text-slate-900"}`}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          <span className="text-xs font-semibold text-slate-400">Loading wallet...</span>
+        </div>
+      </div>
     );
+  }
+
+  // Active sub-page views
+  if (activeTab === "bolt") return <DataPurchaseShell />;
+  if (activeTab === "airtime") return <AirtimeShell />;
+  if (activeTab === "power" || activeTab === "electricity") return <ElectricityShell />;
+  if (activeTab === "tv" || activeTab === "cable-tv") return <CableTVShell />;
+  if (activeTab === "funding" || activeTab === "fund-wallet") return <FundWalletShell />;
+  if (activeTab === "history") return <HistoryShell initialTransactions={data?.transactions || []} />;
+  if (activeTab === "profile") return <ProfileShell initialUser={data?.user} />;
+  if (activeTab === "referral") return <ReferEarnShell initialUser={data?.user} />;
+
+  return (
+    <div className={`min-h-screen transition-colors duration-200 ${isDark ? "bg-[#0b0e14] text-white" : "bg-[#f8fafc] text-slate-900"}`}>
+      {/* Persistent Desktop Sidebar */}
+      <WebDesktopSidebar
+        active="home"
+        onNavigate={(tab) => setActiveTab(tab === "data" ? "bolt" : tab)}
+        onLogout={handleLogout}
+      />
+
+      {/* Main Container */}
+      <div className="lg:pl-64 flex flex-col min-h-screen">
+        <main className="flex-1 w-full max-w-md sm:max-w-lg mx-auto px-4 pt-5 pb-28">
+          {/* === 1. WELCOME & TOP ACTION BUTTONS === */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Logo Container */}
+              <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border p-1 shadow-xs ${
+                isDark ? "bg-[#141721] border-[#222634]" : "bg-white border-slate-200"
+              }`}>
+                <Image
+                  src="/branding/logo.png"
+                  alt="AbbaKano DataSub"
+                  width={36}
+                  height={36}
+                  className="h-full w-full object-contain"
+                  priority
+                />
+              </div>
+
+              {/* Welcome Info */}
+              <div className="flex flex-col min-w-0">
+                <span className={`text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  Welcome back,
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xl font-extrabold tracking-tight truncate ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {firstName}
+                  </span>
+                  <svg className="h-5 w-5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-9 3V5a1.5 1.5 0 013 0v4m0-4a1.5 1.5 0 013 0v4m0-4a1.5 1.5 0 013 0v6.5" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Right Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Support Button */}
+              <Link
+                href="/support"
+                className={`flex h-10 w-10 items-center justify-center rounded-xl border transition-colors cursor-pointer ${
+                  isDark
+                    ? "bg-[#161922] border-[#222634] text-slate-400 hover:text-white"
+                    : "bg-[#ebf0f7] border-slate-200 text-slate-600 hover:text-slate-900"
+                }`}
+                aria-label="Contact Support"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 18v-6a9 9 0 0118 0v6M3 18a2 2 0 002 2h2v-6H5a2 2 0 00-2 2zm18 0a2 2 0 01-2 2h-2v-6h2a2 2 0 012 2z" />
+                </svg>
+              </Link>
+
+              {/* Theme Toggler */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className={`relative flex h-10 w-10 items-center justify-center rounded-xl border transition-colors cursor-pointer ${
+                  isDark
+                    ? "bg-[#161922] border-[#222634] text-blue-500 hover:text-blue-400"
+                    : "bg-[#ebf0f7] border-slate-200 text-blue-600 hover:text-blue-700"
+                }`}
+                aria-label="Toggle Theme"
+              >
+                {isDark ? (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <circle cx="12" cy="12" r="4" strokeWidth="2" />
+                    <path strokeWidth="2" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                )}
+                {/* Badge (A / D / L) */}
+                <span className={`absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black border ${
+                  isDark
+                    ? "bg-blue-600/30 border-blue-500 text-blue-400"
+                    : "bg-blue-100 border-blue-600 text-blue-600"
+                }`}>
+                  {isDark ? "D" : "L"}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* === 2. MASTER WALLET CARD === */}
+          <div className={`rounded-2xl border p-4.5 sm:p-5 mb-5 shadow-xs transition-all ${
+            isDark
+              ? "bg-[#141721] border-[#222634]"
+              : "bg-gradient-to-br from-[#FFFFFF] via-[#F0F5FF] to-[#E4EDFD] border-[rgba(37,99,235,0.16)] shadow-[0_4px_12px_rgba(37,99,235,0.08)]"
+          }`}>
+            {/* Header: Label + Instant Active */}
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                WALLET BALANCE
+              </span>
+
+              <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                isDark
+                  ? "bg-[#083321] border-[#105436] text-[#10b981]"
+                  : "bg-[#d1fae5] border-[#a7f3d0] text-[#059669]"
+              }`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span>Instant Active</span>
+              </div>
+            </div>
+
+            {/* Balance Row */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-baseline">
+                <span className={`text-2xl font-extrabold mr-1 ${isDark ? "text-white" : "text-slate-900"}`}>
+                  ₦
+                </span>
+                <span className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                  {hiddenBalance ? "••••••••" : formattedBalance}
+                </span>
+              </div>
+
+              {/* Eye Button */}
+              <button
+                type="button"
+                onClick={() => setHiddenBalance((curr) => !curr)}
+                className={`p-1.5 transition-colors cursor-pointer ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"}`}
+                aria-label={hiddenBalance ? "Show balance" : "Hide balance"}
+              >
+                {hiddenBalance ? (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {/* Wallet Actions (2 Buttons) */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Fund Wallet */}
+              <button
+                type="button"
+                onClick={() => setActiveTab("funding")}
+                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-3 text-xs sm:text-sm font-bold text-white shadow-xs transition-opacity hover:opacity-90 active:scale-95 cursor-pointer whitespace-nowrap"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeWidth="2.5" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Fund Wallet</span>
+              </button>
+
+              {/* Instant Sub */}
+              <button
+                type="button"
+                onClick={() => setActiveTab("bolt")}
+                className={`flex h-11 items-center justify-center gap-1.5 rounded-xl border text-xs sm:text-sm font-bold transition-colors active:scale-95 cursor-pointer whitespace-nowrap ${
+                  isDark
+                    ? "bg-[#1a2236] border-[#1e293b] text-blue-500 hover:bg-[#202b44]"
+                    : "bg-[#dbeafe] border-blue-200 text-[#2563EB] hover:bg-blue-100"
+                }`}
+              >
+                <svg className="h-4 w-4 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Instant Sub</span>
+              </button>
+            </div>
+          </div>
+
+          {/* === 3. VTU HUB (2x2 GRID) === */}
+          <div className="mb-5">
+            {/* Header: VTU Hub + Services */}
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className={`text-base sm:text-lg font-extrabold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+                VTU Hub
+              </h2>
+              <span className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                Services
+              </span>
+            </div>
+
+            {/* 2x2 Grid */}
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+              {VTU_HUB_ITEMS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setActiveTab(item.tab)}
+                  className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all active:scale-95 cursor-pointer min-h-[105px] ${
+                    isDark
+                      ? "bg-[#141721] border-[#222634] hover:border-slate-700"
+                      : "bg-white border-slate-200 hover:border-blue-300 shadow-2xs"
+                  }`}
+                >
+                  {/* Icon Box */}
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl mb-2.5 ${
+                    isDark ? "bg-[rgba(37,99,235,0.12)] text-blue-500" : "bg-[#eff6ff] text-blue-600"
+                  }`}>
+                    {item.key === "data" && (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.343 9.343c5.857-5.857 15.355-5.857 21.213 0" />
+                      </svg>
+                    )}
+                    {item.key === "airtime" && (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    )}
+                    {item.key === "electricity" && (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <circle cx="12" cy="12" r="7" strokeWidth="2" />
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 10V7l-3 4h2v3l3-4h-2z" />
+                      </svg>
+                    )}
+                    {item.key === "cable" && (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <rect x="3" y="7" width="18" height="13" rx="2" strokeWidth="2" />
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 3l-4 4-4-4" />
+                      </svg>
+                    )}
+                  </div>
+
+                  {/* Title & Subtitle */}
+                  <span className={`text-xs sm:text-sm font-bold mb-0.5 ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {item.title}
+                  </span>
+                  <span className={`text-[11px] leading-tight ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    {item.subtitle}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* === 4. 24/7 RESOLUTION DESK ROW === */}
+          <div className={`flex items-center justify-between gap-3 rounded-2xl border p-3.5 mb-5 ${
+            isDark ? "bg-[#141721] border-[#222634]" : "bg-white border-slate-200 shadow-2xs"
+          }`}>
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Green Icon Box */}
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[rgba(0,208,132,0.12)] text-[#00d084]">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              </div>
+
+              {/* Title & Subtitle */}
+              <div className="flex flex-col min-w-0">
+                <span className={`text-xs sm:text-sm font-bold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
+                  24/7 Resolution Desk
+                </span>
+                <span className={`text-[11px] truncate ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  WhatsApp, Phone Calls &amp; Email Support
+                </span>
+              </div>
+            </div>
+
+            {/* Amber Help Button */}
+            <a
+              href="https://wa.me/2348133339850?text=Hello%20AbbaKano%20Support%2C%20I%20need%20assistance%20with%20my%20account."
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#d97706] hover:bg-[#b45309] px-4 text-xs sm:text-sm font-bold text-white shadow-xs transition-transform active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 18v-6a9 9 0 0118 0v6M3 18a2 2 0 002 2h2v-6H5a2 2 0 00-2 2zm18 0a2 2 0 01-2 2h-2v-6h2a2 2 0 012 2z" />
+              </svg>
+              <span>Help</span>
+            </a>
+          </div>
+        </main>
+      </div>
+
+      {/* === 5. BOTTOM NAVIGATION BAR === */}
+      <WebBottomNav
+        active="home"
+        onNavigate={(tab) => {
+          if (tab === "data") setActiveTab("bolt");
+          else setActiveTab(tab);
+        }}
+      />
+    </div>
+  );
 }

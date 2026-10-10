@@ -1,5 +1,5 @@
 // ============================================================
-// AbbaKano Admin Console — Data Fetching Service Layer
+// AbbaKano Admin Console  -  Data Fetching Service Layer
 // Connects to live backend via NEXT_PUBLIC_API_BASE_URL and Supabase Edge Functions.
 // ============================================================
 
@@ -71,11 +71,6 @@ export type MtnGeneralDataPlan = {
   validityPeriod: "daily" | "weekly" | "monthly";
   sellingPrice: number;
   enabled: boolean;
-};
-
-export type ReferralProgramSettings = {
-  enabled: boolean;
-  signupRewardKobo: number;
 };
 
 function normalizeCarrierName(value: string | null | undefined): Carrier {
@@ -556,11 +551,7 @@ export async function updateStaffMember(
 
 // ─── Margin Settings ──────────────────────────────────────────
 export async function fetchMarginSettings(): Promise<MarginSetting[]> {
-  const response = await apiRequest<{ margins: MarginSetting[] }>(
-    "/admin/settings/margins",
-    {},
-    { showServiceErrorToast: false },
-  );
+  const response = await apiRequest<{ margins: MarginSetting[] }>("/admin/settings/margins");
   return response.margins;
 }
 
@@ -571,7 +562,7 @@ export async function updateMargins(
   return apiRequest<ApiResponse<MarginSetting>>(`/admin/settings/margins/${carrier}`, {
     method: "PATCH",
     body: JSON.stringify(update),
-  }, { showServiceErrorToast: false });
+  });
 }
 
 // ─── Customers ────────────────────────────────────────────────
@@ -685,11 +676,7 @@ export async function fetchSupportCases(): Promise<SupportCase[]> {
 
 // ─── System Settings ──────────────────────────────────────────
 export async function fetchSystemSettings(): Promise<SystemSettings> {
-  return apiRequest<SystemSettings>(
-    "/admin/settings",
-    {},
-    { showServiceErrorToast: false },
-  );
+  return apiRequest<SystemSettings>("/admin/settings");
 }
 
 export async function updateSystemSettings(
@@ -698,22 +685,6 @@ export async function updateSystemSettings(
   return apiRequest<ApiResponse<SystemSettings>>("/admin/settings", {
     method: "PATCH",
     body: JSON.stringify(updates),
-  }, { showServiceErrorToast: false });
-}
-
-export async function fetchReferralProgramSettings(): Promise<ReferralProgramSettings> {
-  return invokeSupabaseFunction<ReferralProgramSettings>("admin-referral-settings", {
-    action: "get",
-  });
-}
-
-export async function updateReferralProgramSettings(
-  settings: ReferralProgramSettings
-): Promise<ReferralProgramSettings> {
-  return invokeSupabaseFunction<ReferralProgramSettings>("admin-referral-settings", {
-    action: "update",
-    enabled: settings.enabled,
-    signupRewardKobo: settings.signupRewardKobo,
   });
 }
 

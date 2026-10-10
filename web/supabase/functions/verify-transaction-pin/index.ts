@@ -224,10 +224,7 @@ async function scryptHash(
   salt: string,
   saltIsHexBytes = false,
 ): Promise<string> {
-  // Supabase Edge Functions resolve remote URL imports reliably in Deno.
-  const scryptModuleUrl =
-    "https://esm.sh/@noble/hashes@2.4.0/scrypt.js";
-  const { scrypt } = await import(scryptModuleUrl);
+  const { scrypt } = await import("npm:@noble/hashes@2.4.0/scrypt.js");
 
   const passwordBytes = new TextEncoder().encode(pin);
   const saltBytes = saltIsHexBytes

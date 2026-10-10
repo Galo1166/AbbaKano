@@ -1,179 +1,84 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { useState } from "react";
-import { useThemeMode } from "@/lib/theme";
-
-const services = [
-  ["signal", "Airtime", "All networks, instant recharge, and no service fee on wallet funding."],
-  ["wifi", "Data bundles", "MTN, Airtel, Glo, and 9mobile plans at reseller rates."],
-  ["bolt", "Electricity", "Prepaid and postpaid tokens for every major disco."],
-  ["tv", "Cable TV", "DStv, GOtv, and Startimes renewals in seconds."],
-];
-
-const steps = [
-  ["01", "Create your account", "Register with your phone number and verify in under a minute."],
-  ["02", "Fund your wallet", "Bank transfer, card, or USSD. Funds reflect instantly."],
-  ["03", "Pay any bill", "Pick a service, enter details, confirm. Delivery is automatic."],
-];
-
-function ServiceIcon({ name }: { name: string }) {
-  if (name === "signal") {
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 18h2M8 14h2M12 10h2M16 6h2" /></svg>;
-  }
-  if (name === "wifi") {
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 8.5a15 15 0 0 1 18 0M6.5 12a9 9 0 0 1 11 0M10 15.5a4 4 0 0 1 4 0M12 19h.01" /></svg>;
-  }
-  if (name === "bolt") {
-    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m13 2-8 12h6l-1 8 8-12h-6l1-8Z" /></svg>;
-  }
-  return <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m10 9 5 3-5 3V9Z" /></svg>;
-}
-
-function ThemeIcon({ light }: { light: boolean }) {
-  return light
-    ? <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>
-    : <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.7A8.5 8.5 0 0 1 9.3 3.5 8.5 8.5 0 1 0 20.5 14.7Z" /></svg>;
-}
-
-function StoreIcon({ store }: { store: "apple" | "play" }) {
-  return store === "apple"
-    ? <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="currentColor" d="M17.05 12.54c-.02-2.04 1.67-3.02 1.75-3.07a3.75 3.75 0 0 0-2.96-1.6c-1.25-.13-2.45.74-3.09.74-.65 0-1.64-.72-2.7-.7a3.98 3.98 0 0 0-3.34 2.03c-1.45 2.51-.37 6.2 1.02 8.23.7 1 1.5 2.1 2.57 2.06 1.03-.04 1.42-.66 2.67-.66 1.24 0 1.6.66 2.68.64 1.11-.02 1.8-1 2.48-2.01a8.22 8.22 0 0 0 1.13-2.33 3.6 3.6 0 0 1-2.21-3.33Zm-2.03-5.99a3.58 3.58 0 0 0 .82-2.57 3.64 3.64 0 0 0-2.36 1.22 3.4 3.4 0 0 0-.85 2.47 3 3 0 0 0 2.39-1.12Z" /></svg>
-    : <svg aria-hidden="true" viewBox="0 0 24 24"><path fill="currentColor" d="m4.5 3.5 10.7 8.5-10.7 8.5a1 1 0 0 1-.5-.9V4.4a1 1 0 0 1 .5-.9Zm12.1 9.6 2.8 2.2-2.8 1.6-2.3-1.9 2.3-1.9Zm-1.2-1L6.8 4.7l8.6 5.2 2.3 1.4-2.3 1.8Zm0 3.8-8.6 5.4 8.6-6.7 2.3 1.5-2.3-.2Z" /></svg>;
-}
+import { LandingNavbar } from "@/components/landing/LandingNavbar";
+import { LandingHero } from "@/components/landing/LandingHero";
+import { ServicesGrid } from "@/components/landing/ServicesGrid";
+import { VirtualAccountsFunding } from "@/components/landing/VirtualAccountsFunding";
+import { HowItWorksSteps } from "@/components/landing/HowItWorksSteps";
+import { SupportBanner } from "@/components/landing/SupportBanner";
+import { LandingFaq } from "@/components/landing/LandingFaq";
+import { LandingFooter } from "@/components/landing/LandingFooter";
 
 export default function Home() {
-  const { theme, toggleTheme } = useThemeMode();
-  const [storeNotice, setStoreNotice] = useState("");
-
   return (
-    <main className={`landing ${theme === "light" ? "light" : ""}`}>
-      <header className="topbar">
-        <Link className="brand" href="/">
-          <span className="brand-mark"><Image src="/branding/logo.png" alt="AbbaKano" width={40} height={40} /></span>
-          <span>AbbaKano DataSub</span>
-        </Link>
-        <button className="theme-toggle" type="button" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
-          <ThemeIcon light={theme === "light"} />
-        </button>
-      </header>
+    <div className="min-h-screen bg-[var(--canvas)] text-[var(--text)] selection:bg-[var(--primary)] selection:text-white transition-colors duration-200">
+      {/* 1. Header Navigation */}
+      <LandingNavbar />
 
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Kano-built, Nigeria-wide</p>
-          <h1>One wallet for airtime, data, and every bill you owe.</h1>
-          <p className="hero-copy">AbbaKano DataSub tops up any network, pays your electricity and cable TV, and settles exam pins instantly, at rates that do not eat your margin.</p>
-          <div className="actions">
-            <Link className="button button-primary" href="/register">Create account</Link>
-            <Link className="button button-secondary" href="/login">Log in</Link>
-          </div>
-          <div className="store-row" aria-label="Mobile app availability">
-            <button
-              className="store-badge"
-              type="button"
-              onClick={() => setStoreNotice("The AbbaKano iOS app is coming soon.")}
-            >
-              <StoreIcon store="apple" /> App Store
-            </button>
-            <button
-              className="store-badge"
-              type="button"
-              onClick={() => setStoreNotice("The Google Play download link will be available soon.")}
-            >
-              <StoreIcon store="play" /> Google Play
-            </button>
-          </div>
-          {storeNotice && (
-            <p className="store-notice" role="status">
-              {storeNotice}
-            </p>
-          )}
-          <div className="trust-row">
-            <div><p className="trust-value">&lt;10 sec</p><span className="trust-label">average delivery time</span></div>
-            <div><p className="trust-value">24/7</p><span className="trust-label">support on WhatsApp &amp; call</span></div>
-          </div>
-        </div>
+      <main id="main-content">
+        {/* 2. Hero Section with Live Master Card Mockup */}
+        <LandingHero />
 
-        <aside className="receipt" aria-label="Example transaction receipt">
-          <div className="receipt-heading"><span>Transaction receipt</span><span className="receipt-id">#AB-88214</span></div>
-          <div className="receipt-line"><span>MTN Data - 5GB</span><strong>NGN 1500</strong></div>
-          <div className="receipt-line"><span>IKEDC Electricity</span><strong>NGN 8,000</strong></div>
-          <div className="receipt-line"><span>GOtv Max - 1 month</span><strong>NGN 6,200</strong></div>
-          <div className="receipt-line"><span>Airtel Airtime</span><strong>NGN 1,000</strong></div>
-          <div className="receipt-status">Delivered successfully</div>
-        </aside>
-      </section>
+        {/* 3. Complete VTU Services Suite */}
+        <ServicesGrid />
 
-      <section className="section">
-        <div className="section-heading"><h2>Every bill, one screen.</h2><p>No app-switching, no queues. Pick a service, confirm, done.</p></div>
-        <div className="grid">{services.map(([icon, title, description]) => <article className="service-card" key={title}><div className="service-icon"><ServiceIcon name={icon} /></div><h3>{title}</h3><p>{description}</p></article>)}</div>
-      </section>
+        {/* 4. Automated Virtual Account Funding (Monnify 3-Bank Engine) */}
+        <VirtualAccountsFunding />
 
-      <section className="section">
-        <div className="section-heading"><h2>From sign-up to your first top-up.</h2><p>Three clear steps, with a receipt for every successful transaction.</p></div>
-        <div className="grid step-grid">{steps.map(([number, title, description]) => <article className="step-card" key={number}><div className="step-number">{number}</div><h3>{title}</h3><p>{description}</p></article>)}</div>
-      </section>
+        {/* 5. Step-by-Step How It Works Progression */}
+        <HowItWorksSteps />
 
-      <section className="stats-band" aria-label="AbbaKano service statistics">
-        <div className="stat"><strong>4 networks</strong><span>airtime &amp; data covered</span></div>
-        <div className="stat"><strong>3 discos+</strong><span>electricity tokens supported</span></div>
-        <div className="stat"><strong>99.9%</strong><span>uptime on transactions</span></div>
-        <div className="stat"><strong>24/7</strong><span>customer support</span></div>
-      </section>
+        {/* 6. Kano Human Support & Dispute Resolution Desk */}
+        <SupportBanner />
 
-      <section className="section cta">
-        <div className="section-heading"><h2>Stop juggling apps for every bill.</h2><p>Create your AbbaKano DataSub account and fund your first wallet in minutes.</p></div>
-        <div className="actions"><Link className="button button-primary" href="/register">Create account</Link><Link className="button button-secondary" href="/login">Log in</Link></div>
-      </section>
+        {/* 7. Frequently Asked Questions */}
+        <LandingFaq />
 
-      <footer className="footer">
-        <div className="footer-grid">
-          <div className="footer-brand-block">
-            <Link className="brand" href="/">
-              <span className="brand-mark"><Image src="/branding/logo.png" alt="AbbaKano" width={40} height={40} /></span>
-              <span>AbbaKano DataSub</span>
-            </Link>
-            <p>Bill payments made simple, from Kano to every state.</p>
-            <Link className="footer-support" href="/support?from=welcome">Talk to support <span aria-hidden="true">-&gt;</span></Link>
-          </div>
-          <div>
-            <h2 className="footer-heading">Services</h2>
-            <nav className="footer-links" aria-label="Services">
-              <Link href="/airtime">Airtime</Link>
-              <Link href="/data">Data bundles</Link>
-              <Link href="/electricity">Electricity</Link>
-              <Link href="/cable-tv">Cable TV</Link>
-            </nav>
-          </div>
-          <div>
-            <h2 className="footer-heading">Company</h2>
-            <nav className="footer-links" aria-label="Company">
-              <Link href="/about?from=welcome">About AbbaKano</Link>
-              <Link href="/refer-and-earn">Refer &amp; earn</Link>
-              <Link href="/support?from=welcome">Help centre</Link>
-              <Link href="/login">Sign in</Link>
-            </nav>
-          </div>
-          <div>
-            <h2 className="footer-heading">Contact</h2>
-            <div className="footer-links">
-              <a href="mailto:support@abbakano.com">support@abbakano.com</a>
-              <a href="tel:+2348133339850">+234 813 333 9850</a>
-              <a href="/support?from=welcome">WhatsApp support</a>
-              <span>Kano, Nigeria</span>
+        {/* 8. Executive High-Conversion CTA Banner */}
+        <section className="relative border-t border-[var(--border)] py-20 md:py-28 bg-[var(--surface-low)]">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 text-center">
+            <div className="relative overflow-hidden rounded-3xl border border-[var(--border-high)] bg-gradient-to-br from-[var(--surface)] via-[var(--surface)] to-[var(--surface-high)] p-10 shadow-2xl sm:p-16">
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-[var(--primary)] mb-6">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <span>Enterprise Telecom Infrastructure</span>
+              </div>
+
+              <h2 className="text-3xl font-extrabold tracking-tight text-[var(--text)] sm:text-5xl">
+                Ready for instantaneous telecom and utility top-ups?
+              </h2>
+
+              <p className="mx-auto mt-4 max-w-xl text-base text-[var(--text-muted)] font-medium leading-relaxed">
+                Join thousands of individuals, students, and VTU vendors across Nigeria managing their data subscriptions and utility settlements from one dependable wallet.
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+                <Link
+                  href="/register"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[var(--primary-container)] hover:shadow-lg active:scale-[0.98]"
+                >
+                  <span>Open Free Account</span>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </Link>
+
+                <Link
+                  href="/login"
+                  className="inline-flex h-12 items-center justify-center rounded-xl border border-[var(--border-high)] bg-[var(--surface-high)] px-7 text-sm font-bold text-[var(--text)] transition-colors hover:bg-[var(--surface-low)] active:scale-[0.98]"
+                >
+                  Sign In to Wallet
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="footer-meta">
-          <div className="footer-status"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></svg><span>Secure wallet and protected payments</span></div>
-          <div className="footer-payment">Paystack <span aria-hidden="true">|</span> Bank transfer <span aria-hidden="true">|</span> USSD</div>
-        </div>
-        <div className="footer-bottom">
-          <span>© 2026 AbbaKano DataSub. All rights reserved.</span>
-          <div className="footer-legal"><Link href="/terms?from=welcome">Terms</Link><Link href="/privacy?from=welcome">Privacy</Link><Link href="/support?from=welcome">Support Desk</Link></div>
-        </div>
-      </footer>
-    </main>
+        </section>
+      </main>
+
+      {/* 9. Comprehensive Corporate Footer */}
+      <LandingFooter />
+    </div>
   );
 }

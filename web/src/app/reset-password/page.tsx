@@ -47,9 +47,7 @@ export default function ResetPasswordPage() {
         if (!active) return;
         console.error("Could not verify password recovery link:", error);
         setMessage(
-          error instanceof Error
-            ? error.message
-            : "Could not verify this password recovery link.",
+          error instanceof Error ? error.message : "Could not verify this password recovery link.",
         );
         setRecoveryState("invalid");
       }
@@ -72,7 +70,7 @@ export default function ResetPasswordPage() {
       return;
     }
     if (password !== confirmPassword) {
-      setMessage("The passwords do not match.");
+      setMessage("Passwords do not match.");
       return;
     }
 
@@ -83,12 +81,10 @@ export default function ResetPasswordPage() {
       setRecoveryState("updated");
       setPassword("");
       setConfirmPassword("");
-      setMessage("Your password has been updated. You can now sign in with it.");
+      setMessage("Your password has been successfully updated. You can now sign in.");
     } catch (error) {
       console.error("Password update failed:", error);
-      setMessage(
-        error instanceof Error ? error.message : "Could not update your password.",
-      );
+      setMessage(error instanceof Error ? error.message : "Could not update your password.");
     } finally {
       setLoading(false);
     }
@@ -98,44 +94,63 @@ export default function ResetPasswordPage() {
     <AuthShell
       title="Reset Password"
       subtitle="Choose a new password"
-      description="Enter and confirm a new password for your AbbaKano account."
+      description="Enter and confirm a secure new password for your AbbaKano account."
       footer={
         <>
-          Remembered your password? <Link href="/login">Back to sign in</Link>
+          Remember your password?{" "}
+          <Link href="/login" className="font-bold text-[var(--primary)] hover:underline">
+            Back to sign in
+          </Link>
         </>
       }
     >
       {recoveryState === "checking" && (
-        <div className="auth-info" role="status">
-          Verifying your password reset link...
+        <div className="py-8 text-center text-sm font-semibold text-[var(--text-muted)]">
+          <div className="h-6 w-6 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin mx-auto mb-3" />
+          <span>Verifying security reset credentials...</span>
         </div>
       )}
 
       {recoveryState === "invalid" && (
-        <div className="auth-form">
-          <div className="auth-error" role="alert">
+        <div className="space-y-4 text-center">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-500">
             {message || "This password reset link is invalid or has expired."}
           </div>
-          <Link className="auth-primary" href="/forgot-password">
-            Request a new reset link
+          <Link
+            href="/forgot-password"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary)] px-6 text-xs font-bold text-white shadow-md hover:bg-[var(--primary-container)]"
+          >
+            Request a New Reset Link
           </Link>
         </div>
       )}
 
       {recoveryState === "updated" && (
-        <div className="auth-form">
-          <div className="auth-info" role="status">{message}</div>
-          <Link className="auth-primary" href="/login">
-            Sign in
+        <div className="space-y-4 text-center">
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs font-semibold text-emerald-500">
+            {message}
+          </div>
+          <Link
+            href="/login"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary)] px-8 text-xs font-bold text-white shadow-md hover:bg-[var(--primary-container)]"
+          >
+            Proceed to Sign In
           </Link>
         </div>
       )}
 
       {recoveryState === "ready" && (
-        <form className="auth-form" onSubmit={submit}>
-          {message && <div className="auth-error" role="alert">{message}</div>}
-          <label>
-            New password
+        <form className="space-y-4 text-left" onSubmit={submit}>
+          {message && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold text-red-500">
+              {message}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold text-[var(--text)] mb-1.5">
+              New Password (Min. 8 characters)
+            </label>
             <input
               type="password"
               value={password}
@@ -143,10 +158,15 @@ export default function ResetPasswordPage() {
               autoComplete="new-password"
               minLength={8}
               required
+              placeholder="Enter new password"
+              className="w-full h-12 rounded-xl border border-[var(--border-high)] bg-[var(--surface-high)] px-4 text-sm font-medium text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-all"
             />
-          </label>
-          <label>
-            Confirm new password
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[var(--text)] mb-1.5">
+              Confirm New Password
+            </label>
             <input
               type="password"
               value={confirmPassword}
@@ -154,10 +174,17 @@ export default function ResetPasswordPage() {
               autoComplete="new-password"
               minLength={8}
               required
+              placeholder="Re-enter new password"
+              className="w-full h-12 rounded-xl border border-[var(--border-high)] bg-[var(--surface-high)] px-4 text-sm font-medium text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-all"
             />
-          </label>
-          <button className="auth-primary" type="submit" disabled={loading}>
-            {loading ? "Updating password..." : "Update password"}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 rounded-xl bg-[var(--primary)] text-sm font-bold text-white shadow-md hover:bg-[var(--primary-container)] hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {loading ? "Updating Password..." : "Update Password & Secure Wallet"}
           </button>
         </form>
       )}

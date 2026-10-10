@@ -65,7 +65,7 @@ function referralPhoneCandidates(referralCode: string) {
 
 async function hashPin(pin: string) {
   const { scrypt } = await import(
-    "https://esm.sh/@noble/hashes@1.8.0/scrypt"
+    "npm:@noble/hashes@2.4.0/scrypt.js"
   );
 
   const passwordBytes = new TextEncoder().encode(pin);

@@ -233,7 +233,7 @@ export default function VtuServicesPage() {
         </div>
       )}
 
-      {/* Gateway Routing Toggles — Pixel-perfect Toggle component */}
+      {/* Gateway Routing Toggles  -  Pixel-perfect Toggle component */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -495,7 +495,7 @@ export default function VtuServicesPage() {
                       {d.status === "FAILED" ? (
                         <span className="text-slate-400 text-xs">Retry unavailable</span>
                       ) : (
-                        <span className="text-slate-300 text-xs">—</span>
+                        <span className="text-slate-300 text-xs"> - </span>
                       )}
                     </td>
                   </tr>
