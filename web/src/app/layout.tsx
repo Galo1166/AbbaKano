@@ -7,6 +7,13 @@ import { GlobalToast } from "@/components/common/GlobalToast";
 export const metadata: Metadata = {
   title: "AbbaKano DataSub",
   description: "One wallet for airtime, data, and every bill you owe.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
