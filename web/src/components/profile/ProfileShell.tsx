@@ -55,6 +55,9 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
   const [showPinModal, setShowPinModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [pinMessage, setPinMessage] = useState("");
@@ -155,6 +158,23 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
       setPinMessage(err?.message || "Could not save PIN. Please try again.");
     } finally {
       setSavingPin(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeletingAccount(true);
+    setDeleteError("");
+    try {
+      const { error } = await supabase.functions.invoke("delete-account");
+      if (error) {
+        throw error;
+      }
+      await supabase.auth.signOut();
+      router.push("/login");
+    } catch (err: any) {
+      console.error("Delete account error:", err);
+      setDeleteError(err?.message || "Failed to delete account. Please try again or contact support.");
+      setDeletingAccount(false);
     }
   }
 
@@ -677,6 +697,60 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className={`w-full max-w-sm rounded-3xl border p-5 text-center shadow-2xl transition-colors ${
+            isDark ? "bg-[#141721] border-[#222634] text-white" : "bg-white border-slate-200 text-slate-900"
+          }`}>
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/15 text-rose-500">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+
+            <h3 className={`text-base font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>
+              Delete your account?
+            </h3>
+            <p className={`mt-1.5 text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+              This permanently removes your AbbaKano account and signs you out. Some transaction records may need to be retained for legal or accounting compliance. This action cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div className="mt-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-2.5 text-xs font-semibold text-rose-500 text-left">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteError("");
+                }}
+                disabled={deletingAccount}
+                className={`h-11 rounded-xl border text-xs font-bold transition active:scale-95 cursor-pointer ${
+                  isDark
+                    ? "bg-[#181B25] border-[#222634] text-slate-300 hover:bg-[#1e2330]"
+                    : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteAccount()}
+                disabled={deletingAccount}
+                className="h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                {deletingAccount ? "Deleting..." : "Delete Account"}
+              </button>
             </div>
           </div>
         </div>
