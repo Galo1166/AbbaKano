@@ -184,12 +184,12 @@ export function LandingHero() {
                   <a
                     href="/data"
                     onClick={(e) => handleProtectedNav(e, "/data")}
-                    className="flex min-h-[40px] items-center justify-center gap-1 rounded-lg border border-[var(--border-high)] bg-[var(--surface-low)] px-2 py-2 text-[11px] sm:text-xs font-bold text-[var(--text)] transition-colors hover:bg-[var(--surface-high)] active:scale-95 cursor-pointer whitespace-nowrap shadow-2xs"
+                    className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-white/25 bg-white/10 hover:bg-white/20 px-3 py-2 text-[11px] sm:text-xs font-bold text-white transition-all active:scale-95 cursor-pointer whitespace-nowrap shadow-xs"
                   >
-                    <svg className="h-4 w-4 text-[var(--primary-light)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-4 w-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    <span>Instant Sub</span>
+                    <span className="text-white font-bold">Instant Sub</span>
                   </a>
                 </div>
               </div>

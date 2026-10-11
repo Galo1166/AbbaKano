@@ -493,24 +493,50 @@ export function AirtimeShell() {
               </div>
             </div>
 
-            {/* Insufficient Balance Alert */}
-            {isInsufficient && (
-              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 mb-4 text-xs text-rose-500 flex items-center justify-between">
-                <span>Insufficient balance (₦{(balance || 0).toLocaleString()}).</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCheckout(false);
-                    window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "funding" }));
-                  }}
-                  className="font-bold underline cursor-pointer"
-                >
-                  Fund Wallet
-                </button>
-              </div>
-            )}
+            {isInsufficient ? (
+              <div className="space-y-4 py-2">
+                <div className={`rounded-2xl border p-4 text-center ${
+                  isDark ? "bg-rose-500/10 border-rose-500/25 text-rose-400" : "bg-rose-50 border-rose-200 text-rose-700"
+                }`}>
+                  <div className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-rose-500/20 text-rose-500">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-sm font-extrabold tracking-tight">Insufficient Wallet Balance</h4>
+                  <p className="mt-1 text-xs opacity-90 leading-relaxed">
+                    Your wallet balance of <span className="font-mono font-black">{formatNaira(balance || 0)}</span> is not enough to complete this airtime recharge.
+                  </p>
+                </div>
 
-            {/* PIN Authorization */}
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowCheckout(false)}
+                    className={`flex h-11 items-center justify-center rounded-xl border text-xs font-bold transition active:scale-95 cursor-pointer ${
+                      isDark
+                        ? "bg-[#181B25] border-[#222634] text-slate-300 hover:bg-[#1e2330]"
+                        : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCheckout(false);
+                      window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "funding" }));
+                    }}
+                    className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition active:scale-95 cursor-pointer"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Fund Wallet</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
             <form onSubmit={handlePinPurchase} className="space-y-4">
               <div>
                 <label className={`block text-[11px] font-bold uppercase tracking-wider mb-2 text-center ${
@@ -572,6 +598,7 @@ export function AirtimeShell() {
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}
