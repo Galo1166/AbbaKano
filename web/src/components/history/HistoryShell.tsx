@@ -218,7 +218,30 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
           }
         }
 
-        const depositTransactions: Transaction[] = (deposits || []).map((deposit) => ({
+        const ONE_HOUR_MS = 60 * 60 * 1000;
+        const now = Date.now();
+
+        // Expired pending deposits (> 1 hr) automatically disappear from UI
+        const activeDeposits = (deposits || []).filter((deposit) => {
+          const isPending = String(deposit.status || '').toLowerCase() === 'pending';
+          if (isPending && deposit.created_at) {
+            const time = new Date(deposit.created_at).getTime();
+            if (!isNaN(time) && now - time > ONE_HOUR_MS) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        // Mark expired pending deposits as cancelled in DB
+        const expiredDepositIds = (deposits || [])
+          .filter((d) => String(d.status || '').toLowerCase() === 'pending' && d.created_at && (now - new Date(d.created_at).getTime() > ONE_HOUR_MS))
+          .map((d) => d.id);
+        if (expiredDepositIds.length > 0) {
+          supabase.from('deposits').update({ status: 'cancelled' }).in('id', expiredDepositIds).then(undefined, () => {});
+        }
+
+        const depositTransactions: Transaction[] = activeDeposits.map((deposit) => ({
           id: deposit.reference,
           type: "deposit",
           label: "Wallet Deposit",

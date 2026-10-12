@@ -127,26 +127,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.functions.invoke('referral-services', { body: { action: 'summary' } }),
       ]);
 
+      const ONE_HOUR_MS = 60 * 60 * 1000;
+      const now = Date.now();
+
+      const isPendingExpired = (status?: string, createdAt?: string | number) => {
+        const s = String(status || '').toLowerCase();
+        if (s !== 'pending') return false;
+        if (!createdAt) return false;
+        const time = typeof createdAt === 'number' ? createdAt : new Date(createdAt).getTime();
+        return !isNaN(time) && now - time > ONE_HOUR_MS;
+      };
+
       if (walletRes.status === 'fulfilled' && !walletRes.value.error) {
         setMainBalance(Number(walletRes.value.data?.balance_kobo || 0) / 100);
       }
       if (txRes.status === 'fulfilled' && !txRes.value.error) {
-        const vtuTransactions = (txRes.value.data || []).map((tx) => mapServerTx({
-          ...tx,
-          type: String(tx.transaction_type || '').toLowerCase(),
-          amount: Number(tx.amount_kobo || 0) / 100,
-          label: tx.account_number || tx.transaction_type,
-          reference: String(tx.id),
-        }));
-        const deposits = depositRes.status === 'fulfilled' && !depositRes.value.error
-          ? (depositRes.value.data || []).map((deposit) => mapServerTx({
+        const vtuTransactions = (txRes.value.data || [])
+          .filter((tx) => !isPendingExpired(tx.status, tx.created_at))
+          .map((tx) => mapServerTx({
+            ...tx,
+            type: String(tx.transaction_type || '').toLowerCase(),
+            amount: Number(tx.amount_kobo || 0) / 100,
+            label: tx.account_number || tx.transaction_type,
+            reference: String(tx.id),
+          }));
+
+        const rawDeposits = depositRes.status === 'fulfilled' && !depositRes.value.error
+          ? (depositRes.value.data || [])
+          : [];
+
+        // Any pending deposit older than 1 hour is considered abandoned/cancelled and disappears from the UI
+        const deposits = rawDeposits
+          .filter((deposit) => !isPendingExpired(deposit.status, deposit.created_at))
+          .map((deposit) => mapServerTx({
             ...deposit,
             type: 'deposit',
             amount: Number(deposit.amount_kobo || 0) / 100,
             label: deposit.reference ? `Deposit (${deposit.reference})` : 'Wallet funding',
             reference: deposit.reference || deposit.id,
-          }))
-          : [];
+          }));
+
+        // Proactively update expired pending deposits to cancelled in Supabase
+        const expiredDepositIds = rawDeposits
+          .filter((d) => isPendingExpired(d.status, d.created_at))
+          .map((d) => d.id);
+        if (expiredDepositIds.length > 0) {
+          supabase.from('deposits').update({ status: 'cancelled' }).in('id', expiredDepositIds).then(undefined, () => {});
+        }
+
         setTransactions([...vtuTransactions, ...deposits].sort((a, b) => b.timestamp - a.timestamp));
       }
       if (referralRes.status === 'fulfilled' && !referralRes.value.error) {
