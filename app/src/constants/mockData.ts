@@ -102,14 +102,23 @@ export const MOCK_VIRTUAL_ACCOUNTS: VirtualAccount[] = [
     bankName: "Moniepoint MFB",
     accountNumber: "8034 991 240",
     accountName: "AbbaKano - Usman Bello",
-    feeInfo: "0% > ₦2,000 • Bank transfers reflect within 15–30 seconds",
+    feeInfo: "0% fee > ₦2,000 • Instant auto-credit in ~15s",
+    logoColor: "#0047cc",
     recommended: true,
+  },
+  {
+    bankName: "Sterling Bank",
+    accountNumber: "9021 345 881",
+    accountName: "AbbaKano - Usman Bello",
+    feeInfo: "Monnify Dedicated Desk • 100% Instant auto-credit",
+    logoColor: "#e60000",
   },
   {
     bankName: "Wema Bank / ALAT",
     accountNumber: "0284 119 552",
     accountName: "AbbaKano - Usman Bello",
-    feeInfo: "Backup Virtual Desk • Instant auto-credit reflect (< 30s)",
+    feeInfo: "Automated Virtual Desk • Instant credit reflect (< 30s)",
+    logoColor: "#93186c",
   },
 ];
 

@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { PaletteType, Spacing } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { TelcoNetworkSelector } from '@/components/vtu/TelcoNetworkSelector';
 import { DataBundlePicker } from '@/components/vtu/DataBundlePicker';
 import { TelcoNetworkId } from '@/constants/telco';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
@@ -28,26 +27,11 @@ export const VtuView: React.FC<VtuViewProps> = ({
         showBack={!!onBackPress}
         onBackPress={onBackPress}
       />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Network Operator Selection */}
-        <TelcoNetworkSelector
-          selectedNetwork={selectedNetwork}
-          onSelectNetwork={setSelectedNetwork}
-        />
-
-        {/* Data Plan Engine */}
-        <DataBundlePicker
-          selectedNetwork={selectedNetwork}
-          onSelectNetwork={setSelectedNetwork}
-        />
-
-        {/* Bottom spacing */}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      <DataBundlePicker
+        initialNetwork={initialNetwork}
+        selectedNetwork={selectedNetwork}
+        onSelectNetwork={setSelectedNetwork}
+      />
     </View>
   );
 };

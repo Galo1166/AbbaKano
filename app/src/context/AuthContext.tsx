@@ -6,6 +6,7 @@ import {
   getBiometricLogin,
   saveBiometricLogin,
   clearBiometricLogin,
+  saveBiometricTransactionPin,
 } from '@/services/biometricService';
 
 export interface AuthUser {
@@ -183,6 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     if (error || !data.user) throw error || new Error('Account created, but sign in failed.');
     await saveBiometricLogin(email, payload.password);
+    await saveBiometricTransactionPin(payload.pin);
     setUser(mapUser(data.user));
   }, []);
 

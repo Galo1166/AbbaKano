@@ -25,6 +25,7 @@ export const AirtimeView: React.FC<AirtimeViewProps> = ({ onBackPress }) => {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <TelcoQuickRecharge />
         <View style={{ height: 100 }} />

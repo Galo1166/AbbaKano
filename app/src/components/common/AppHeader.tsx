@@ -110,7 +110,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               { backgroundColor: T.surfaceHigh, borderColor: T.border },
               pressed && styles.pressed,
             ]}
-            onPress={() => Linking.openURL('https://wa.me/2348166774566')}
+            onPress={() => Linking.openURL('https://wa.me/2348133339850')}
             hitSlop={8}
             accessible
             accessibilityLabel="Contact Support Desk"

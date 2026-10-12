@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing } from '@/constants/theme';
 import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { supabase } from '@/lib/supabase';
+import { api, ApiError } from '@/lib/api';
+import { SCREEN_ASSETS } from '@/../assets/screenAssets';
 
 const CABLE_PROVIDERS = [
-  { id: 'dstv', code: 'DSTV', name: 'DStv', brandColor: '#e60012' },
-  { id: 'gotv', code: 'GOTV', name: 'GOtv', brandColor: '#ff7900' },
-  { id: 'startimes', code: 'STARTIMES', name: 'StarTimes', brandColor: '#1d4ed8' },
+  { id: 'dstv', code: 'DSTV', name: 'DStv', brandColor: '#0083ca', logo: SCREEN_ASSETS.dstvLogo },
+  { id: 'gotv', code: 'GOTV', name: 'GOtv', brandColor: '#009639', logo: SCREEN_ASSETS.gotvLogo },
+  { id: 'startimes', code: 'STARTIMES', name: 'StarTimes', brandColor: '#0e4b89', logo: SCREEN_ASSETS.startimesLogo },
 ] as const;
 type CableProvider = (typeof CABLE_PROVIDERS)[number];
 type CablePackage = { id: string; name: string; price: number; planToken: string };
@@ -43,61 +44,44 @@ export const CableTvBillerCard: React.FC = () => {
   }, [paymentSuccessCount]);
 
   useEffect(() => {
-    const cleanSmartcardNumber = smartcardNumber.replace(/\D/g, '');
-    if (!/^\d{10}$/.test(cleanSmartcardNumber)) {
+    if (smartcardNumber.length !== 10) {
       setVerifiedCustomer(null);
       setPackages([]);
       setSelectedPackageId('');
       return;
     }
-
     let cancelled = false;
     setLoading(true);
     setErrorMessage(null);
-
-    void supabase.functions.invoke<{ customerName?: string; plans?: Array<{ name: string; price: number; code: string; selectionToken: string }> }>('cable-services', {
-      body: {
-        provider: selectedProvider.code,
-        smartcardNumber: cleanSmartcardNumber,
-      },
-    }).then(({ data, error }) => {
+    void api.post<{ customerName?: string; plans?: Array<{ name: string; price: number; code: string; selectionToken: string }> }>('/vtu/verify-cable', {
+      provider: selectedProvider.id,
+      smartcardNumber,
+    }).then((response) => {
       if (cancelled) return;
-      if (error) throw error;
-      setVerifiedCustomer(data?.customerName || null);
-      const nextPackages = (data?.plans || []).map((plan) => ({
-        id: plan.code,
-        name: plan.name,
-        price: Number(plan.price),
-        planToken: plan.selectionToken,
-      }));
+      setVerifiedCustomer(response.customerName || null);
+      const nextPackages = (response.plans || []).map((plan) => ({ id: plan.code, name: plan.name, price: Number(plan.price), planToken: plan.selectionToken }));
       setPackages(nextPackages);
       setSelectedPackageId(nextPackages[0]?.id || '');
     }).catch((error) => {
-      if (!cancelled) {
-        const message = error instanceof Error ? error.message : 'Could not verify this cable customer.';
-        setErrorMessage(message);
-      }
+      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this cable customer.');
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedProvider.code, smartcardNumber]);
+  }, [selectedProvider.id, smartcardNumber]);
 
   const activePackage = packages.find((p) => p.id === selectedPackageId) || packages[0];
 
   const handleSubscribe = () => {
-    const cleanSmartcardNumber = smartcardNumber.replace(/\D/g, '');
-    if (!activePackage || !/^\d{10}$/.test(cleanSmartcardNumber)) return;
+    if (!activePackage || smartcardNumber.length < 10) return;
 
     startCheckout({
       type: 'CABLE_TV',
       title: `${selectedProvider.code} ${activePackage.name}`,
       serviceName: `${selectedProvider.name}`,
-      recipient: cleanSmartcardNumber,
+      recipient: smartcardNumber,
       planName: activePackage.name,
       amount: activePackage.price,
       fee: 100,
-      billerName: selectedProvider.code,
-      meterNumber: cleanSmartcardNumber,
-      planToken: activePackage.planToken,
+      billerName: selectedProvider.name,
       onSuccess: clearInputs,
     });
   };
@@ -131,14 +115,14 @@ export const CableTvBillerCard: React.FC = () => {
                   styles.provLogoCircle,
                   isSelected && {
                     borderColor: prov.brandColor || Palette.primary,
-                    borderWidth: 1.5,
+                    borderWidth: 2,
                   },
                 ]}
               >
-                <MaterialCommunityIcons
-                  name="television-classic"
-                  size={20}
-                  color={isSelected ? Palette.primary : Palette.onSurfaceMuted}
+                <Image
+                  source={prov.logo}
+                  style={styles.provLogo}
+                  resizeMode="contain"
                 />
               </View>
               <Text
@@ -150,7 +134,7 @@ export const CableTvBillerCard: React.FC = () => {
                   },
                 ]}
                 numberOfLines={1}
-                adjustsFontSizeToFit
+                ellipsizeMode="tail"
               >
                 {prov.code === 'STARTIMES' ? 'StarTimes' : prov.code}
               </Text>
@@ -193,10 +177,10 @@ export const CableTvBillerCard: React.FC = () => {
               style={[styles.pkgCard, isSelected && styles.pkgCardSelected]}
               onPress={() => setSelectedPackageId(pkg.id)}
             >
-              <Text style={[styles.pkgName, isSelected && styles.pkgNameSelected]}>
+              <Text style={[styles.pkgName, isSelected && styles.pkgNameSelected]} numberOfLines={1} ellipsizeMode="tail">
                 {pkg.name}
               </Text>
-              <Text style={[styles.pkgPrice, isSelected && styles.pkgPriceSelected]}>
+              <Text style={[styles.pkgPrice, isSelected && styles.pkgPriceSelected]} numberOfLines={1}>
                 ₦{pkg.price.toLocaleString()}
               </Text>
             </Pressable>
@@ -324,6 +308,8 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Palette.onSurface,
+    flex: 1,
+    marginRight: Spacing.two,
   },
   pkgNameSelected: {
     color: Palette.primary,
@@ -334,6 +320,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     fontWeight: '700',
     color: Palette.onSurface,
     fontVariant: ['tabular-nums'],
+    flexShrink: 0,
   },
   pkgPriceSelected: {
     color: Palette.primary,

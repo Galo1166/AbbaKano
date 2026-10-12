@@ -25,6 +25,7 @@ export const CableTvView: React.FC<CableTvViewProps> = ({ onBackPress }) => {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <CableTvBillerCard />
         <View style={{ height: 100 }} />

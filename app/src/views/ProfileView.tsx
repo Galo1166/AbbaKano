@@ -6,14 +6,22 @@ import { useApp, useTheme } from '@/context/AppContext';
 import { ThemeSwitchModal } from '@/components/common/ThemeSwitchModal';
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { SignOutModal } from '@/components/common/SignOutModal';
-import { authenticateBiometric } from '@/services/biometricService';
+import { LegalDocumentModal } from '@/components/modals/LegalDocumentModal';
+import {
+  authenticateBiometric,
+  isAppLockEnabled,
+  setAppLockEnabled,
+  isBiometricsEnabled,
+  setBiometricsEnabled,
+  checkUserHasPin,
+} from '@/services/biometricService';
 import { useAuth } from '@/context/AuthContext';
 
 interface ProfileViewProps {
   onNavigateToReferEarn?: () => void;
   onNavigateToFundWallet?: () => void;
   onNavigateToSupport?: () => void;
-  onNavigateToPinSetup?: () => void;
+  onNavigateToPinSetup?: (hasExistingPin: boolean) => void;
   onSignOut?: () => void;
 }
 
@@ -29,13 +37,38 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const T = useTheme();
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [showLegalModal, setShowLegalModal] = useState(false);
+  const [legalTab, setLegalTab] = useState<'privacy' | 'terms'>('privacy');
   const [biometrics, setBiometrics] = useState(true);
   const [appLock, setAppLock] = useState(true);
+  const [hasPin, setHasPin] = useState(true);
   const [deletingAccount, setDeletingAccount] = useState(false);
+
+  React.useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      const lockEnabled = await isAppLockEnabled();
+      const bioEnabled = await isBiometricsEnabled();
+      const pinExists = await checkUserHasPin();
+      if (mounted) {
+        setAppLock(lockEnabled);
+        setBiometrics(bioEnabled);
+        setHasPin(pinExists);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const menuItems = useMemo(() => [
     { id: 'refer', icon: 'card-giftcard', title: 'Refer & Earn', subtitle: "Earn ₦100 for each friend's first data top-up", badge: '₦100 BONUS', section: 'Referral & Rewards' },
-    { id: 'change_pin', icon: 'pin', title: 'Change Transaction PIN', subtitle: '4-digit wallet security PIN', section: 'Security & Preferences' },
+    {
+      id: 'change_pin',
+      icon: 'pin',
+      title: hasPin ? 'Change Transaction PIN' : 'Set Transaction PIN',
+      subtitle: hasPin ? '4-digit wallet security PIN' : 'Create 4-digit security PIN to authorize transactions',
+      section: 'Security & Preferences',
+      badge: hasPin ? undefined : 'ACTION REQUIRED',
+    },
     { id: 'biometrics', icon: 'fingerprint', title: 'Biometrics Login', subtitle: 'Face ID / Fingerprint unlock', section: 'Security & Preferences', hasToggle: true },
     { id: 'app_lock', icon: 'lock', title: 'App Lock PIN', subtitle: 'Screen lock security timeout', section: 'Security & Preferences', hasToggle: true },
     {
@@ -64,32 +97,40 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   const handleToggle = async (id: string) => {
     if (id === 'biometrics') {
-      try {
-        await authenticateBiometric('Enable biometric security');
-        setBiometrics((v) => !v);
-      } catch {
-        // The system biometric prompt already explains why the action was not completed.
+      const nextVal = !biometrics;
+      if (nextVal) {
+        try {
+          await authenticateBiometric('Enable biometric security');
+          setBiometrics(true);
+          await setBiometricsEnabled(true);
+        } catch {
+          // The system biometric prompt already explains why the action was not completed.
+        }
+      } else {
+        setBiometrics(false);
+        await setBiometricsEnabled(false);
       }
+    } else if (id === 'app_lock') {
+      const nextVal = !appLock;
+      setAppLock(nextVal);
+      await setAppLockEnabled(nextVal);
     }
-    else if (id === 'app_lock') setAppLock((v) => !v);
   };
 
   const handleMenuPress = (id: string) => {
     if (id === 'theme_appearance') setShowThemeModal(true);
     else if (id === 'refer') onNavigateToReferEarn?.();
-    else if (id === 'change_pin') onNavigateToPinSetup?.();
+    else if (id === 'change_pin') onNavigateToPinSetup?.(hasPin);
     else if (id === 'support') {
       if (onNavigateToSupport) onNavigateToSupport();
     }
     else if (id === 'privacy') {
-      void Linking.openURL('https://www.abbakanodatasub.com.ng/privacy').catch(() => {
-        Alert.alert('Could not open page', 'Please try again or visit abbakanodatasub.com.ng/privacy in your browser.');
-      });
+      setLegalTab('privacy');
+      setShowLegalModal(true);
     }
     else if (id === 'terms') {
-      void Linking.openURL('https://www.abbakanodatasub.com.ng/terms').catch(() => {
-        Alert.alert('Could not open page', 'Please try again or visit abbakanodatasub.com.ng/terms in your browser.');
-      });
+      setLegalTab('terms');
+      setShowLegalModal(true);
     }
     else if (id === 'delete_account') {
       Alert.alert(
@@ -157,9 +198,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
             <View style={styles.profileInfo}>
               <View style={styles.nameRow}>
-                <Text style={[styles.profileName, { color: T.onSurface }]}>{user.name || user.fullName || 'User'}</Text>
+                <Text style={[styles.profileName, { color: T.onSurface }]} numberOfLines={1} ellipsizeMode="tail">
+                  {user.name || user.fullName || 'User'}
+                </Text>
               </View>
-              <Text style={[styles.profileContact, { color: T.onSurfaceVariant, marginTop: 4 }]}>
+              <Text style={[styles.profileContact, { color: T.onSurfaceVariant, marginTop: 4 }]} numberOfLines={1} ellipsizeMode="tail">
                 +234 803 459 2811 • {user.email}
               </Text>
             </View>
@@ -176,8 +219,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <MaterialIcons name="account-balance-wallet" size={18} color={T.tertiary} />
               </View>
               <View>
-                <Text style={[styles.profileBalanceLabel, { color: T.onSurfaceMuted }]}>Master Wallet Balance</Text>
-                <Text style={[styles.profileBalanceAmount, { color: T.onSurface }]}>
+                <Text style={[styles.profileBalanceLabel, { color: T.onSurfaceMuted }]} numberOfLines={1}>
+                  Master Wallet Balance
+                </Text>
+                <Text style={[styles.profileBalanceAmount, { color: T.onSurface }]} numberOfLines={1}>
                   ₦{mainBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
                 </Text>
               </View>
@@ -213,16 +258,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </View>
                   <View style={styles.menuItemInfo}>
                     <View style={styles.menuItemTitleRow}>
-                      <Text style={[styles.menuItemTitle, { color: item.danger ? T.error : T.onSurface }]}>
+                      <Text
+                        style={[styles.menuItemTitle, { color: item.danger ? T.error : T.onSurface }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
                         {item.id === 'delete_account' && deletingAccount ? 'Deleting...' : item.title}
                       </Text>
                       {item.badge && (
                         <View style={styles.menuBadge}>
-                          <Text style={[styles.menuBadgeText, { color: T.secondary }]}>{item.badge}</Text>
+                          <Text style={[styles.menuBadgeText, { color: T.secondary }]} numberOfLines={1}>{item.badge}</Text>
                         </View>
                       )}
                     </View>
-                    <Text style={[styles.menuItemSubtitle, { color: T.onSurfaceVariant }]}>{item.subtitle}</Text>
+                    <Text
+                      style={[styles.menuItemSubtitle, { color: T.onSurfaceVariant }]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {item.subtitle}
+                    </Text>
                   </View>
                   {item.hasToggle ? (
                     <View style={[styles.toggle, { backgroundColor: getToggleState(item.id) ? T.primary : T.surfaceHigh }]}>
@@ -248,6 +303,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         visible={showSignOutModal}
         onClose={() => setShowSignOutModal(false)}
         onConfirmSignOut={() => onSignOut?.()}
+      />
+      <LegalDocumentModal
+        visible={showLegalModal}
+        onClose={() => setShowLegalModal(false)}
+        initialTab={legalTab}
       />
     </>
   );
@@ -289,7 +349,7 @@ const styles = StyleSheet.create({
   menuItemInfo: { flex: 1, gap: 2 },
   menuItemTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   menuItemTitle: { fontSize: 14, fontWeight: '700', fontFamily: Typography.family },
-  menuBadge: { backgroundColor: 'rgba(238,152,0,0.15)', borderRadius: Rounded.full, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: 'rgba(238,152,0,0.3)' },
+  menuBadge: { backgroundColor: 'rgba(238,152,0,0.15)', borderRadius: Rounded.full, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: 'rgba(238,152,0,0.3)', flexShrink: 0, maxWidth: 110, overflow: 'hidden' },
   menuBadgeText: { fontSize: 10, fontWeight: '800', fontFamily: Typography.family },
   menuItemSubtitle: { fontSize: 12, fontFamily: Typography.family, lineHeight: 16 },
 

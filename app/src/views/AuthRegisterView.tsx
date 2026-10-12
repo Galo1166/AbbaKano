@@ -23,6 +23,80 @@ interface AuthRegisterViewProps {
   onLoginPress: () => void;
 }
 
+interface PasswordRule {
+  id: string;
+  label: string;
+  met: boolean;
+}
+
+export interface PasswordStrengthResult {
+  rules: PasswordRule[];
+  metCount: number;
+  scoreText: 'Empty' | 'Weak' | 'Fair' | 'Good' | 'Strong';
+  scoreColor: string;
+  isStrong: boolean;
+}
+
+export const checkPasswordStrength = (pwd: string): PasswordStrengthResult => {
+  const rules: PasswordRule[] = [
+    { id: 'min_length', label: '8+ Chars', met: pwd.length >= 8 },
+    { id: 'uppercase', label: 'Uppercase (A-Z)', met: /[A-Z]/.test(pwd) },
+    { id: 'lowercase', label: 'Lowercase (a-z)', met: /[a-z]/.test(pwd) },
+    { id: 'number', label: 'Number (0-9)', met: /[0-9]/.test(pwd) },
+    { id: 'special', label: 'Symbol (!@#$)', met: /[^A-Za-z0-9]/.test(pwd) },
+  ];
+
+  const metCount = rules.filter((r) => r.met).length;
+
+  if (pwd.length === 0) {
+    return {
+      rules,
+      metCount: 0,
+      scoreText: 'Empty',
+      scoreColor: '#94A3B8',
+      isStrong: false,
+    };
+  }
+
+  if (metCount <= 2) {
+    return {
+      rules,
+      metCount,
+      scoreText: 'Weak',
+      scoreColor: '#EF4444',
+      isStrong: false,
+    };
+  }
+
+  if (metCount === 3) {
+    return {
+      rules,
+      metCount,
+      scoreText: 'Fair',
+      scoreColor: '#F59E0B',
+      isStrong: false,
+    };
+  }
+
+  if (metCount === 4) {
+    return {
+      rules,
+      metCount,
+      scoreText: 'Good',
+      scoreColor: '#3B82F6',
+      isStrong: false,
+    };
+  }
+
+  return {
+    rules,
+    metCount,
+    scoreText: 'Strong',
+    scoreColor: '#10B981',
+    isStrong: true,
+  };
+};
+
 export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
   onRegisterSuccess,
   onLoginPress,
@@ -46,6 +120,9 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const pwdStrength = useMemo(() => checkPasswordStrength(password), [password]);
+  const passwordsMatch = password.length > 0 && confirmPassword.length > 0 && password === confirmPassword;
 
   // Detect network from phone
   const detectNetwork = (p: string): string => {
@@ -71,8 +148,12 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
       setErrorMessage('Please enter a valid email address.');
       return;
     }
-    if (!password || password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.');
+    if (!password) {
+      setErrorMessage('Please enter a password.');
+      return;
+    }
+    if (!pwdStrength.isStrong) {
+      setErrorMessage('Strong password is required: Please ensure your password satisfies all 5 security pattern criteria.');
       return;
     }
     if (password !== confirmPassword) {
@@ -244,10 +325,34 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
             </View>
           </View>
 
-          {/* Password */}
+          {/* Password with Strength Meter Pattern */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputBox}>
+            <View style={styles.labelWithBadgeRow}>
+              <Text style={styles.inputLabel}>Password</Text>
+              {password.length > 0 && (
+                <View
+                  style={[
+                    styles.strengthBadge,
+                    {
+                      backgroundColor: `${pwdStrength.scoreColor}18`,
+                      borderColor: `${pwdStrength.scoreColor}60`,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.strengthBadgeText, { color: pwdStrength.scoreColor }]}>
+                    {pwdStrength.scoreText}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View
+              style={[
+                styles.inputBox,
+                password.length > 0 && {
+                  borderColor: pwdStrength.isStrong ? '#10B981' : `${pwdStrength.scoreColor}80`,
+                },
+              ]}
+            >
               <MaterialIcons name="lock-outline" size={20} color={Palette.onSurfaceMuted} />
               <TextInput
                 style={styles.textInput}
@@ -256,7 +361,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
                   setPassword(t);
                   if (errorMessage) setErrorMessage(null);
                 }}
-                placeholder="Enter password (min. 6 characters)"
+                placeholder="Create a strong password"
                 placeholderTextColor={Palette.onSurfaceMuted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -269,12 +374,96 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
                 />
               </Pressable>
             </View>
+
+            {/* Visual Strength Meter Bar */}
+            <View style={styles.meterContainer}>
+              <View style={styles.meterSegmentsRow}>
+                {[1, 2, 3, 4, 5].map((step) => {
+                  const isFilled = step <= pwdStrength.metCount;
+                  return (
+                    <View
+                      key={step}
+                      style={[
+                        styles.meterSegment,
+                        {
+                          backgroundColor: isFilled
+                            ? pwdStrength.scoreColor
+                            : Palette.borderHigh,
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+
+              {/* Pattern Requirements Checklist */}
+              <View style={styles.rulesGrid}>
+                {pwdStrength.rules.map((rule) => (
+                  <View
+                    key={rule.id}
+                    style={[
+                      styles.rulePill,
+                      rule.met ? styles.rulePillMet : styles.rulePillUnmet,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={rule.met ? 'check-circle' : 'radio-button-unchecked'}
+                      size={12}
+                      color={rule.met ? '#10B981' : Palette.onSurfaceMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.ruleText,
+                        rule.met ? styles.ruleTextMet : styles.ruleTextUnmet,
+                      ]}
+                    >
+                      {rule.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           </View>
 
           {/* Confirm Password */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Confirm Password</Text>
-            <View style={styles.inputBox}>
+            <View style={styles.labelWithBadgeRow}>
+              <Text style={styles.inputLabel}>Confirm Password</Text>
+              {confirmPassword.length > 0 && (
+                <View
+                  style={[
+                    styles.matchBadge,
+                    {
+                      backgroundColor: passwordsMatch
+                        ? 'rgba(16, 185, 129, 0.12)'
+                        : 'rgba(239, 68, 68, 0.12)',
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={passwordsMatch ? 'check-circle' : 'cancel'}
+                    size={12}
+                    color={passwordsMatch ? '#10B981' : '#EF4444'}
+                  />
+                  <Text
+                    style={[
+                      styles.matchBadgeText,
+                      { color: passwordsMatch ? '#10B981' : '#EF4444' },
+                    ]}
+                  >
+                    {passwordsMatch ? 'Passwords match' : 'Do not match'}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View
+              style={[
+                styles.inputBox,
+                confirmPassword.length > 0 && {
+                  borderColor: passwordsMatch ? '#10B981' : '#EF4444',
+                },
+              ]}
+            >
               <MaterialIcons name="lock-outline" size={20} color={Palette.onSurfaceMuted} />
               <TextInput
                 style={styles.textInput}
@@ -415,7 +604,7 @@ export const AuthRegisterView: React.FC<AuthRegisterViewProps> = ({
           <Pressable
             style={({ pressed }) => [
               styles.registerBtn,
-              (!termsAccepted || !fullName || !phone || !password || !confirmPassword || !pin || !confirmPin) && styles.registerBtnDisabled,
+              (!termsAccepted || !fullName || !phone || !pwdStrength.isStrong || !passwordsMatch || !pin || !confirmPin) && styles.registerBtnDisabled,
               pressed && termsAccepted && { opacity: 0.88 },
             ]}
             onPress={handleRegister}
@@ -720,5 +909,81 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     color: Palette.onSurfaceMuted,
     fontFamily: Typography.family,
     textAlign: 'center',
+  },
+
+  // Password Strength Meter & Patterns
+  meterContainer: {
+    marginTop: 4,
+    gap: 8,
+  },
+  meterSegmentsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    width: '100%',
+  },
+  meterSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  rulesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  rulePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Rounded.full,
+    borderWidth: 1,
+  },
+  rulePillMet: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+  },
+  rulePillUnmet: {
+    backgroundColor: Palette.surfaceHigh,
+    borderColor: 'transparent',
+  },
+  ruleText: {
+    fontSize: 11,
+    fontFamily: Typography.family,
+  },
+  ruleTextMet: {
+    color: '#10B981',
+    fontWeight: '700',
+  },
+  ruleTextUnmet: {
+    color: Palette.onSurfaceMuted,
+    fontWeight: '500',
+  },
+  strengthBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Rounded.full,
+    borderWidth: 1,
+  },
+  strengthBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: Typography.family,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  matchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Rounded.full,
+  },
+  matchBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: Typography.family,
   },
 });

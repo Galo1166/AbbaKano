@@ -88,7 +88,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (onNavigateToSupport) {
       onNavigateToSupport();
     } else {
-      Linking.openURL('https://wa.me/2348166774566');
+      Linking.openURL('https://wa.me/2348133339850');
     }
   };
 

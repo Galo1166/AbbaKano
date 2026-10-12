@@ -14,37 +14,46 @@ import { useApp } from '@/context/AppContext';
 import { Numpad } from '@/components/common/Numpad';
 
 export const PinAuthModal: React.FC = () => {
-  const { isPinModalOpen, cancelPin, verifyPinAndExecute, verifyBiometricAndExecute, draft } = useCheckout();
+  const { isPinModalOpen, cancelPin, verifyPinAndExecute, verifyBiometricAndExecute, draft, purchaseError } = useCheckout();
   const { theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     if (isPinModalOpen) {
       setPin('');
       setErrorMsg(null);
+      setIsVerifying(false);
     }
   }, [isPinModalOpen]);
 
   if (!draft) return null;
 
   const handleKeyPress = (val: string) => {
-    if (pin.length < 4) {
-      const nextPin = pin + val;
-      setPin(nextPin);
-      setErrorMsg(null);
+    if (isVerifying || pin.length >= 4) return;
+    const nextPin = pin + val;
+    setPin(nextPin);
+    setErrorMsg(null);
 
-      // Auto-submit upon 4th digit
-      if (nextPin.length === 4) {
-        setTimeout(() => {
-          const success = verifyPinAndExecute(nextPin);
+    // Auto-submit upon 4th digit
+    if (nextPin.length === 4) {
+      setIsVerifying(true);
+      setTimeout(async () => {
+        try {
+          const success = await verifyPinAndExecute(nextPin);
           if (!success) {
-            setErrorMsg('Invalid PIN. Please enter your 4-digit transaction PIN.');
+            setErrorMsg(purchaseError || 'Invalid transaction PIN. Please try again.');
             setPin('');
           }
-        }, 150);
-      }
+        } catch (err: any) {
+          setErrorMsg(err?.message || 'Could not process transaction.');
+          setPin('');
+        } finally {
+          setIsVerifying(false);
+        }
+      }, 150);
     }
   };
 

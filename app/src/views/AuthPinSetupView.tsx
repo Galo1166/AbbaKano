@@ -9,6 +9,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { PaletteType, Rounded, Spacing, Typography } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { getBiometricTransactionPin } from '@/services/biometricService';
 
 interface AuthPinSetupViewProps {
   onPinCompleted: (pin: string, currentPin?: string) => void | Promise<void>;
@@ -39,21 +40,39 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [stage, setStage] = useState<'current' | 'setup' | 'confirm'>(requireCurrentPin ? 'current' : 'setup');
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleKeyPress = (key: string) => {
-    if (key === 'fingerprint') return;
+    if (isSaving || key === 'fingerprint') return;
     if (key === 'backspace') {
+      setErrorMessage(null);
       if (stage === 'current') setCurrentPin(p => p.slice(0, -1));
       else if (stage === 'setup') setPin(p => p.slice(0, -1));
       else setConfirmPin(p => p.slice(0, -1));
       return;
     }
 
+    setErrorMessage(null);
+
     if (stage === 'current') {
       if (currentPin.length < 4) {
         const nextPin = currentPin + key;
         setCurrentPin(nextPin);
-        if (nextPin.length === 4) setTimeout(() => setStage('setup'), 300);
+        if (nextPin.length === 4) {
+          setIsSaving(true);
+          setTimeout(async () => {
+            const storedPin = await getBiometricTransactionPin();
+            if (storedPin && storedPin.length === 4 && storedPin !== nextPin) {
+              setIsSaving(false);
+              setCurrentPin('');
+              setErrorMessage('Incorrect current PIN. Please try again.');
+              return;
+            }
+            setIsSaving(false);
+            setStage('setup');
+          }, 250);
+        }
       }
     } else if (stage === 'setup') {
       if (pin.length < 4) {
@@ -68,10 +87,24 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
         const newConfirmPin = confirmPin + key;
         setConfirmPin(newConfirmPin);
         if (newConfirmPin.length === 4) {
-          setTimeout(() => {
+          setIsSaving(true);
+          setTimeout(async () => {
             if (newConfirmPin === pin) {
-              void               void onPinCompleted(pin, requireCurrentPin ? currentPin : undefined);
+              try {
+                await onPinCompleted(pin, requireCurrentPin ? currentPin : undefined);
+              } catch (err: any) {
+                const msg = err?.message || 'Could not update PIN. Please try again.';
+                setErrorMessage(msg);
+                Alert.alert('PIN Error', msg);
+                setPin('');
+                setConfirmPin('');
+                if (requireCurrentPin) setCurrentPin('');
+                setStage(requireCurrentPin ? 'current' : 'setup');
+              } finally {
+                setIsSaving(false);
+              }
             } else {
+              setIsSaving(false);
               Alert.alert('PIN Mismatch', 'PINs do not match. Please try again.');
               setPin('');
               setConfirmPin('');
@@ -112,10 +145,17 @@ export const AuthPinSetupView: React.FC<AuthPinSetupViewProps> = ({
             style={[
               styles.pinDot,
               enteredPin.length > i && styles.pinDotFilled,
+              errorMessage ? styles.pinDotError : null,
             ]}
           />
         ))}
       </View>
+
+      {errorMessage ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : null}
 
       {/* === NUMPAD === */}
       <View style={styles.numpad}>
@@ -216,6 +256,24 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   pinDotFilled: {
     backgroundColor: Palette.primary,
     borderColor: Palette.primary,
+  },
+  pinDotError: {
+    backgroundColor: Palette.error,
+    borderColor: Palette.error,
+  },
+  errorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: Rounded.full,
+    maxWidth: 320,
+    alignSelf: 'center',
+  },
+  errorText: {
+    fontSize: 12,
+    color: Palette.error,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 
   // Numpad

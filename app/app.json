@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "abbakano_data_sub_app",
+    "name": "AbbaKano DataSub",
     "slug": "abbakano_data_sub_app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,11 +11,21 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.abbakano.datasub",
+      "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#01197D",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundImage": "./assets/images/android-icon-background.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -29,15 +39,33 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#07090E",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 240
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": false,
+            "enableShrinkResourcesInReleaseBuilds": false,
+            "useLegacyPackaging": true,
+            "buildArchs": ["arm64-v8a", "armeabi-v7a"],
+            "extraProguardRules": "-keep class com.swmansion.reanimated.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }"
+          }
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7e7ea0d0-fa18-464c-a440-b4f2612f4520"
+      }
     }
   }
 }

@@ -97,6 +97,9 @@ export const Button: React.FC<ButtonProps> = ({
               },
               textStyle,
             ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           >
             {title}
           </Text>

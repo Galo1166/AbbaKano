@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { ApiError } from '@/lib/api';
 
 export interface DataPlan {
   id: string;
@@ -52,33 +53,55 @@ export const fetchDataPlans = async (
       : plans;
   }
 
-  const request = (async () => {
-    const { data, error } = await supabase.functions.invoke<{ plans?: {
-    label: string;
-    price: number;
-    code: string;
-    category?: string;
-    selectionToken?: string;
-    purchaseAvailable?: boolean;
-    }[]; message?: string }>('data-services', {
-      body: { network },
-    });
-    if (error) throw error;
-    if (!data) throw new Error('We could not load data plans right now. Please try again.');
-    const plans = sortPlans((data.plans || []).map((plan) => ({
-      id: `${network}-${plan.code}`,
-      network,
-      dataAmount: plan.label,
-      price: Number(plan.price),
-      validity: '',
-      planType: plan.category || 'GENERAL',
-      type: plan.category || 'GENERAL',
-      planToken: plan.selectionToken,
-      purchaseAvailable: plan.purchaseAvailable !== false,
-    })));
-    planCache.set(cacheKey, { plans, expiresAt: Date.now() + 30_000 });
-    return plans;
-  })().finally(() => planRequests.delete(cacheKey));
+  const executeRequest = async (): Promise<DataPlan[]> => {
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        plans?: {
+          label: string;
+          price: number;
+          code: string;
+          category?: string;
+          selectionToken?: string;
+          purchaseAvailable?: boolean;
+        }[];
+        message?: string;
+      }>('data-services', {
+        body: { network },
+      });
+
+      if (error) {
+        let msg = 'Could not load data plans right now.';
+        if ('context' in error && (error as any).context instanceof Response) {
+          try {
+            const body = await (error as any).context.clone().json();
+            if (body?.message) msg = body.message;
+          } catch {}
+        } else if (error.message) {
+          msg = error.message;
+        }
+        throw new ApiError(msg, 400);
+      }
+
+      if (!data) throw new ApiError('We could not load data plans right now. Please try again.', 400);
+      const plans = sortPlans((data.plans || []).map((plan) => ({
+        id: `${network}-${plan.code}`,
+        network,
+        dataAmount: plan.label,
+        price: Number(plan.price),
+        validity: '',
+        planType: plan.category || 'GENERAL',
+        type: plan.category || 'GENERAL',
+        planToken: plan.selectionToken,
+        purchaseAvailable: plan.purchaseAvailable !== false,
+      })));
+      planCache.set(cacheKey, { plans, expiresAt: Date.now() + 30_000 });
+      return plans;
+    } finally {
+      planRequests.delete(cacheKey);
+    }
+  };
+
+  const request = executeRequest();
   planRequests.set(cacheKey, request);
   const plans = await request;
   return category

@@ -21,8 +21,10 @@ interface TransactionDetailModalProps {
   onClose: () => void;
 }
 
-function breakLongReference(value: string): string {
-  return value.length > 18 ? value.replace(/(.{4})(?=.)/g, "$1\u200B") : value;
+function breakLongReference(value: unknown): string {
+  if (value == null) return '';
+  const str = String(value);
+  return str.length > 18 ? str.replace(/(.{4})(?=.)/g, "$1\u200B") : str;
 }
 
 export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
@@ -40,9 +42,11 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const isDataBundle = transaction.type === 'DATA';
 
   const handleCopyRef = async () => {
-    await Clipboard.setStringAsync(transaction.reference);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (transaction.reference != null) {
+      await Clipboard.setStringAsync(String(transaction.reference));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleCopyToken = async () => {
@@ -135,10 +139,7 @@ export const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
               <View style={styles.row}>
                 <Text style={styles.label}>Reference</Text>
                 <Pressable style={styles.refBox} onPress={handleCopyRef}>
-                  <Text
-                    style={styles.value}
-                    accessibilityLabel={transaction.reference}
-                  >
+                  <Text style={styles.value}>
                     {breakLongReference(transaction.reference)}
                   </Text>
                   <Ionicons

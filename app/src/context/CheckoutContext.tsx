@@ -102,15 +102,11 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
 
       if (draft.planToken) body.planToken = draft.planToken;
-      if (draft.meterNumber && draft.type === 'ELECTRICITY') body.meterNumber = String(draft.meterNumber).replace(/\D/g, '');
-      if (draft.meterNumber && draft.type === 'CABLE_TV') body.smartcardNumber = String(draft.meterNumber).replace(/\D/g, '');
+      if (draft.meterNumber && draft.type === 'ELECTRICITY') body.meterNumber = draft.meterNumber;
+      if (draft.meterNumber && draft.type === 'CABLE_TV') body.smartcardNumber = draft.meterNumber;
       if (draft.meterType) body.meterType = draft.meterType;
-      if (draft.type === 'CABLE_TV') {
-        body.provider = String(draft.network || draft.billerName || '').trim().toUpperCase() || undefined;
-      }
-      if (draft.type === 'ELECTRICITY') {
-        body.provider = String(draft.network || draft.billerName || '').trim().toUpperCase() || undefined;
-      }
+      if (draft.type === 'CABLE_TV' && draft.billerName) body.provider = draft.billerName;
+      if (draft.type === 'ELECTRICITY' && draft.network) body.provider = draft.network;
 
       const { data: result, error } = await supabase.functions.invoke<{
         reference?: string;
@@ -157,8 +153,18 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try { draft.onSuccess(); } catch {}
       }
       return true;
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Purchase failed. Please try again.';
+    } catch (err: any) {
+      let msg = 'Purchase failed. Please try again.';
+      if (err instanceof ApiError) {
+        msg = err.message;
+      } else if (err?.context instanceof Response) {
+        try {
+          const body = await err.context.clone().json();
+          if (body?.message) msg = body.message;
+        } catch {}
+      } else if (err?.message) {
+        msg = err.message;
+      }
       setPurchaseError(msg);
       return false;
     }

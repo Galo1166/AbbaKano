@@ -19,6 +19,31 @@ export const CheckoutSheet: React.FC = () => {
   const { mainBalance, theme: Palette } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
 
+  const cleanServiceTitle = useMemo(() => {
+    if (!draft) return '';
+    if (draft.type === 'DATA') {
+      const net = draft.network ? draft.network.toUpperCase() : '';
+      return `${net} Data Bundle`.trim();
+    }
+    // Deduplicate repeated consecutive words like "AIRTEL AIRTEL"
+    let title = draft.title.replace(/\b([A-Za-z]+)\s+\1\b/gi, '$1');
+    return title;
+  }, [draft]);
+
+  const cleanPlanName = useMemo(() => {
+    if (!draft || !draft.planName) return null;
+    let name = draft.planName.trim();
+    // If name begins with network name (e.g. "AIRTEL GIFTING 1.0GB"), strip redundant network name
+    if (draft.network && name.toUpperCase().startsWith(draft.network.toUpperCase())) {
+      name = name.slice(draft.network.length).trim();
+    }
+    // Deduplicate consecutive words
+    name = name.replace(/\b([A-Za-z]+)\s+\1\b/gi, '$1');
+    // Deduplicate duplicate "(30 Days) (30 Days)"
+    name = name.replace(/\s*\(\s*(\d+\s*days?)\s*\)\s*\(\s*\1\s*\)/gi, ' ($1)');
+    return name;
+  }, [draft]);
+
   if (!draft) return null;
 
   const totalPayable = draft.amount + draft.fee;
@@ -61,34 +86,40 @@ export const CheckoutSheet: React.FC = () => {
             <View style={styles.breakdownBox}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Service</Text>
-                <Text style={styles.detailValue}>{draft.title}</Text>
+                <Text style={styles.detailValue} numberOfLines={2}>
+                  {cleanServiceTitle}
+                </Text>
               </View>
 
               <View style={styles.divider} />
 
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Beneficiary / Recipient</Text>
-                <Text style={[styles.detailValue, styles.highlightValue]}>
+                <Text style={styles.detailLabel}>Recipient</Text>
+                <Text style={[styles.detailValue, styles.highlightValue]} numberOfLines={1}>
                   {draft.recipient}
                 </Text>
               </View>
 
-              {draft.planName && (
+              {cleanPlanName ? (
                 <>
                   <View style={styles.divider} />
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Package / Plan</Text>
-                    <Text style={styles.detailValue}>{draft.planName}</Text>
+                    <Text style={styles.detailLabel}>Plan / Package</Text>
+                    <Text style={styles.detailValue} numberOfLines={2}>
+                      {cleanPlanName}
+                    </Text>
                   </View>
                 </>
-              )}
+              ) : null}
 
               {draft.fee > 0 && (
                 <>
                   <View style={styles.divider} />
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Convenience Fee</Text>
-                    <Text style={styles.detailValue}>₦{draft.fee.toLocaleString()}</Text>
+                    <Text style={styles.detailValue} numberOfLines={1}>
+                      ₦{draft.fee.toLocaleString()}
+                    </Text>
                   </View>
                 </>
               )}
@@ -97,27 +128,34 @@ export const CheckoutSheet: React.FC = () => {
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Payment Method</Text>
-                <Text style={styles.detailValue}>AbbaKano Main Wallet</Text>
+                <Text style={styles.detailValue} numberOfLines={1}>
+                  AbbaKano Main Wallet
+                </Text>
               </View>
 
               <View style={styles.divider} />
 
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Current Wallet Balance</Text>
-                <Text style={styles.detailValue}>₦{mainBalance.toLocaleString()}</Text>
+                <Text style={styles.detailLabel}>Current Balance</Text>
+                <Text style={styles.detailValue} numberOfLines={1}>
+                  ₦{mainBalance.toLocaleString()}
+                </Text>
               </View>
 
               <View style={styles.divider} />
 
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Balance After Transaction</Text>
+                <Text style={styles.detailLabel}>Balance After</Text>
                 <Text
                   style={[
                     styles.detailValue,
                     { color: hasSufficientBalance ? Palette.tertiary : Palette.error },
                   ]}
+                  numberOfLines={1}
                 >
-                  ₦{balanceAfter.toLocaleString()}
+                  {balanceAfter < 0
+                    ? `-₦${Math.abs(balanceAfter).toLocaleString()}`
+                    : `₦${balanceAfter.toLocaleString()}`}
                 </Text>
               </View>
             </View>
@@ -202,8 +240,9 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Palette.surfaceLow,
     borderRadius: Rounded.xl,
-    padding: Spacing.four,
-    marginBottom: Spacing.four,
+    paddingVertical: Spacing.four,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.three,
     borderWidth: 1,
     borderColor: Palette.border,
   },
@@ -212,10 +251,11 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
     fontWeight: '700',
     color: Palette.onSurfaceMuted,
     letterSpacing: 1,
+    textTransform: 'uppercase',
     marginBottom: 4,
   },
   calloutAmount: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: Palette.onSurface,
     fontVariant: ['tabular-nums'],
@@ -223,23 +263,33 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   breakdownBox: {
     backgroundColor: Palette.surfaceLow,
     borderRadius: Rounded.lg,
-    padding: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
     marginBottom: Spacing.three,
+    borderWidth: 1,
+    borderColor: Palette.border,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: 10,
+    gap: 12,
   },
   detailLabel: {
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '500',
     color: Palette.onSurfaceMuted,
+    flex: 1,
+    lineHeight: 18,
   },
   detailValue: {
+    flex: 1.5,
     fontSize: 13,
     fontWeight: '600',
     color: Palette.onSurface,
+    textAlign: 'right',
+    lineHeight: 18,
   },
   highlightValue: {
     color: Palette.primaryLight,
@@ -248,7 +298,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Palette.border,
-    marginVertical: 2,
+    opacity: 0.6,
   },
   warningBox: {
     flexDirection: 'row',

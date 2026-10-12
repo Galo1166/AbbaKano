@@ -87,8 +87,9 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* === DEDICATED TRANSFER ACCOUNTS === */}
+        {/* === DEDICATED TRANSFER ACCOUNTS (MONNIFY 3-BANK ENGINE) === */}
         <View style={styles.accountsSectionHeader}>
           <View style={styles.accountsSectionLeft}>
             <MaterialIcons
@@ -96,120 +97,138 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
               size={20}
               color={Palette.primary}
             />
-            <Text style={styles.accountsSectionTitle}>
-              Dedicated Transfer Accounts
+            <Text style={styles.accountsSectionTitle} numberOfLines={1}>
+              Dedicated Virtual Accounts
             </Text>
           </View>
           <View style={styles.autoSyncBadge}>
             <View style={styles.autoSyncDot} />
-            <Text style={styles.autoSyncText}>AUTO-SYNC</Text>
+            <Text style={styles.autoSyncText}>MONNIFY SYNC</Text>
           </View>
         </View>
 
-        {/* Moniepoint Account (Primary) */}
-        {virtualAccounts.map((account, idx) => (
-          <View key={idx} style={styles.accountCard}>
-            <View style={styles.accountCardTop}>
-              <View style={styles.accountLeft}>
-                <View style={styles.accountIconBox}>
-                  <MaterialIcons
-                    name={idx === 0 ? "payments" : "account-balance-wallet"}
-                    size={20}
-                    color={
-                      idx === 0 ? Palette.primary : Palette.onSurfaceVariant
-                    }
-                  />
+        <Text style={styles.accountsSubtitle}>
+          Choose any of your 3 dedicated bank accounts. Transfers reflect automatically in 15–30 seconds.
+        </Text>
+
+        {/* 3 Virtual Accounts (Moniepoint, Sterling, Wema / Others) */}
+        {virtualAccounts.map((account, idx) => {
+          const isMoniepoint = /moniepoint/i.test(account.bankName);
+          const isSterling = /sterling/i.test(account.bankName);
+          const isWema = /wema/i.test(account.bankName);
+          const brandColor = isMoniepoint ? '#0047cc' : isSterling ? '#d32f2f' : isWema ? '#93186c' : Palette.primary;
+          const badgeText = isMoniepoint ? 'Fastest • Recommended' : isSterling ? 'Monnify Dedicated' : 'Backup Desk';
+          const subLabel = isMoniepoint ? 'Automated Virtual Gateway • ~15s' : isSterling ? 'Monnify Dedicated Reserve Desk' : 'Automated Virtual Desk • < 30s';
+
+          return (
+            <View
+              key={idx}
+              style={[
+                styles.accountCard,
+                idx === 0 && { borderColor: brandColor },
+              ]}
+            >
+              <View style={styles.accountCardTop}>
+                <View style={styles.accountLeft}>
+                  <View style={[styles.accountIconBox, { backgroundColor: `${brandColor}18` }]}>
+                    <MaterialIcons
+                      name={isMoniepoint ? "bolt" : isSterling ? "account-balance" : "credit-card"}
+                      size={20}
+                      color={brandColor}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.bankName, { color: brandColor }]} numberOfLines={1}>
+                      {account.bankName}
+                    </Text>
+                    <Text style={styles.bankSubLabel} numberOfLines={1} ellipsizeMode="tail">
+                      {subLabel}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.bankName}>{account.bankName}</Text>
-                  <Text style={styles.bankSubLabel}>
-                    {idx === 0
-                      ? "Automated Virtual Gateway"
-                      : "Backup Virtual Desk"}
+                <View
+                  style={[
+                    styles.recommendedBadge,
+                    { backgroundColor: `${brandColor}15` },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="verified"
+                    size={13}
+                    color={brandColor}
+                  />
+                  <Text style={[styles.recommendedText, { color: brandColor }]}>
+                    {badgeText}
                   </Text>
                 </View>
               </View>
-              {idx === 0 ? (
-                <View style={styles.recommendedBadge}>
+
+              {/* Account Number Row */}
+              <View style={styles.accountNumberBox}>
+                <Text style={styles.accountNumberLabel}>Account Number</Text>
+                <View style={styles.accountNumberRow}>
+                  <Text
+                    style={[
+                      styles.accountNumber,
+                      { color: brandColor },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {account.accountNumber}
+                  </Text>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.copyBtn,
+                      pressed && { opacity: 0.75 },
+                    ]}
+                    onPress={() =>
+                      handleCopy(
+                        account.accountNumber.replace(/\s/g, ""),
+                        account.accountNumber,
+                      )
+                    }
+                  >
+                    <MaterialIcons
+                      name={
+                        copiedAccount === account.accountNumber.replace(/\s/g, "")
+                          ? "check"
+                          : "content-copy"
+                      }
+                      size={16}
+                      color={brandColor}
+                    />
+                    <Text style={[styles.copyBtnText, { color: brandColor }]}>
+                      {copiedAccount === account.accountNumber.replace(/\s/g, "")
+                        ? "Copied!"
+                        : "Copy"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Account Name Row */}
+              <View style={styles.accountNameRow}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.accountNameLabel} numberOfLines={1}>
+                    Beneficiary Account Name
+                  </Text>
+                  <Text style={styles.accountNameValue} numberOfLines={1} ellipsizeMode="tail">
+                    {account.accountName}
+                  </Text>
+                </View>
+                <View style={styles.verifiedBadge}>
                   <MaterialIcons
-                    name="bolt"
+                    name="check-circle"
                     size={14}
                     color={Palette.tertiary}
                   />
-                  <Text style={styles.recommendedText}>Recommended</Text>
+                  <Text style={styles.verifiedText}>Auto-Credit</Text>
                 </View>
-              ) : (
-                <View style={styles.altBadge}>
-                  <Text style={styles.altBadgeText}>Alternative</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Account Number Row */}
-            <View style={styles.accountNumberBox}>
-              <Text style={styles.accountNumberLabel}>Account Number</Text>
-              <View style={styles.accountNumberRow}>
-                <Text
-                  style={[
-                    styles.accountNumber,
-                    idx === 0 && { color: Palette.primary },
-                  ]}
-                >
-                  {account.accountNumber}
-                </Text>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.copyBtn,
-                    pressed && { opacity: 0.75 },
-                  ]}
-                  onPress={() =>
-                    handleCopy(
-                      account.accountNumber.replace(/\s/g, ""),
-                      account.accountNumber,
-                    )
-                  }
-                >
-                  <MaterialIcons
-                    name={
-                      copiedAccount === account.accountNumber.replace(/\s/g, "")
-                        ? "check"
-                        : "content-copy"
-                    }
-                    size={16}
-                    color={
-                      idx === 0 ? Palette.primary : Palette.onSurfaceVariant
-                    }
-                  />
-                  <Text style={styles.copyBtnText}>
-                    {copiedAccount === account.accountNumber.replace(/\s/g, "")
-                      ? "Copied!"
-                      : "Copy"}
-                  </Text>
-                </Pressable>
               </View>
             </View>
-
-            {/* Account Name Row */}
-            <View style={styles.accountNameRow}>
-              <View>
-                <Text style={styles.accountNameLabel}>
-                  Beneficiary Account Name
-                </Text>
-                <Text style={styles.accountNameValue}>
-                  {account.accountName}
-                </Text>
-              </View>
-              <View style={styles.verifiedBadge}>
-                <MaterialIcons
-                  name="check-circle"
-                  size={14}
-                  color={Palette.tertiary}
-                />
-                <Text style={styles.verifiedText}>Verified</Text>
-              </View>
-            </View>
-          </View>
-        ))}
+          );
+        })}
 
         {/* === CARD & BANK TRANSFER (Paystack) === */}
         <View style={styles.gatewayCard}>
@@ -316,17 +335,29 @@ const getStyles = (Palette: PaletteType) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      gap: 8,
     },
     accountsSectionLeft: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
+      flex: 1,
+      flexShrink: 1,
     },
     accountsSectionTitle: {
-      fontSize: 18,
+      fontSize: 15,
       fontWeight: "700",
       color: Palette.onSurface,
       fontFamily: Typography.family,
+      flexShrink: 1,
+    },
+    accountsSubtitle: {
+      fontSize: 12,
+      color: Palette.onSurfaceVariant,
+      fontFamily: Typography.family,
+      lineHeight: 18,
+      marginTop: -Spacing.two,
+      marginBottom: Spacing.one,
     },
     autoSyncBadge: {
       flexDirection: "row",
@@ -364,11 +395,16 @@ const getStyles = (Palette: PaletteType) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 8,
     },
     accountLeft: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.two,
+      flex: 1,
+      flexShrink: 1,
+      minWidth: 0,
     },
     accountIconBox: {
       width: 32,
@@ -397,6 +433,8 @@ const getStyles = (Palette: PaletteType) =>
       borderRadius: Rounded.full,
       paddingHorizontal: 8,
       paddingVertical: 4,
+      flexShrink: 0,
+      overflow: "hidden",
     },
     recommendedText: {
       fontSize: 11,
@@ -440,6 +478,8 @@ const getStyles = (Palette: PaletteType) =>
       color: Palette.onSurface,
       letterSpacing: 2,
       fontFamily: Typography.family,
+      flex: 1,
+      minWidth: 0,
     },
     copyBtn: {
       flexDirection: "row",

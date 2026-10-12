@@ -25,6 +25,7 @@ export const ElectricityView: React.FC<ElectricityViewProps> = ({ onBackPress })
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <ElectricityBillerCard />
         <View style={{ height: 100 }} />

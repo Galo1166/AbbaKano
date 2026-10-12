@@ -5,6 +5,7 @@ import {
   TransactionRecord,
   KycTierInfo,
   MOCK_KYC_TIERS,
+  MOCK_VIRTUAL_ACCOUNTS,
 } from '@/constants/mockData';
 import { getPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
@@ -51,18 +52,20 @@ function mapServerTx(tx: any): TransactionRecord {
     pending: 'PENDING',
     failed: 'FAILED',
   };
+  const rawRef = tx.reference ?? tx.id;
+  const refString = rawRef != null ? String(rawRef) : `TX-${Date.now()}`;
   return {
-    id: tx.id,
-    reference: tx.id,
+    id: String(tx.id ?? refString),
+    reference: refString,
     type: (typeMap[tx.type] || 'DATA') as any,
-    title: tx.label || tx.type,
-    description: tx.label || '',
-    amount: tx.amount || 0,
+    title: String(tx.label || tx.type || 'Transaction'),
+    description: String(tx.label || ''),
+    amount: Number(tx.amount || 0),
     fee: 0,
     status: (statusMap[tx.status] || 'PENDING') as any,
     date: tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-NG') : 'Recently',
     timestamp: tx.created_at ? new Date(tx.created_at).getTime() : Date.now(),
-    recipient: '',
+    recipient: String(tx.recipient || tx.account_number || ''),
   };
 }
 
@@ -83,7 +86,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [referralCommissionBalance, setReferralCommissionBalance] = useState<number>(0);
   const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
+  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>(MOCK_VIRTUAL_ACCOUNTS);
   const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 
@@ -133,14 +136,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           type: String(tx.transaction_type || '').toLowerCase(),
           amount: Number(tx.amount_kobo || 0) / 100,
           label: tx.account_number || tx.transaction_type,
-          reference: tx.id,
+          reference: String(tx.id),
         }));
         const deposits = depositRes.status === 'fulfilled' && !depositRes.value.error
           ? (depositRes.value.data || []).map((deposit) => mapServerTx({
             ...deposit,
             type: 'deposit',
             amount: Number(deposit.amount_kobo || 0) / 100,
-            label: deposit.reference || 'Wallet funding',
+            label: deposit.reference ? `Deposit (${deposit.reference})` : 'Wallet funding',
+            reference: deposit.reference || deposit.id,
           }))
           : [];
         setTransactions([...vtuTransactions, ...deposits].sort((a, b) => b.timestamp - a.timestamp));

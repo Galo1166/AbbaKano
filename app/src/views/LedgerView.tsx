@@ -21,8 +21,10 @@ type FilterStatus = 'ALL' | 'SUCCESSFUL' | 'PENDING' | 'FAILED';
 
 const FILTER_CATEGORIES: FilterCategory[] = ['All', 'Data', 'Airtime', 'Wallet Deposits', 'Electricity'];
 
-function breakLongReference(value: string): string {
-  return value.length > 18 ? value.replace(/(.{4})(?=.)/g, "$1\u200B") : value;
+function breakLongReference(value: unknown): string {
+  if (value == null) return '';
+  const str = String(value);
+  return str.length > 18 ? str.replace(/(.{4})(?=.)/g, "$1\u200B") : str;
 }
 
 export const LedgerView: React.FC = () => {
@@ -31,17 +33,23 @@ export const LedgerView: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<FilterCategory>('All');
   const [selectedTx, setSelectedTx] = useState<TransactionRecord | null>(null);
 
-  // Stats from transactions
+  // Stats from transactions: Only settled/successful transactions count towards verified inflow/outflow
   const stats = useMemo(() => {
-    const outflows = transactions.filter((t) => t.type !== 'FUND_WALLET');
-    const inflows = transactions.filter((t) => t.type === 'FUND_WALLET');
+    const successfulTx = transactions.filter((t) => t.status === 'SUCCESSFUL');
+    const outflows = successfulTx.filter((t) => t.type !== 'FUND_WALLET');
+    const inflows = successfulTx.filter((t) => t.type === 'FUND_WALLET');
     return {
-      outflowTotal: outflows.reduce((sum, t) => sum + t.amount, 0),
+      outflowTotal: outflows.reduce((sum, t) => sum + (Number(t.amount) || 0), 0),
       outflowCount: outflows.length,
-      inflowTotal: inflows.reduce((sum, t) => sum + t.amount, 0),
+      inflowTotal: inflows.reduce((sum, t) => sum + (Number(t.amount) || 0), 0),
       inflowCount: inflows.length,
     };
   }, [transactions]);
+
+  const currentMonthLabel = useMemo(() => {
+    const now = new Date();
+    return `${now.toLocaleString('en-US', { month: 'long', year: 'numeric' })} Ledger`;
+  }, []);
 
   const filteredTx = useMemo(() => {
     if (activeCategory === 'All') return transactions;
@@ -135,7 +143,7 @@ export const LedgerView: React.FC = () => {
         {/* === MONTH HEADER === */}
         <View style={styles.monthHeader}>
           <MaterialIcons name="calendar-month" size={18} color={Palette.primary} />
-          <Text style={styles.monthLabel}>February 2025 Ledger</Text>
+          <Text style={styles.monthLabel}>{currentMonthLabel}</Text>
         </View>
 
         {/* === VERIFIED LEDGER STATS CARD === */}
@@ -265,25 +273,27 @@ export const LedgerView: React.FC = () => {
 
               <View style={styles.txDetailRows}>
                 {[
-                  { label: 'Reference', value: selectedTx.reference },
-                  { label: 'Status', value: selectedTx.status },
-                  { label: 'Recipient', value: selectedTx.recipient },
-                  { label: 'Date', value: selectedTx.date },
-                ].map(({ label, value }) => (
-                  <View key={label} style={styles.txDetailRow}>
-                    <Text style={styles.txDetailRowLabel}>{label}</Text>
-                    <Text
-                      style={[
-                        styles.txDetailRowValue,
-                        label === 'Reference' && styles.txDetailReferenceValue,
-                      ]}
-                      numberOfLines={label === 'Reference' ? 4 : 2}
-                      accessibilityLabel={label === 'Reference' ? value : undefined}
-                    >
-                      {label === 'Reference' ? breakLongReference(value) : value}
-                    </Text>
-                  </View>
-                ))}
+                  { label: 'Reference', value: selectedTx.reference ? String(selectedTx.reference) : 'N/A' },
+                  { label: 'Status', value: selectedTx.status ? String(selectedTx.status) : 'UNKNOWN' },
+                  { label: 'Recipient', value: selectedTx.recipient ? String(selectedTx.recipient) : 'N/A' },
+                  { label: 'Date', value: selectedTx.date ? String(selectedTx.date) : 'N/A' },
+                ].map(({ label, value }) => {
+                  const displayValue = String(value ?? '');
+                  return (
+                    <View key={label} style={styles.txDetailRow}>
+                      <Text style={styles.txDetailRowLabel}>{label}</Text>
+                      <Text
+                        style={[
+                          styles.txDetailRowValue,
+                          label === 'Reference' && styles.txDetailReferenceValue,
+                        ]}
+                        numberOfLines={label === 'Reference' ? 4 : 2}
+                      >
+                        {label === 'Reference' ? breakLongReference(displayValue) : displayValue}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
 
               {/* High-Contrast Electricity Token Card */}

@@ -6,7 +6,7 @@ import { FormInput } from '@/components/common/FormInput';
 import { Button } from '@/components/common/Button';
 import { useCheckout } from '@/context/CheckoutContext';
 import { useApp } from '@/context/AppContext';
-import { supabase } from '@/lib/supabase';
+import { api, ApiError } from '@/lib/api';
 
 const ELECTRICITY_DISCOS = [
   { id: 'aedc', code: 'AEDC', name: 'Abuja Electricity' },
@@ -47,68 +47,44 @@ export const ElectricityBillerCard: React.FC = () => {
   }, [paymentSuccessCount]);
 
   useEffect(() => {
-    const cleanMeterNumber = meterNumber.replace(/\D/g, '');
-    if (!/^\d{8,14}$/.test(cleanMeterNumber)) {
+    if (meterNumber.length < 8) {
       setVerifiedCustomer(null);
       setPlanToken(null);
       return;
     }
-
     let cancelled = false;
     setLoading(true);
     setErrorMessage(null);
-
+    const meterTypeQuery = meterType === 'POSTPAID' ? 'postpaid' : 'prepaid';
     void Promise.all([
-      supabase.functions.invoke<{ customerName?: string; customerAddress?: string; selectionToken?: string }>('electricity-services', {
-        body: {
-          action: 'verify-meter',
-          provider: selectedDisCo.code,
-          meterNumber: cleanMeterNumber,
-          disco: selectedDisCo.id,
-        },
-      }),
-      supabase.functions.invoke<{ plans?: Array<{ selectionToken?: string; code?: string }> }>('electricity-services', {
-        body: {
-          action: 'plans',
-          provider: selectedDisCo.code,
-        },
-      }),
-    ]).then(([verificationResult, plansResult]) => {
+      api.post<{ customerName?: string; customerAddress?: string }>('/vtu/verify-electricity', { provider: selectedDisCo.id, meterNumber }),
+      api.get<{ plans: Array<{ selectionToken?: string }> }>(`/vtu/service-plans?service=electricity&provider=${selectedDisCo.id}&meterType=${meterTypeQuery}`),
+    ]).then(([verification, plansResponse]) => {
       if (cancelled) return;
-      if (verificationResult.error) throw verificationResult.error;
-      if (plansResult.error) throw plansResult.error;
-      const verification = verificationResult.data;
-      const plans = plansResult.data;
-      setVerifiedCustomer(verification?.customerName || verification?.customerAddress || null);
-      setPlanToken(verification?.selectionToken || plans?.plans?.[0]?.selectionToken || null);
+      setVerifiedCustomer(verification.customerName || verification.customerAddress || null);
+      setPlanToken(plansResponse.plans?.[0]?.selectionToken || null);
     }).catch((error) => {
-      if (!cancelled) {
-        const message = error instanceof Error ? error.message : 'Could not verify this meter.';
-        setErrorMessage(message);
-      }
+      if (!cancelled) setErrorMessage(error instanceof ApiError ? error.message : 'Could not verify this meter.');
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [meterNumber, selectedDisCo.code, selectedDisCo.id]);
+  }, [meterNumber, meterType, selectedDisCo.id]);
 
   const presetAmounts = ['1000', '2000', '3000', '5000', '10000', '20000'];
 
   const handlePay = () => {
-    const cleanMeterNumber = meterNumber.replace(/\D/g, '');
     const numAmount = parseInt(amount, 10);
     if (isNaN(numAmount) || numAmount < 500) return;
-    if (!/^\d{8,14}$/.test(cleanMeterNumber)) return;
+    if (meterNumber.length < 11) return;
 
     startCheckout({
       type: 'ELECTRICITY',
       title: `${selectedDisCo.name} ${meterType}`,
       serviceName: `${selectedDisCo.name} Electricity Token`,
-      recipient: cleanMeterNumber,
+      recipient: meterNumber,
       amount: numAmount,
       fee: 100,
-      billerName: selectedDisCo.code,
-      meterNumber: cleanMeterNumber,
+      billerName: selectedDisCo.name,
       planToken: planToken || undefined,
-      meterType,
       units: `${(numAmount / 72.5).toFixed(1)} kWh`,
       onSuccess: clearInputs,
     });
@@ -156,6 +132,9 @@ export const ElectricityBillerCard: React.FC = () => {
             >
               <Text
                 style={[styles.meterTypeText, isSelected && styles.meterTypeTextActive]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
               >
                 {type === 'PREPAID' ? 'Prepaid (Token Code)' : 'Postpaid (Bill Payment)'}
               </Text>
@@ -171,7 +150,7 @@ export const ElectricityBillerCard: React.FC = () => {
         value={meterNumber}
         onChangeText={setMeterNumber}
         keyboardType="numeric"
-        maxLength={14}
+        maxLength={11}
         leftIcon={<MaterialCommunityIcons name="counter" size={18} color={Palette.onSurfaceMuted} />}
       />
 
@@ -276,6 +255,7 @@ const getStyles = (Palette: PaletteType) => StyleSheet.create({
   meterTypeBtn: {
     flex: 1,
     paddingVertical: 9,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Rounded.md,
