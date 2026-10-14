@@ -151,6 +151,7 @@ export function DataPurchaseShell() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [hasPasskey, setHasPasskey] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
   function goHome() {
@@ -245,6 +246,7 @@ export function DataPurchaseShell() {
       return;
     }
     setErrorMessage("");
+    setIdempotencyKey(crypto.randomUUID());
     setShowCheckout(true);
   }
 
@@ -262,6 +264,7 @@ export function DataPurchaseShell() {
         planCode: selectedPlan.code,
         selectionToken: selectedPlan.selectionToken,
         phone,
+        idempotencyKey,
         webauthnResponse: authResponse,
       });
 
@@ -301,6 +304,7 @@ export function DataPurchaseShell() {
         selectionToken: selectedPlan.selectionToken,
         phone,
         pin,
+        idempotencyKey,
       });
 
       setReceipt({
