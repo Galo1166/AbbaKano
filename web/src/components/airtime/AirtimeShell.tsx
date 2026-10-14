@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { startAuthentication } from "@simplewebauthn/browser";
+import {
+  startAuthentication,
+  type PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
 import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
 import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
@@ -18,6 +21,12 @@ type Receipt = {
   network: Network;
   phone: string;
   amount: number;
+};
+
+type AirtimePurchaseResponse = {
+  status?: string;
+  message?: string;
+  reference?: string;
 };
 
 const presets = [100, 200, 500, 1000, 2000, 5000, 10000];
@@ -105,20 +114,34 @@ export function AirtimeShell() {
     setMessage("");
 
     try {
-      const optionsRes = await invokeSupabaseFunction<{ options: any }>("webauthn-authenticate-options", {});
-      const authResponse = await startAuthentication({ optionsJSON: optionsRes.options });
+      const options = await invokeSupabaseFunction<PublicKeyCredentialRequestOptionsJSON>("passkey-auth", {
+        action: "transaction-options",
+        purchase: {
+          network: selectedNetwork,
+          phone,
+          purchaseType: "AIRTIME",
+          amount: numericAmount,
+        },
+      });
+      const authResponse = await startAuthentication({ optionsJSON: options });
+      const { transactionAuthorization } = await invokeSupabaseFunction<{
+        transactionAuthorization: string;
+      }>("passkey-auth", {
+        action: "transaction-verify",
+        response: authResponse,
+      });
 
-      const purchaseRes = await invokeSupabaseFunction<any>("process-airtime-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<AirtimePurchaseResponse>("purchase-airtime", {
         network: selectedNetwork,
         phone,
         amount: numericAmount,
         idempotencyKey,
-        webauthnResponse: authResponse,
+        transactionAuthorization,
       });
 
       setReceipt({
         status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Airtime recharge successful!",
+        message: sanitizeServiceMessage(purchaseRes.message || "Airtime recharge successful!") || "Airtime recharge successful!",
         reference: purchaseRes.reference || `AIR-${Date.now()}`,
         network: selectedNetwork,
         phone,
@@ -128,7 +151,7 @@ export function AirtimeShell() {
       setPin("");
       const updatedBal = await getWalletBalance();
       setBalance(updatedBal);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessage(safeErrorMessage(err, "An error occurred.") || "Biometric authentication failed.");
     } finally {
       setPurchasing(false);
@@ -147,7 +170,7 @@ export function AirtimeShell() {
     setMessage("");
 
     try {
-      const purchaseRes = await invokeSupabaseFunction<any>("process-airtime-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<AirtimePurchaseResponse>("purchase-airtime", {
         network: selectedNetwork,
         phone,
         amount: numericAmount,
@@ -157,7 +180,7 @@ export function AirtimeShell() {
 
       setReceipt({
         status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Airtime recharge successful!",
+        message: sanitizeServiceMessage(purchaseRes.message || "Airtime recharge successful!") || "Airtime recharge successful!",
         reference: purchaseRes.reference || `AIR-${Date.now()}`,
         network: selectedNetwork,
         phone,
@@ -167,7 +190,7 @@ export function AirtimeShell() {
       setPin("");
       const updatedBal = await getWalletBalance();
       setBalance(updatedBal);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessage(safeErrorMessage(err, "An error occurred.") || "Airtime purchase could not be completed.");
     } finally {
       setPurchasing(false);
