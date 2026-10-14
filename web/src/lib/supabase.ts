@@ -100,12 +100,16 @@ export async function getWalletBalance(): Promise<number> {
   if (authError) throw authError;
   if (!user) throw new Error("Authentication required.");
 
-  const { data: wallet, error: walletError } = await supabase
-    .from("wallets")
-    .select("balance_kobo")
-    .eq("user_id", user.id)
-    .single();
+  const [walletRes, resvRes] = await Promise.all([
+    supabase.from("wallets").select("balance_kobo").eq("user_id", user.id).maybeSingle(),
+    supabase.from("wallet_reservations").select("amount_kobo").eq("user_id", user.id).eq("status", "held"),
+  ]);
 
-  if (walletError) throw walletError;
-  return Number(wallet.balance_kobo) / 100;
+  if (walletRes.error) throw walletRes.error;
+  const rawKobo = Number(walletRes.data?.balance_kobo || 0);
+  let heldKobo = 0;
+  if (!resvRes.error && Array.isArray(resvRes.data)) {
+    heldKobo = resvRes.data.reduce((sum, r) => sum + Number(r.amount_kobo || 0), 0);
+  }
+  return Math.max(0, rawKobo - heldKobo) / 100;
 }

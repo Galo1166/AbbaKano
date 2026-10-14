@@ -1,0 +1,30 @@
+{
+  "name": "AbbaKano DataSub",
+  "short_name": "AbbaKano",
+  "description": "One wallet for airtime, data, electricity, cable TV and bills in Nigeria.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0e14",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "48x48 96x96",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": [
+    "finance",
+    "utilities",
+    "productivity"
+  ]
+}

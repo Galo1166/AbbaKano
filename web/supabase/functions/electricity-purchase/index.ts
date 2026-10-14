@@ -101,7 +101,7 @@ async function vtuGateRequest(
       Accept: "application/json",
     },
     body: new URLSearchParams(params),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(45000),
   });
   const payload = await response.json().catch(() => null);
   return { response, payload };

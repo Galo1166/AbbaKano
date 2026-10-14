@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
@@ -77,22 +77,27 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser) return;
 
-        const [profileRes, walletRes] = await Promise.all([
+        const [profileRes, walletRes, resvRes] = await Promise.all([
           supabase.from("profiles").select("*").eq("id", authUser.id).maybeSingle(),
           supabase.from("wallets").select("balance_kobo").eq("user_id", authUser.id).maybeSingle(),
+          supabase.from("wallet_reservations").select("amount_kobo").eq("user_id", authUser.id).eq("status", "held"),
         ]);
 
         const profileData: any = profileRes.data || {};
         const walletData: any = walletRes.data || {};
+        const heldKobo = Array.isArray(resvRes.data)
+          ? resvRes.data.reduce((acc, r) => acc + Number(r.amount_kobo || 0), 0)
+          : 0;
+        const availableKobo = Math.max(0, Number(walletData.balance_kobo || 0) - heldKobo);
 
         setUser({
           full_name: profileData.full_name || authUser.user_metadata?.full_name || "Tester User",
           email: authUser.email || "tester@example.com",
-          phone: profileData.phone || authUser.phone || "+234 800 000 0000",
+          phone: profileData.phone || authUser.phone || authUser.user_metadata?.phone || "",
           role: profileData.role || "Customer",
         });
 
-        setBalance(Number(walletData.balance_kobo || 0) / 100);
+        setBalance(availableKobo / 100);
         setBiometrics(Boolean(profileData.biometrics_enabled));
         setAppLock(Boolean(profileData.app_lock_enabled));
         setHasPin(Boolean(profileData.has_transaction_pin || profileData.has_pin));
@@ -193,6 +198,18 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
   const displayName = user.full_name || user.fullName || "User";
   const initials = displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "U";
 
+  const formattedPhone = useMemo(() => {
+    if (!user.phone) return null;
+    const digits = user.phone.replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("0")) {
+      return `+234 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+    }
+    if (digits.length === 13 && digits.startsWith("234")) {
+      return `+234 ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
+    }
+    return user.phone;
+  }, [user.phone]);
+
   return (
     <main className={`min-h-screen transition-colors duration-200 antialiased pb-32 ${
       isDark ? "bg-[#0b0e14] text-white" : "bg-[#f8fafc] text-slate-900"
@@ -245,13 +262,24 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
               }`} />
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <h2 className={`text-base font-extrabold truncate ${isDark ? "text-white" : "text-slate-900"}`}>
                 {displayName}
               </h2>
-              <p className={`text-xs truncate mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                {user.phone} • {user.email}
-              </p>
+              <div className="flex flex-col gap-0.5">
+                {formattedPhone && (
+                  <div className="flex items-center gap-1.5 text-xs text-blue-500 font-semibold truncate">
+                    <span className="material-symbols-outlined text-[13px]">call</span>
+                    <span>{formattedPhone}</span>
+                  </div>
+                )}
+                {user.email && (
+                  <div className={`flex items-center gap-1.5 text-xs truncate ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    <span className="material-symbols-outlined text-[13px]">mail</span>
+                    <span className="truncate">{user.email}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

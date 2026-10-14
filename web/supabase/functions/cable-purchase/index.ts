@@ -290,7 +290,7 @@ Deno.serve(async (req) => {
           plan_code: selection.planCode,
           plan_name: selection.label,
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(45000),
       });
       providerPayload = await providerResponse.json().catch(() => null);
     } catch (providerError) {
