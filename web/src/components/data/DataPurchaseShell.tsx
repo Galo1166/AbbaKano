@@ -257,7 +257,7 @@ export function DataPurchaseShell() {
       const optionsRes = await invokeSupabaseFunction<{ options: any }>("webauthn-authenticate-options", {});
       const authResponse = await startAuthentication({ optionsJSON: optionsRes.options });
 
-      const purchaseRes = await invokeSupabaseFunction<any>("process-data-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<any>("data-purchase", {
         network,
         planCode: selectedPlan.code,
         selectionToken: selectedPlan.selectionToken,
@@ -295,7 +295,7 @@ export function DataPurchaseShell() {
     setErrorMessage("");
 
     try {
-      const purchaseRes = await invokeSupabaseFunction<any>("process-data-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<any>("data-purchase", {
         network,
         planCode: selectedPlan.code,
         selectionToken: selectedPlan.selectionToken,
