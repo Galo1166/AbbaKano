@@ -36,8 +36,14 @@ function formatNaira(amount: number) {
 }
 
 function normalizedStatus(value?: string): Status {
-  const status = value?.toLowerCase();
-  return status === "success" || status === "failed" ? status : "pending";
+  const status = value?.toLowerCase().trim();
+  if (["success", "successful", "completed", "delivered"].includes(status || "")) {
+    return "success";
+  }
+  if (["failed", "rejected", "reversed", "cancelled"].includes(status || "")) {
+    return "failed";
+  }
+  return "pending";
 }
 
 function transactionCategory(transaction: Transaction) {
@@ -486,9 +492,11 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
                 </div>
 
                 <div className="text-right shrink-0">
-                  <p className={`font-mono text-xs font-bold ${isCredit ? "text-emerald-500" : isDark ? "text-white" : "text-slate-900"}`}>
-                    {isCredit ? "+" : "-"}{formatNaira(Number(tx.amount || 0))}
-                  </p>
+                  {category !== "Data Bundles" && tx.type !== "data" && (
+                    <p className={`font-mono text-xs font-bold ${isCredit ? "text-emerald-500" : isDark ? "text-white" : "text-slate-900"}`}>
+                      {isCredit ? "+" : "-"}{formatNaira(Number(tx.amount || 0))}
+                    </p>
+                  )}
                   <span className={`inline-block mt-0.5 rounded px-1.5 py-0.2 text-[8px] font-bold uppercase ${
                     txStatus === "success"
                       ? "bg-emerald-500/10 text-emerald-500"
@@ -530,6 +538,7 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
               </button>
             </div>
 
+            {transactionCategory(selected) !== "Data Bundles" && selected.type !== "data" && (
             <div className={`my-3 rounded-2xl border p-4 text-center ${
               isDark ? "bg-[#181B25] border-[#222634]" : "bg-slate-50 border-slate-200"
             }`}>
@@ -538,6 +547,7 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
                 {formatNaira(Number(selected.amount || 0))}
               </p>
             </div>
+          )}
 
             <div className={`space-y-2 rounded-2xl border p-3.5 text-xs ${
               isDark ? "bg-[#181B25] border-[#222634]" : "bg-slate-50 border-slate-200"

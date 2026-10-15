@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import {  FormEvent, useEffect, useState , useRef } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
 import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
@@ -147,6 +147,7 @@ export function DataPurchaseShell() {
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+  const isExecutingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -251,7 +252,8 @@ export function DataPurchaseShell() {
   }
 
   async function handlePasskeyPurchase() {
-    if (!selectedPlan || !validPhone) return;
+    if (!selectedPlan || !validPhone || isExecutingRef.current || purchasing) return;
+    isExecutingRef.current = true;
     setPurchasing(true);
     setErrorMessage("");
 
@@ -282,18 +284,19 @@ export function DataPurchaseShell() {
     } catch (err: any) {
       setErrorMessage(safeErrorMessage(err, "An error occurred.") || "Biometric authentication failed.");
     } finally {
+      isExecutingRef.current = false;
       setPurchasing(false);
     }
   }
 
   async function handlePinPurchase(e: FormEvent) {
     e.preventDefault();
-    if (!selectedPlan || !validPhone) return;
+    if (!selectedPlan || !validPhone || isExecutingRef.current || purchasing) return;
     if (pin.length !== 4) {
       setErrorMessage("Enter your 4-digit transaction PIN.");
       return;
     }
-
+    isExecutingRef.current = true;
     setPurchasing(true);
     setErrorMessage("");
 
@@ -769,6 +772,12 @@ export function DataPurchaseShell() {
               </div>
             ) : (
             <form onSubmit={handlePinPurchase} className="space-y-4">
+              {purchasing && (
+                <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-blue-500/10 text-blue-500 text-xs font-bold animate-pulse">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                  <span>Securing & Processing Transaction...</span>
+                </div>
+              )}
               <div>
                 <label className={`block text-[11px] font-bold uppercase tracking-wider mb-2 text-center ${
                   isDark ? "text-slate-300" : "text-slate-700"
