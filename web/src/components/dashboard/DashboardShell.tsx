@@ -126,7 +126,7 @@ export function DashboardShell() {
           return;
         }
 
-        const [profileResult, walletResult, transactionsResult] = await Promise.all([
+        const [profileResult, walletResult, transactionsResult, resvResult] = await Promise.all([
           supabase
             .from("profiles")
             .select(`
@@ -161,6 +161,11 @@ export function DashboardShell() {
             .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(20),
+          supabase
+            .from("wallet_reservations")
+            .select("amount_kobo")
+            .eq("user_id", user.id)
+            .eq("status", "held"),
         ]);
 
         if (cancelled) return;
@@ -180,6 +185,13 @@ export function DashboardShell() {
           }),
         }));
 
+        const rawBalanceKobo = Number(wallet?.balance_kobo || 0);
+        let heldKobo = 0;
+        if (resvResult?.data && Array.isArray(resvResult.data)) {
+          heldKobo = resvResult.data.reduce((sum: number, row: any) => sum + Number(row.amount_kobo || 0), 0);
+        }
+        const availableBalance = Math.max(0, rawBalanceKobo - heldKobo) / 100;
+
         setData({
           user: {
             full_name: profile?.full_name || "",
@@ -188,7 +200,7 @@ export function DashboardShell() {
             biometrics_enabled: profile?.biometrics_enabled,
             app_lock_enabled: profile?.app_lock_enabled,
           },
-          balance: Number(wallet?.balance_kobo || 0) / 100,
+          balance: availableBalance,
           transactions,
         });
       } catch (error) {
@@ -210,6 +222,33 @@ export function DashboardShell() {
       cancelled = true;
     };
   }, [reloadKey, router]);
+
+  // Live Realtime updates for wallet balance and transactions
+  useEffect(() => {
+    let channel: any;
+    async function subscribeRealtime() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      channel = supabase
+        .channel(`dashboard-realtime-${user.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "wallets", filter: `user_id=eq.${user.id}` }, () => {
+          setReloadKey((k) => k + 1);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "wallet_reservations", filter: `user_id=eq.${user.id}` }, () => {
+          setReloadKey((k) => k + 1);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "vtu_transactions", filter: `user_id=eq.${user.id}` }, () => {
+          setReloadKey((k) => k + 1);
+        })
+        .subscribe();
+    }
+    void subscribeRealtime();
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
 
   useEffect(() => {
     function handleTabChange(event: Event) {
