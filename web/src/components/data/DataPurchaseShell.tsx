@@ -96,9 +96,20 @@ const categories: Array<{ id: Category; label: string }> = [
   { id: "DIRECT", label: "Direct" },
 ];
 
-const PLAN_CACHE_TTL_MS = 30_000;
+const PLAN_CACHE_TTL_MS = 15 * 60 * 1000;
 const planCache = new Map<Network, { plans: Plan[]; expiresAt: number }>();
 const planRequests = new Map<Network, Promise<Plan[]>>();
+
+export function getCachedPlans(network: Network): Plan[] | null {
+  const cached = planCache.get(network);
+  if (cached && cached.expiresAt > Date.now()) return cached.plans;
+  return null;
+}
+
+export function preloadAllDataPlans() {
+  const networks: Network[] = ["MTN", "AIRTEL", "GLO", "9MOBILE"];
+  return Promise.allSettled(networks.map((n) => loadCachedPlans(n)));
+}
 
 function loadCachedPlans(network: Network, forceReload = false) {
   if (forceReload) planCache.delete(network);
@@ -162,12 +173,13 @@ export function DataPurchaseShell() {
 
   const [network, setNetwork] = useState<Network>("MTN");
   const [category, setCategory] = useState<Category>("GENERAL");
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const initialCachedPlans = getCachedPlans(network) || [];
+  const [plans, setPlans] = useState<Plan[]>(initialCachedPlans);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialCachedPlans.length === 0);
   const [purchasing, setPurchasing] = useState(false);
   const isExecutingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -215,7 +227,22 @@ export function DataPurchaseShell() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const cached = getCachedPlans(network);
+    if (cached && cached.length > 0) {
+      const sorted = [...cached].sort((a, b) => {
+        const capA = planCapacity(a.label);
+        const capB = planCapacity(b.label);
+        if (capA !== capB) return capA - capB;
+        return a.price - b.price;
+      });
+      setPlans(sorted);
+      setLoading(false);
+      const inCurrentCat = sorted.filter((p) => (p.category || "GENERAL").toUpperCase() === category);
+      if (inCurrentCat.length > 0) setSelectedPlan(inCurrentCat[0]);
+      else if (sorted.length > 0) setSelectedPlan(sorted[0]);
+    } else {
+      setLoading(true);
+    }
     setErrorMessage("");
 
     loadCachedPlans(network)

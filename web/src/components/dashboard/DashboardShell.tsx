@@ -19,7 +19,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { DataPurchaseShell, preloadDataPlans } from "@/components/data/DataPurchaseShell";
+import { DataPurchaseShell, preloadDataPlans, preloadAllDataPlans } from "@/components/data/DataPurchaseShell";
+import { FundWalletModal } from "@/components/funding/FundWalletModal";
 import { AirtimeShell } from "@/components/airtime/AirtimeShell";
 import { HistoryShell } from "@/components/history/HistoryShell";
 import { ProfileShell } from "@/components/profile/ProfileShell";
@@ -131,6 +132,11 @@ export function DashboardShell() {
   const [reloadKey, setReloadKey] = useState(0);
   const { theme, toggleTheme } = useThemeMode();
   const [activeTab, setActiveTab] = useState("home");
+  const [showFundModal, setShowFundModal] = useState(false);
+
+  useEffect(() => {
+    void preloadAllDataPlans();
+  }, []);
   const isDark = theme === "dark";
 
   function toggleBalanceVisibility() {
@@ -518,7 +524,7 @@ export function DashboardShell() {
               {/* Fund Wallet */}
               <button
                 type="button"
-                onClick={() => setActiveTab("funding")}
+                onClick={() => setShowFundModal(true)}
                 className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2563EB] px-3 text-xs sm:text-sm font-bold text-white shadow-xs transition-opacity hover:opacity-90 active:scale-95 cursor-pointer whitespace-nowrap"
               >
                 <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -650,6 +656,9 @@ export function DashboardShell() {
       </div>
 
       {/* === 5. BOTTOM NAVIGATION BAR === */}
+      {/* Fund Wallet Popup Modal */}
+      <FundWalletModal isOpen={showFundModal} onClose={() => setShowFundModal(false)} />
+
       <WebBottomNav
         active="home"
         onNavigate={(tab) => {
