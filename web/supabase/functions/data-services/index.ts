@@ -157,6 +157,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ plans: cached.plans });
     }
 
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+
+    // Batch-load all custom price overrides for this mobile network
+    const { data: overrides } = await supabaseAdmin
+      .from("price_overrides")
+      .select("plan_code, price, enabled, label")
+      .eq("provider", network);
+    const overrideMap = new Map(
+      (overrides || []).map((row: { plan_code: string; price: number; enabled?: boolean; label?: string }) => [
+        row.plan_code,
+        { price: Number(row.price), enabled: row.enabled !== false, label: row.label },
+      ]),
+    );
+
     const baseUrl = (Deno.env.get("VTU_GATE_BASE_URL") ||
       "https://api.vtugate.com/api/v1").replace(/\/$/, "");
     const servicesResponse = await fetchVtuGate(
@@ -189,31 +203,42 @@ Deno.serve(async (req) => {
             async (plan: Record<string, unknown>) => {
               const label = String(plan.name || "").trim();
               const planCode = String(plan.code || "").trim();
-              const price = Number(plan.price);
+              const apiPrice = Number(plan.price);
               if (
                 !label ||
                 !planCode ||
-                !Number.isFinite(price) ||
-                price <= 0 ||
-                price > 100000
+                !Number.isFinite(apiPrice) ||
+                apiPrice <= 0 ||
+                apiPrice > 100000
               ) {
                 return null;
               }
+
+              const override = overrideMap.get(planCode) || overrideMap.get(`${serviceId}:${planCode}`);
+              // All plans are turned off by default until the admin explicitly enables them
+              if (!override || override.enabled !== true) {
+                return null;
+              }
+
+              const finalPrice = override && Number.isFinite(override.price) && override.price > 0
+                ? override.price
+                : apiPrice;
+              const displayLabel = override?.label || label;
 
               const selectionToken = await createDataPlanToken(
                 {
                   provider: "vtugate",
                   network,
-                  label,
+                  label: displayLabel,
                   serviceId,
                   planCode,
-                  price,
+                  price: finalPrice,
                 },
                 signingSecret,
               );
               return {
-                label,
-                price,
+                label: displayLabel,
+                price: finalPrice,
                 code: `${serviceId}:${planCode}`,
                 category: planCategory,
                 provider: "vtugate",
@@ -231,7 +256,6 @@ Deno.serve(async (req) => {
     const plans = batches.flatMap((batch) =>
       batch.status === "fulfilled" ? batch.value : [],
     );
-    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
     const { data: catalogPlans, error: catalogError } = await supabaseAdmin
       .from("admin_vtu_plans")
       .select("id, network, category, capacity, capacity_mb, duration, price_kobo, enabled")

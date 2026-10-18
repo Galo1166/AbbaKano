@@ -24,6 +24,21 @@ export const ReceiptModal: React.FC = () => {
 
   if (!activeReceipt) return null;
 
+  const isSuccessful = activeReceipt.status === 'SUCCESSFUL';
+  const isPending = activeReceipt.status === 'PENDING';
+  const statusTitle = isSuccessful
+    ? 'Transaction Successful'
+    : isPending
+      ? 'Transaction Pending'
+      : 'Transaction Failed';
+  const statusSubtitle = isSuccessful
+    ? 'Payment processed and delivered instantly'
+    : isPending
+      ? 'Your purchase is still being checked. Do not submit it again yet.'
+      : 'The purchase could not be completed.';
+  const statusLabel = isSuccessful ? 'COMPLETED' : isPending ? 'PENDING' : 'FAILED';
+  const statusColor = isSuccessful ? Palette.tertiary : isPending ? Palette.secondaryLight : Palette.error;
+
   const handleCopyToken = async () => {
     if (!activeReceipt.token) return;
     await Clipboard.setStringAsync(activeReceipt.token);
@@ -49,15 +64,18 @@ export const ReceiptModal: React.FC = () => {
       <View style={styles.backdrop}>
         <View style={styles.container}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {/* Success Icon Badge */}
-            <View style={styles.successIconOuter}>
-              <View style={styles.successIconInner}>
-                <Ionicons name="checkmark" size={32} color="#002616" />
+            <View style={[styles.successIconOuter, { backgroundColor: `${statusColor}33` }]}>
+              <View style={[styles.successIconInner, { backgroundColor: statusColor }]}>
+                <Ionicons
+                  name={isSuccessful ? 'checkmark' : isPending ? 'time-outline' : 'close'}
+                  size={32}
+                  color={isSuccessful ? '#002616' : '#FFFFFF'}
+                />
               </View>
             </View>
 
-            <Text style={styles.receiptTitle}>Transaction Successful</Text>
-            <Text style={styles.receiptSubtitle}>Payment processed and delivered instantly</Text>
+            <Text style={styles.receiptTitle}>{statusTitle}</Text>
+            <Text style={styles.receiptSubtitle}>{statusSubtitle}</Text>
 
             {/* Total Amount / Bundle Purchased Banner */}
             <View style={styles.amountBanner}>
@@ -167,8 +185,8 @@ export const ReceiptModal: React.FC = () => {
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Status</Text>
-                <View style={styles.successPill}>
-                  <Text style={styles.successPillText}>COMPLETED</Text>
+                <View style={[styles.successPill, { backgroundColor: `${statusColor}26` }]}>
+                  <Text style={[styles.successPillText, { color: statusColor }]}>{statusLabel}</Text>
                 </View>
               </View>
             </View>

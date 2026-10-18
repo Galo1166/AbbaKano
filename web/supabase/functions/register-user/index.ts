@@ -1,5 +1,6 @@
 // @ts-expect-error Deno resolves this remote module at runtime.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createMonnifyReservedAccount } from "../_shared/monnify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -346,6 +347,18 @@ Deno.serve(async (req) => {
         },
         500
       );
+    }
+
+    // Automatically create Dedicated Virtual Bank Accounts (Monnify DVA)
+    try {
+      await createMonnifyReservedAccount(supabaseAdmin, {
+        id: userId,
+        fullName,
+        email,
+        phone: phone.local,
+      });
+    } catch (dvaError) {
+      console.warn("Monnify DVA creation warning:", dvaError);
     }
 
     if (referralCode) {

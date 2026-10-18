@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchInflows } from "@admin/services/api";
+import { fetchInflows, markDepositFailed } from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge, { inflowStatusVariant } from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
@@ -16,8 +16,11 @@ export default function DepositsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [updatingDepositId, setUpdatingDepositId] = useState<string | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
   const PAGE_SIZE = 20;
-  const requestKey = JSON.stringify([filter, search, page]);
+  const requestKey = JSON.stringify([filter, search, page, refreshCount]);
   const loading = loadedRequestKey !== requestKey;
 
   useEffect(() => {
@@ -40,7 +43,28 @@ export default function DepositsPage() {
         setLoadedRequestKey(requestKey);
       });
     return () => { cancelled = true; };
-  }, [filter, search, page, requestKey]);
+  }, [filter, search, page, refreshCount, requestKey]);
+
+  const handleMarkFailed = async (inflow: InflowRecord) => {
+    if (inflow.status !== "PENDING_SETTLEMENT" || updatingDepositId) return;
+    const confirmed = window.confirm(
+      `Mark the ${formatNaira(inflow.amount)} deposit from ${inflow.customerName} as failed? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setUpdatingDepositId(inflow.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await markDepositFailed(inflow.id);
+      setSuccessMessage("Pending deposit marked as failed.");
+      setRefreshCount((count) => count + 1);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to update deposit status.");
+    } finally {
+      setUpdatingDepositId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -55,6 +79,11 @@ export default function DepositsPage() {
       {errorMessage && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-800">
           {errorMessage}
+        </div>
+      )}
+      {successMessage && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800" role="status">
+          {successMessage}
         </div>
       )}
 
@@ -233,7 +262,18 @@ export default function DepositsPage() {
                       {formatTimeAgo(inflow.settledAt)}
                     </td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                      <span className="text-[11px] text-outline">View only</span>
+                      {inflow.status === "PENDING_SETTLEMENT" ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleMarkFailed(inflow)}
+                          disabled={updatingDepositId !== null}
+                          className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {updatingDepositId === inflow.id ? "Updating…" : "Mark failed"}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-outline">View only</span>
+                      )}
                     </td>
                   </tr>
                 ))}

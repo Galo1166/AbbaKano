@@ -197,21 +197,31 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "VTU Gate did not return a cable customer name." }, 502);
     }
 
+    // Batch-load all custom price overrides for this cable provider
+    const { data: overrides } = await supabaseAdmin
+      .from('price_overrides')
+      .select('plan_code, price')
+      .eq('provider', provider);
+    const overrideMap = new Map(
+      (overrides || []).map((row: { plan_code: string; price: number }) => [row.plan_code, Number(row.price)]),
+    );
+
     const plans = await Promise.all(
       (verification.data?.cable_plans || []).map(
         async (plan: Record<string, unknown>) => {
           const label = String(plan.name || "").trim();
           const planCode = String(plan.code || "").trim();
-          const price = Number(plan.price);
+          const apiPrice = Number(plan.price);
           if (
             !label ||
             !planCode ||
-            !Number.isFinite(price) ||
-            price <= 0 ||
-            price > 100000
+            !Number.isFinite(apiPrice) ||
+            apiPrice <= 0 ||
+            apiPrice > 100000
           ) {
             return null;
           }
+          const finalPrice = overrideMap.has(planCode) ? overrideMap.get(planCode)! : apiPrice;
           const selectionToken = await createDataPlanToken(
             {
               provider: "vtugate",
@@ -219,14 +229,14 @@ Deno.serve(async (req) => {
               label,
               serviceId,
               planCode,
-              price,
+              price: finalPrice,
               accountNumber: smartcardNumber,
             },
             serviceKey,
           );
           return {
             label,
-            price,
+            price: finalPrice,
             code: `${serviceId}:${planCode}`,
             category: "Cable TV",
             provider: "vtugate",

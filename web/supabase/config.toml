@@ -133,6 +133,11 @@ verify_jwt = false
 import_map = "./functions/admin-vtu-plans/deno.json"
 entrypoint = "./functions/admin-vtu-plans/index.ts"
 
+[functions.admin-settings]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-settings/index.ts"
+
 [functions.vtugate-services]
 enabled = true
 verify_jwt = false
@@ -165,3 +170,18 @@ entrypoint = "./functions/register-user/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/update-transaction-pin/index.ts"
+
+[functions.wallet-summary]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/wallet-summary/index.ts"
+
+[functions.monnify-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/monnify-webhook/index.ts"
+
+[functions.virtual-accounts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/virtual-accounts/index.ts"

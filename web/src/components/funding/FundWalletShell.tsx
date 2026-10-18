@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase, invokeSupabaseFunction } from "@/lib/supabase";
 import { safeErrorMessage } from "@/lib/userFeedback";
 import { useThemeMode } from "@/lib/theme";
+import { fetchVirtualAccounts, type VirtualAccount } from "@/lib/virtualAccounts";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 
@@ -18,14 +19,49 @@ export function FundWalletShell() {
   const [amount, setAmount] = useState<string>("2000");
   const [fundingLocked, setFundingLocked] = useState(false);
   const [message, setMessage] = useState("");
+  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState("");
+  const [accountsRetry, setAccountsRetry] = useState(0);
+  const [copiedAccountNumber, setCopiedAccountNumber] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState("");
   const fundingLockRef = useRef(false);
   const fundingAttemptRef = useRef(0);
   const countdownTimerRef = useRef<number | null>(null);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadVirtualAccounts() {
+      setAccountsLoading(true);
+      setAccountsError("");
+
+      try {
+        const accounts = await fetchVirtualAccounts();
+        if (!cancelled) setVirtualAccounts(accounts);
+      } catch (error) {
+        if (!cancelled) {
+          setAccountsError(safeErrorMessage(error, "Could not load your bank account details."));
+        }
+      } finally {
+        if (!cancelled) setAccountsLoading(false);
+      }
+    }
+
+    void loadVirtualAccounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountsRetry]);
 
   useEffect(() => {
     return () => {
       if (countdownTimerRef.current !== null) {
         window.clearInterval(countdownTimerRef.current);
+      }
+      if (copyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
       }
     };
   }, []);
@@ -47,6 +83,24 @@ export function FundWalletShell() {
       window.dispatchEvent(new CustomEvent("app-tab-change", { detail: "home" }));
     } else {
       router.push("/app");
+    }
+  }
+
+  async function copyAccountNumber(accountNumber: string) {
+    try {
+      await navigator.clipboard.writeText(accountNumber);
+      setCopyError("");
+      setCopiedAccountNumber(accountNumber);
+      if (copyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
+      }
+      copyFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopiedAccountNumber(null);
+        copyFeedbackTimerRef.current = null;
+      }, 1800);
+    } catch (error) {
+      console.error("Virtual account copy error:", error);
+      setCopyError("Could not copy the account number. Please select and copy it manually.");
     }
   }
 
@@ -301,29 +355,153 @@ export function FundWalletShell() {
             </form>
           </div>
 
-          {/* Monnify Virtual Accounts Notice */}
+          {/* Dedicated Virtual Accounts */}
           <div className={`rounded-2xl border p-4 transition-all ${
             isDark ? "bg-[#141721] border-[#222634]" : "bg-white border-slate-200"
           }`}>
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <span className={`text-xs font-bold block ${
-                  isDark ? "text-white" : "text-slate-900"
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                  isDark ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-600"
                 }`}>
-                  Bank Transfer Notice
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M5 6h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2zm3 8h3" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <h2 className={`text-sm font-extrabold ${
+                    isDark ? "text-white" : "text-slate-900"
+                  }`}>
+                    Dedicated Transfer Accounts
+                  </h2>
+                  <p className={`text-[11px] ${
+                    isDark ? "text-slate-400" : "text-slate-500"
+                  }`}>
+                    Transfer to automatically fund your wallet
+                  </p>
+                </div>
+              </div>
+              {!accountsLoading && virtualAccounts.length > 0 && (
+                <span className="shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
+                  AUTO-SYNC
                 </span>
-                <p className={`text-[11px] leading-relaxed mt-1 ${
-                  isDark ? "text-slate-400" : "text-slate-600"
-                }`}>
-                  Dedicated virtual accounts (Moniepoint, Sterling &amp; Wema) will be available once our automated Monnify integration is live. Please use the Paystack card and transfer option above for instant wallet top-up.
-                </p>
-              </div>
+              )}
             </div>
+
+            {accountsLoading ? (
+              <div className={`flex items-center gap-2 rounded-xl p-3 text-xs ${
+                isDark ? "bg-[#0b0e14] text-slate-400" : "bg-slate-50 text-slate-500"
+              }`} role="status">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                Loading your bank account details...
+              </div>
+            ) : accountsError ? (
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3">
+                <p className="text-xs font-medium text-rose-500" role="alert">{accountsError}</p>
+                <button
+                  type="button"
+                  onClick={() => setAccountsRetry((attempt) => attempt + 1)}
+                  className="mt-2 text-xs font-bold text-blue-500 hover:text-blue-400"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : virtualAccounts.length > 0 ? (
+              <div className="space-y-3">
+                {virtualAccounts.map((account) => (
+                  <div
+                    key={`${account.bankName}:${account.accountNumber}`}
+                    className={`rounded-xl border p-3 ${
+                      isDark ? "bg-[#0b0e14] border-[#222634]" : "bg-slate-50 border-slate-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className={`truncate text-sm font-bold ${
+                          isDark ? "text-white" : "text-slate-900"
+                        }`}>
+                          {account.bankName}
+                        </h3>
+                        <p className={`mt-0.5 text-[10px] ${
+                          isDark ? "text-slate-400" : "text-slate-500"
+                        }`}>
+                          Dedicated virtual account
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
+                        AUTO-SYNC
+                      </span>
+                    </div>
+
+                    <div className={`mt-3 rounded-lg border p-3 ${
+                      isDark ? "bg-[#141721] border-[#222634]" : "bg-white border-slate-200"
+                    }`}>
+                      <span className={`block text-[10px] font-bold uppercase tracking-wider ${
+                        isDark ? "text-slate-400" : "text-slate-500"
+                      }`}>
+                        Account Number
+                      </span>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className={`break-all font-mono text-lg font-extrabold tracking-wide ${
+                          isDark ? "text-blue-400" : "text-blue-600"
+                        }`}>
+                          {account.accountNumber}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void copyAccountNumber(account.accountNumber)}
+                          className={`flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors ${
+                            isDark
+                              ? "border-[#222634] bg-[#1b2030] text-slate-200 hover:bg-[#252b3d]"
+                              : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                          }`}
+                          aria-label={`Copy ${account.bankName} account number`}
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M8 8V5a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3M5 8h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
+                          </svg>
+                          {copiedAccountNumber === account.accountNumber ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <span className={`block text-[10px] font-semibold ${
+                        isDark ? "text-slate-400" : "text-slate-500"
+                      }`}>
+                        Beneficiary Account Name
+                      </span>
+                      <p className={`mt-0.5 break-words text-xs font-bold ${
+                        isDark ? "text-slate-200" : "text-slate-800"
+                      }`}>
+                        {account.accountName}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <p className={`text-[11px] leading-relaxed ${
+                  isDark ? "text-slate-400" : "text-slate-500"
+                }`}>
+                  Transfer to any account above. Your wallet will be credited automatically after the transfer is confirmed.
+                </p>
+                {copyError && (
+                  <p className="text-xs font-medium text-rose-500" role="alert">{copyError}</p>
+                )}
+              </div>
+            ) : (
+              <div className={`rounded-xl p-3 text-xs leading-relaxed ${
+                isDark ? "bg-[#0b0e14] text-slate-400" : "bg-slate-50 text-slate-600"
+              }`}>
+                Your dedicated bank account details are not available yet. Please use Paystack above to fund your wallet, or try again shortly.
+                <button
+                  type="button"
+                  onClick={() => setAccountsRetry((attempt) => attempt + 1)}
+                  className="ml-1 font-bold text-blue-500 hover:text-blue-400"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Security Guarantee Note */}

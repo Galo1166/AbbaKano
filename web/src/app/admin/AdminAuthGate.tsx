@@ -63,11 +63,11 @@ export default function AdminAuthGate({ children }: { children: React.ReactNode 
   return (
     <SidebarProvider>
       <div className="admin-root">
-        <div className="min-h-screen bg-surface flex flex-col antialiased">
+        <div className="h-screen overflow-hidden bg-surface flex flex-col antialiased">
           <Sidebar />
-          <div className="flex-1 lg:pl-64 flex flex-col min-h-screen transition-all duration-200">
+          <div className="h-full min-h-0 flex-1 lg:pl-64 flex flex-col transition-all duration-200">
             <TopNav />
-            <main className="flex-1 pt-16 pb-12">
+            <main id="main-content" className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pt-16 pb-6">
               <div className="w-full px-4 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
                 {children}
               </div>

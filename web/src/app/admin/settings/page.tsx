@@ -6,10 +6,12 @@ import {
   fetchMarginSettings,
   fetchSystemSettings,
   updateSystemSettings,
+  fetchMonnifySettings,
+  updateMonnifySettings,
 } from "@admin/services/api";
 import PageHeader from "@admin/components/layout/PageHeader";
 import Toggle from "@admin/components/ui/Toggle";
-import type { MarginSetting, SystemSettings } from "@admin/types/telecom";
+import type { MarginSetting, SystemSettings, MonnifySettings } from "@admin/types/telecom";
 
 const CARRIER_IMAGES: Record<string, string> = {
   MTN: "/carriers/mtn.png",
@@ -33,6 +35,8 @@ export default function SettingsPage() {
   const [margins, setMargins] = useState<MarginSetting[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [activeTab, setActiveTab] = useState("margins");
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
@@ -42,15 +46,27 @@ export default function SettingsPage() {
       setMargins(m);
       setSettings(s);
       setLoading(false);
+    }).catch((error: unknown) => {
+      setLoadError(error instanceof Error ? error.message : "Could not load admin settings.");
+      setLoading(false);
     });
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
-    await updateSystemSettings(settings || {});
-    setSaving(false);
-    setSavedNotice("Settings saved successfully.");
-    setTimeout(() => setSavedNotice(null), 3500);
+    setSaveError("");
+    try {
+      await Promise.all([
+        updateSystemSettings(settings || {}),
+        ...margins.map((margin) => updateMargins(margin.carrier, margin)),
+      ]);
+      setSavedNotice("Settings saved successfully.");
+      setTimeout(() => setSavedNotice(null), 3500);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save admin settings.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateMargin = (carrier: string, field: keyof MarginSetting, value: unknown) => {
@@ -63,6 +79,13 @@ export default function SettingsPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="w-8 h-8 rounded-full border-3 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
+
+  if (loadError)
+    return (
+      <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm font-semibold text-red-900">
+        Could not load admin settings: {loadError}
       </div>
     );
 
@@ -103,6 +126,11 @@ export default function SettingsPage() {
         <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-semibold text-emerald-800 flex items-center gap-2">
           <span className="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
           <span>{savedNotice}</span>
+        </div>
+      )}
+      {saveError && (
+        <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-xs font-semibold text-red-900">
+          {saveError}
         </div>
       )}
 

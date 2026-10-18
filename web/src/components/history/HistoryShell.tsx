@@ -284,7 +284,41 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
             };
           });
 
-        const combined = [...depositTransactions, ...ledgerTransactions].sort((a, b) => {
+        const ledgerTransactionIds = new Set(transactionIds.map(Number));
+        const { data: unsettledPurchases, error: unsettledPurchasesError } = await supabase
+          .from("vtu_transactions")
+          .select("id, transaction_type, status, amount_kobo, phone_number, account_number, network, provider_reference, metadata, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (unsettledPurchasesError) throw unsettledPurchasesError;
+
+        // Pending and failed purchases have no wallet-ledger entry. Include
+        // them explicitly so the web and mobile histories agree while a
+        // reservation is awaiting reconciliation.
+        const unledgeredPurchaseTransactions: Transaction[] = (unsettledPurchases || [])
+          .filter((transaction) => !ledgerTransactionIds.has(Number(transaction.id)))
+          .map((transaction) => ({
+            id: transaction.provider_reference || `ABBA-${transaction.id}`,
+            type: transaction.transaction_type || "purchase",
+            label: typeof transaction.metadata?.plan_label === "string"
+              ? transaction.metadata.plan_label
+              : `${String(transaction.transaction_type || "Purchase").replaceAll("_", " ")} purchase`,
+            amount: Math.abs(Number(transaction.amount_kobo || 0)) / 100,
+            status: transaction.status,
+            date: transaction.created_at,
+            currency: "NGN",
+            metadata: transaction.metadata || {},
+            phoneNumber: transaction.phone_number || undefined,
+            accountNumber: transaction.account_number || undefined,
+            network: transaction.network || undefined,
+          }));
+
+        const combined = [
+          ...depositTransactions,
+          ...ledgerTransactions,
+          ...unledgeredPurchaseTransactions,
+        ].sort((a, b) => {
           const aTime = a.date ? new Date(a.date).getTime() : 0;
           const bTime = b.date ? new Date(b.date).getTime() : 0;
           return bTime - aTime;

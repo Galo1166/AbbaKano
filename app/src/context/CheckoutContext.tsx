@@ -23,6 +23,8 @@ export interface CheckoutDraft {
   meterNumber?: string;
   /** Electricity meter type (prepaid / postpaid) */
   meterType?: string;
+  /** Stable for the lifetime of one checkout; reused if the request must be retried. */
+  idempotencyKey?: string;
   onSuccess?: () => void;
 }
 
@@ -57,7 +59,12 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const startCheckout = (newDraft: CheckoutDraft) => {
-    setDraft(newDraft);
+    setDraft({
+      ...newDraft,
+      // A retry must address the original server-side reservation. Generating
+      // this key during submission would turn every retry into a new purchase.
+      idempotencyKey: newDraft.idempotencyKey || createIdempotencyKey(),
+    });
     setPurchaseError(null);
     setIsSheetOpen(true);
     setIsPinModalOpen(false);
@@ -89,7 +96,10 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const functionName = typeToFunction[draft.type];
       if (!functionName || draft.type === 'FUND_WALLET') return false;
 
-      const idempotencyKey = createIdempotencyKey();
+      const idempotencyKey = draft.idempotencyKey;
+      if (!idempotencyKey) {
+        throw new Error('This checkout has expired. Start the purchase again.');
+      }
 
       // Build the body based on transaction type
       const body: Record<string, unknown> = {
@@ -120,8 +130,14 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const txStatusMap: Record<string, 'SUCCESSFUL' | 'PENDING' | 'FAILED'> = {
         success: 'SUCCESSFUL',
         pending: 'PENDING',
+        processing: 'PENDING',
         failed: 'FAILED',
       };
+      const rawStatus = result.status?.toLowerCase() || 'success';
+      const transactionStatus = txStatusMap[rawStatus];
+      if (!transactionStatus) {
+        throw new Error('We could not confirm your purchase status. Check your transaction history before trying again.');
+      }
 
       const newTx: TransactionRecord = {
         id: result.reference || `tx-${Date.now()}`,
@@ -131,7 +147,7 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         description: `${draft.serviceName} to ${draft.recipient}`,
         amount: draft.amount,
         fee: draft.fee,
-        status: txStatusMap[result.status || 'success'] || 'SUCCESSFUL',
+        status: transactionStatus,
         date: 'Just now',
         timestamp: Date.now(),
         network: draft.network,
@@ -144,12 +160,14 @@ export const CheckoutProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setActiveReceipt(newTx);
       setIsPinModalOpen(false);
       setIsReceiptOpen(true);
-      setPaymentSuccessCount((prev) => prev + 1);
+      if (transactionStatus === 'SUCCESSFUL') {
+        setPaymentSuccessCount((prev) => prev + 1);
+      }
 
       // Refresh wallet balance & transactions in the background
       refreshData().catch(() => {});
 
-      if (draft.onSuccess) {
+      if (transactionStatus === 'SUCCESSFUL' && draft.onSuccess) {
         try { draft.onSuccess(); } catch {}
       }
       return true;

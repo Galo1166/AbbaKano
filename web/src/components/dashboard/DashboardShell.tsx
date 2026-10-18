@@ -16,9 +16,9 @@ export function DashboardLoadingSkeleton() {
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { supabase } from "@/lib/supabase";
-import { DataPurchaseShell } from "@/components/data/DataPurchaseShell";
+import { DataPurchaseShell, preloadDataPlans } from "@/components/data/DataPurchaseShell";
 import { AirtimeShell } from "@/components/airtime/AirtimeShell";
 import { HistoryShell } from "@/components/history/HistoryShell";
 import { ProfileShell } from "@/components/profile/ProfileShell";
@@ -29,6 +29,7 @@ import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { ReferEarnShell } from "@/components/referral/ReferEarnShell";
 import { useThemeMode } from "@/lib/theme";
+import { fetchVirtualAccounts } from "@/lib/virtualAccounts";
 
 type DashboardData = {
   user: {
@@ -45,14 +46,6 @@ type DashboardData = {
     referralCommissionBalance?: number;
   };
   balance: number;
-  transactions: Array<{
-    id?: string | number;
-    type?: string;
-    label?: string;
-    status?: string;
-    amount?: number;
-    date?: string;
-  }>;
 };
 
 const VTU_HUB_ITEMS = [
@@ -82,10 +75,56 @@ const VTU_HUB_ITEMS = [
   },
 ];
 
+const BALANCE_VISIBILITY_STORAGE_KEY = "abbakano-balance-hidden";
+const BALANCE_VISIBILITY_CHANGE_EVENT = "abbakano-balance-visibility-change";
+let cachedBalanceVisibility: boolean | null = null;
+
+function getBalanceVisibilitySnapshot(): boolean | null {
+  if (typeof window === "undefined") return null;
+  if (cachedBalanceVisibility !== null) return cachedBalanceVisibility;
+
+  try {
+    cachedBalanceVisibility = window.localStorage.getItem(BALANCE_VISIBILITY_STORAGE_KEY) === "true";
+  } catch (error) {
+    console.error("Could not restore balance visibility preference:", error);
+    cachedBalanceVisibility = false;
+  }
+
+  return cachedBalanceVisibility;
+}
+
+function subscribeToBalanceVisibility(onChange: () => void) {
+  function handleChange() {
+    cachedBalanceVisibility = null;
+    onChange();
+  }
+
+  window.addEventListener(BALANCE_VISIBILITY_CHANGE_EVENT, handleChange);
+  window.addEventListener("storage", handleChange);
+  return () => {
+    window.removeEventListener(BALANCE_VISIBILITY_CHANGE_EVENT, handleChange);
+    window.removeEventListener("storage", handleChange);
+  };
+}
+
+function saveBalanceVisibility(hidden: boolean) {
+  cachedBalanceVisibility = hidden;
+  try {
+    window.localStorage.setItem(BALANCE_VISIBILITY_STORAGE_KEY, String(hidden));
+  } catch (error) {
+    console.error("Could not save balance visibility preference:", error);
+  }
+  window.dispatchEvent(new Event(BALANCE_VISIBILITY_CHANGE_EVENT));
+}
+
 export function DashboardShell() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
-  const [hiddenBalance, setHiddenBalance] = useState(false);
+  const hiddenBalance = useSyncExternalStore(
+    subscribeToBalanceVisibility,
+    getBalanceVisibilitySnapshot,
+    () => null,
+  );
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
@@ -93,16 +132,31 @@ export function DashboardShell() {
   const [activeTab, setActiveTab] = useState("home");
   const isDark = theme === "dark";
 
+  function toggleBalanceVisibility() {
+    if (hiddenBalance === null) return;
+    saveBalanceVisibility(!hiddenBalance);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.push("/login");
   }
 
   useEffect(() => {
+    void preloadDataPlans().catch((error) => {
+      console.error("Background data-plan preload failed:", error);
+    });
+    void fetchVirtualAccounts().catch((error) => {
+      console.error("Background virtual-account preload failed:", error);
+    });
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function hydrateDashboard() {
       try {
+        setErrorMessage("");
         const {
           data: { session },
           error: sessionError,
@@ -115,18 +169,9 @@ export function DashboardShell() {
           return;
         }
 
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+        const user = session.user;
 
-        if (authError) throw authError;
-        if (!user) {
-          setErrorMessage("Your login session is not available. Please sign in again.");
-          return;
-        }
-
-        const [profileResult, walletResult, transactionsResult, resvResult] = await Promise.all([
+        const [profileResult, walletResult, resvResult] = await Promise.all([
           supabase
             .from("profiles")
             .select(`
@@ -147,21 +192,6 @@ export function DashboardShell() {
             .maybeSingle(),
 
           supabase
-            .from("wallet_ledger")
-            .select(`
-              id,
-              entry_type,
-              amount_kobo,
-              balance_before_kobo,
-              balance_after_kobo,
-              description,
-              metadata,
-              created_at
-            `)
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(20),
-          supabase
             .from("wallet_reservations")
             .select("amount_kobo")
             .eq("user_id", user.id)
@@ -169,21 +199,11 @@ export function DashboardShell() {
         ]);
 
         if (cancelled) return;
+        if (profileResult.error) throw profileResult.error;
+        if (walletResult.error) throw walletResult.error;
 
         const profile = profileResult.data;
         const wallet = walletResult.data;
-
-        const transactions = (transactionsResult.data || []).map((transaction) => ({
-          id: transaction.id,
-          type: transaction.entry_type,
-          label: transaction.description || transaction.entry_type,
-          status: "completed",
-          amount: Number(transaction.amount_kobo) / 100,
-          date: new Date(transaction.created_at).toLocaleString("en-NG", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          }),
-        }));
 
         const rawBalanceKobo = Number(wallet?.balance_kobo || 0);
         let heldKobo = 0;
@@ -201,7 +221,6 @@ export function DashboardShell() {
             app_lock_enabled: profile?.app_lock_enabled,
           },
           balance: availableBalance,
-          transactions,
         });
       } catch (error) {
         if (cancelled) return;
@@ -276,23 +295,12 @@ export function DashboardShell() {
   const firstName =
     data?.user.full_name?.split(" ")[0] ||
     data?.user.fullName?.split(" ")[0] ||
-    "Tester";
+    "there";
 
   const formattedBalance = (data?.balance || 0).toLocaleString("en-NG", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-
-  if (loading) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? "bg-[#0b0e14] text-white" : "bg-[#f8fafc] text-slate-900"}`}>
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-          <span className="text-xs font-semibold text-slate-400">Loading wallet...</span>
-        </div>
-      </div>
-    );
-  }
 
   // Active sub-page views
   if (activeTab === "bolt") return <DataPurchaseShell />;
@@ -300,7 +308,7 @@ export function DashboardShell() {
   if (activeTab === "power" || activeTab === "electricity") return <ElectricityShell />;
   if (activeTab === "tv" || activeTab === "cable-tv") return <CableTVShell />;
   if (activeTab === "funding" || activeTab === "fund-wallet") return <FundWalletShell />;
-  if (activeTab === "history") return <HistoryShell initialTransactions={data?.transactions || []} />;
+  if (activeTab === "history") return <HistoryShell />;
   if (activeTab === "profile") return <ProfileShell initialUser={data?.user} />;
   if (activeTab === "referral") return <ReferEarnShell initialUser={data?.user} />;
 
@@ -399,6 +407,22 @@ export function DashboardShell() {
             </div>
           </div>
 
+          {errorMessage && (
+            <div
+              className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-500"
+              role="alert"
+            >
+              <span>{errorMessage}</span>
+              <button
+                type="button"
+                onClick={() => setReloadKey((current) => current + 1)}
+                className="shrink-0 font-bold underline underline-offset-2"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
           {/* === 2. MASTER WALLET CARD === */}
           <div className={`rounded-2xl border p-4.5 sm:p-5 mb-5 shadow-xs transition-all ${
             isDark
@@ -428,14 +452,15 @@ export function DashboardShell() {
                   ₦
                 </span>
                 <span className={`text-3xl sm:text-4xl font-extrabold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
-                  {hiddenBalance ? "••••••••" : formattedBalance}
+                  {hiddenBalance ? "••••••••" : loading || !data ? "—" : formattedBalance}
                 </span>
               </div>
 
               {/* Eye Button */}
               <button
                 type="button"
-                onClick={() => setHiddenBalance((curr) => !curr)}
+                onClick={toggleBalanceVisibility}
+                disabled={hiddenBalance === null}
                 className={`p-1.5 transition-colors cursor-pointer ${isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"}`}
                 aria-label={hiddenBalance ? "Show balance" : "Hide balance"}
               >

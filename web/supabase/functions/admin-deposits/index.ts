@@ -63,6 +63,32 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Invalid JSON request body." }, 400);
     }
 
+    if (body.action === "mark_failed") {
+      if (typeof body.depositId !== "string" || !/^[1-9]\d*$/.test(body.depositId)) {
+        return jsonResponse({ message: "A valid deposit ID is required." }, 400);
+      }
+      const depositId = Number(body.depositId);
+      if (!Number.isSafeInteger(depositId)) {
+        return jsonResponse({ message: "A valid deposit ID is required." }, 400);
+      }
+      const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+      const { data, error } = await supabaseAdmin.rpc("admin_fail_pending_deposit", {
+        p_deposit_id: depositId,
+        p_actor_user_id: user.id,
+      });
+      if (error) throw error;
+      if (!data || typeof data !== "object" || typeof data.success !== "boolean") {
+        throw new Error("Deposit status update returned an invalid result.");
+      }
+      if (!data.success) {
+        return jsonResponse({ message: data.message }, data.message === "Deposit not found." ? 404 : 409);
+      }
+      return jsonResponse(data);
+    }
+    if (body.action !== undefined) {
+      return jsonResponse({ message: "Unsupported deposit action." }, 400);
+    }
+
     const page = Number.isInteger(body.page) ? Number(body.page) : 1;
     const pageSize = Number.isInteger(body.pageSize) ? Number(body.pageSize) : 20;
     if (page < 1 || pageSize < 1 || pageSize > 100) {

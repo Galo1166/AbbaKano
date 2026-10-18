@@ -2,8 +2,11 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import {  FormEvent, useEffect, useState , useRef } from "react";
-import { startAuthentication } from "@simplewebauthn/browser";
+import { FormEvent, useEffect, useState, useRef } from "react";
+import {
+  startAuthentication,
+  type PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/browser";
 import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
 import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
@@ -22,6 +25,12 @@ type Plan = {
   provider?: string;
   validityPeriod?: "daily" | "weekly" | "monthly";
   purchaseAvailable?: boolean;
+};
+
+type PurchaseResponse = {
+  status?: string;
+  message?: string;
+  reference?: string;
 };
 
 type Receipt = {
@@ -109,6 +118,10 @@ function loadCachedPlans(network: Network, forceReload = false) {
   return request;
 }
 
+export function preloadDataPlans(network: Network = "MTN") {
+  return loadCachedPlans(network);
+}
+
 function formatNaira(amount: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
 }
@@ -131,6 +144,15 @@ function detectCarrierFromPhone(input: string): Network | null {
   if (/^(0805|0807|0705|0815|0811|0905|0915)/.test(prefix)) return "GLO";
   if (/^(0809|0818|0817|0909|0908)/.test(prefix)) return "9MOBILE";
   return null;
+}
+
+async function submitDataPurchase(request: Record<string, unknown>): Promise<PurchaseResponse> {
+  let response = await invokeSupabaseFunction<PurchaseResponse>("data-purchase", request);
+  for (let attempt = 0; response.status === "pending" && attempt < 2; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    response = await invokeSupabaseFunction<PurchaseResponse>("data-purchase", request);
+  }
+  return response;
 }
 
 export function DataPurchaseShell() {
@@ -258,21 +280,34 @@ export function DataPurchaseShell() {
     setErrorMessage("");
 
     try {
-      const optionsRes = await invokeSupabaseFunction<{ options: any }>("webauthn-authenticate-options", {});
-      const authResponse = await startAuthentication({ optionsJSON: optionsRes.options });
+      const options = await invokeSupabaseFunction<PublicKeyCredentialRequestOptionsJSON>("passkey-auth", {
+        action: "transaction-options",
+        purchase: {
+          network,
+          phone,
+          selectionToken: selectedPlan.selectionToken,
+        },
+      });
+      const authResponse = await startAuthentication({ optionsJSON: options });
+      const { transactionAuthorization } = await invokeSupabaseFunction<{
+        transactionAuthorization: string;
+      }>("passkey-auth", {
+        action: "transaction-verify",
+        response: authResponse,
+      });
 
-      const purchaseRes = await invokeSupabaseFunction<any>("data-purchase", {
+      const purchaseRes = await submitDataPurchase({
         network,
         planCode: selectedPlan.code,
         selectionToken: selectedPlan.selectionToken,
         phone,
         idempotencyKey,
-        webauthnResponse: authResponse,
+        transactionAuthorization,
       });
 
       setReceipt({
         status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Data purchase successful!",
+        message: sanitizeServiceMessage(purchaseRes.message || "Data purchase successful!") || "Data purchase successful!",
         reference: purchaseRes.reference || `DATA-${Date.now()}`,
         label: selectedPlan.label,
         network,
@@ -301,7 +336,7 @@ export function DataPurchaseShell() {
     setErrorMessage("");
 
     try {
-      const purchaseRes = await invokeSupabaseFunction<any>("data-purchase", {
+      const purchaseRes = await submitDataPurchase({
         network,
         planCode: selectedPlan.code,
         selectionToken: selectedPlan.selectionToken,
@@ -312,7 +347,7 @@ export function DataPurchaseShell() {
 
       setReceipt({
         status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Data purchase successful!",
+        message: sanitizeServiceMessage(purchaseRes.message || "Data purchase successful!") || "Data purchase successful!",
         reference: purchaseRes.reference || `DATA-${Date.now()}`,
         label: selectedPlan.label,
         network,

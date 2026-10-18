@@ -58,6 +58,7 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [currentPin, setCurrentPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [pinMessage, setPinMessage] = useState("");
@@ -137,6 +138,10 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
 
   async function handleSavePin(e: FormEvent) {
     e.preventDefault();
+    if (hasPin && currentPin.length !== 4) {
+      setPinMessage("Enter your current 4-digit transaction PIN.");
+      return;
+    }
     if (newPin.length !== 4 || confirmPin.length !== 4) {
       setPinMessage("PIN must be 4 digits.");
       return;
@@ -150,13 +155,14 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
     setPinMessage("");
 
     try {
-      const { error } = await supabase.functions.invoke("set-user-pin", {
-        body: { pin: newPin },
+      const { error } = await supabase.functions.invoke("update-transaction-pin", {
+        body: { currentPin, newPin },
       });
       if (error) throw error;
 
       setHasPin(true);
       setShowPinModal(false);
+      setCurrentPin("");
       setNewPin("");
       setConfirmPin("");
     } catch (err: any) {
@@ -581,6 +587,31 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError("");
+                setShowDeleteModal(true);
+              }}
+              className="w-full flex items-center justify-between p-3.5 text-left transition hover:bg-rose-500/10 cursor-pointer"
+            >
+              <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs sm:text-sm font-bold text-rose-500">Delete Account</p>
+                  <p className={`truncate text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Permanently remove your account
+                  </p>
+                </div>
+              </div>
+              <svg className="h-4 w-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
         </section>
       </div>
@@ -607,6 +638,28 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
             </div>
 
             <form onSubmit={handleSavePin} className="space-y-3.5">
+              {hasPin && (
+                <div>
+                  <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  }`}>
+                    Current 4-Digit PIN
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={currentPin}
+                    onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))}
+                    placeholder="••••"
+                    className={`w-full text-center tracking-[8px] font-mono text-xl font-bold py-2.5 rounded-xl border outline-none ${
+                      isDark
+                        ? "bg-[#0b0e14] border-[#222634] text-white focus:border-blue-500"
+                        : "bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-600"
+                    }`}
+                  />
+                </div>
+              )}
               <div>
                 <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${
                   isDark ? "text-slate-400" : "text-slate-600"
@@ -657,7 +710,7 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
 
               <button
                 type="submit"
-                disabled={savingPin || newPin.length !== 4 || confirmPin.length !== 4}
+                disabled={savingPin || (hasPin && currentPin.length !== 4) || newPin.length !== 4 || confirmPin.length !== 4}
                 className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer disabled:opacity-50"
               >
                 {savingPin ? "Saving PIN..." : "Save Security PIN"}

@@ -1,24 +1,45 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { startAuthentication } from "@simplewebauthn/browser";
+import {
+  startAuthentication,
+  type PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
-import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
+import { getWalletBalance, invokeSupabaseFunction, supabase } from "@/lib/supabase";
 import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { useThemeMode } from "@/lib/theme";
 
-type ElectricityProvider = "AEDC" | "EKEDC" | "IKEDC" | "JED" | "KEDCO" | "PHED";
+type ElectricityProvider = "AEDC" | "IKEDC" | "JED" | "KEDCO" | "PHED";
 
 const providers: Array<{ id: ElectricityProvider; label: string; name: string }> = [
   { id: "AEDC", label: "AEDC", name: "Abuja Electric" },
-  { id: "EKEDC", label: "EKEDC", name: "Eko Electric" },
-  { id: "IKEDC", label: "IKEDC", name: "Ikeja Electric" },
+  { id: "IKEDC", label: "EKEDC", name: "Ikeja Electric" },
   { id: "JED", label: "JED", name: "Jos Electric" },
   { id: "KEDCO", label: "KEDCO", name: "Kano Electric" },
   { id: "PHED", label: "PHED", name: "Port Harcourt Electric" },
 ];
+
+type ElectricityPurchaseResponse = {
+  status?: string;
+  message?: string;
+  reference?: string;
+  token?: string;
+  units?: string;
+};
+
+type ElectricityReceipt = {
+  message: string;
+  reference: string;
+  provider: ElectricityProvider;
+  meterNumber: string;
+  amount: number;
+  customerName?: string;
+  token?: string;
+  units?: string;
+};
 
 const presets = [1000, 2000, 3000, 5000, 10000];
 
@@ -44,7 +65,8 @@ export function ElectricityShell() {
   const [purchasing, setPurchasing] = useState(false);
   const [message, setMessage] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
-  const [receipt, setReceipt] = useState<any>(null);
+  const [receipt, setReceipt] = useState<ElectricityReceipt | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
 
   function goHome() {
     if (typeof window !== "undefined" && window.location.pathname === "/app") {
@@ -60,6 +82,18 @@ export function ElectricityShell() {
       try {
         const bal = await getWalletBalance();
         if (!cancelled) setBalance(bal);
+
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        if (user) {
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("phone")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (profileError) throw profileError;
+          if (!cancelled) setAccountPhone(profile?.phone || user.phone || "");
+        }
       } catch (err) {
         console.error("Wallet balance fetch error:", err);
       }
@@ -70,40 +104,53 @@ export function ElectricityShell() {
 
   useEffect(() => {
     const rawMeter = meterNumber.replace(/\D/g, "");
-    if (rawMeter.length < 10) {
-      setMeterVerification("idle");
-      setCustomerName(null);
-      setVerifiedSelectionToken(null);
-      return;
-    }
+    if (rawMeter.length < 10) return;
 
     let active = true;
-    setMeterVerification("checking");
-    setMessage("");
-
-    invokeSupabaseFunction<{ customerName?: string; name?: string; selectionToken?: string }>("verify-electricity-meter", {
+    invokeSupabaseFunction<{ customerName: string; selectionToken: string }>("electricity-services", {
+      action: "verify-meter",
       provider,
       meterNumber: rawMeter,
-      meterType,
     })
       .then((res) => {
         if (!active) return;
-        setCustomerName(res.customerName || res.name || "Verified Customer");
-        setVerifiedSelectionToken(res.selectionToken || "verified-token");
+        setCustomerName(res.customerName);
+        setVerifiedSelectionToken(res.selectionToken);
         setMeterVerification("verified");
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!active) return;
-        setCustomerName("Verified Customer");
-        setVerifiedSelectionToken("mock-token");
-        setMeterVerification("verified");
+        setCustomerName(null);
+        setVerifiedSelectionToken(null);
+        setMeterVerification("error");
+        setMessage(safeErrorMessage(error, "Could not verify electricity meter."));
       });
 
     return () => { active = false; };
-  }, [provider, meterNumber, meterType]);
+  }, [provider, meterNumber]);
+
+  function updateMeterNumber(value: string) {
+    const cleaned = value.replace(/\D/g, "").slice(0, 14);
+    setMeterNumber(cleaned);
+    setCustomerName(null);
+    setVerifiedSelectionToken(null);
+    setMessage("");
+    setMeterVerification(cleaned.length >= 10 ? "checking" : "idle");
+  }
+
+  function chooseProvider(nextProvider: ElectricityProvider) {
+    setProvider(nextProvider);
+    setCustomerName(null);
+    setVerifiedSelectionToken(null);
+    setMessage("");
+    setMeterVerification(meterNumber.replace(/\D/g, "").length >= 10 ? "checking" : "idle");
+  }
 
   const numericAmount = Number(amount || 0);
-  const canReview = meterNumber.replace(/\D/g, "").length >= 10 && numericAmount >= 500;
+  const canReview = meterNumber.replace(/\D/g, "").length >= 10 &&
+    numericAmount >= 500 &&
+    meterVerification === "verified" &&
+    Boolean(verifiedSelectionToken);
   const isInsufficient = balance !== null && numericAmount > balance;
 
   async function handlePasskeyPurchase() {
@@ -112,17 +159,32 @@ export function ElectricityShell() {
     setMessage("");
 
     try {
-      const optionsRes = await invokeSupabaseFunction<{ options: any }>("webauthn-authenticate-options", {});
-      const authResponse = await startAuthentication({ optionsJSON: optionsRes.options });
+      const options = await invokeSupabaseFunction<PublicKeyCredentialRequestOptionsJSON>("passkey-auth", {
+        action: "transaction-options",
+        purchase: {
+          network: provider,
+          phone: accountPhone,
+          selectionToken: verifiedSelectionToken,
+          amount: numericAmount,
+        },
+      });
+      const authResponse = await startAuthentication({ optionsJSON: options });
+      const { transactionAuthorization } = await invokeSupabaseFunction<{
+        transactionAuthorization: string;
+      }>("passkey-auth", {
+        action: "transaction-verify",
+        response: authResponse,
+      });
 
-      const purchaseRes = await invokeSupabaseFunction<any>("process-electricity-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<ElectricityPurchaseResponse>("electricity-purchase", {
         provider,
         meterNumber: meterNumber.replace(/\D/g, ""),
         meterType,
         amount: numericAmount,
         phone: accountPhone,
         selectionToken: verifiedSelectionToken,
-        webauthnResponse: authResponse,
+        idempotencyKey,
+        transactionAuthorization,
       });
 
       setReceipt({
@@ -159,7 +221,7 @@ export function ElectricityShell() {
     setMessage("");
 
     try {
-      const purchaseRes = await invokeSupabaseFunction<any>("process-electricity-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<ElectricityPurchaseResponse>("electricity-purchase", {
         provider,
         meterNumber: meterNumber.replace(/\D/g, ""),
         meterType,
@@ -167,6 +229,7 @@ export function ElectricityShell() {
         phone: accountPhone,
         selectionToken: verifiedSelectionToken,
         pin,
+        idempotencyKey,
       });
 
       setReceipt({
@@ -242,7 +305,7 @@ export function ElectricityShell() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setProvider(item.id)}
+                  onClick={() => chooseProvider(item.id)}
                   className={`shrink-0 flex items-center gap-1.5 rounded-2xl border px-3.5 py-2.5 transition-all cursor-pointer ${
                     isSelected
                       ? "border-blue-600 bg-blue-600 text-white font-extrabold shadow-xs"
@@ -319,7 +382,7 @@ export function ElectricityShell() {
               inputMode="numeric"
               maxLength={14}
               value={meterNumber}
-              onChange={(e) => setMeterNumber(e.target.value.replace(/\D/g, "").slice(0, 14))}
+              onChange={(e) => updateMeterNumber(e.target.value)}
               placeholder="Enter meter or account number"
               className={`w-full bg-transparent py-3 pr-4 font-mono text-base font-bold outline-none ${
                 isDark ? "text-white placeholder-slate-500" : "text-slate-900 placeholder-slate-400"
@@ -390,7 +453,10 @@ export function ElectricityShell() {
           <button
             type="button"
             disabled={!canReview || purchasing}
-            onClick={() => setShowCheckout(true)}
+            onClick={() => {
+              setIdempotencyKey(crypto.randomUUID());
+              setShowCheckout(true);
+            }}
             className="w-full h-12 rounded-xl flex items-center justify-center text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-98 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {purchasing

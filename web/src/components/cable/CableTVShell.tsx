@@ -2,7 +2,10 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { startAuthentication } from "@simplewebauthn/browser";
+import {
+  startAuthentication,
+  type PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/browser";
 import { FormEvent, useEffect, useState } from "react";
 import { getWalletBalance, invokeSupabaseFunction } from "@/lib/supabase";
 import { safeErrorMessage, sanitizeServiceMessage } from "@/lib/userFeedback";
@@ -28,6 +31,18 @@ type Receipt = {
   phone: string;
   amount: number;
   customerName?: string;
+};
+
+type CableServicesResponse = {
+  customerName: string;
+  accountPhone: string;
+  plans: CablePlan[];
+};
+
+type CablePurchaseResponse = {
+  status?: string;
+  message?: string;
+  reference?: string;
 };
 
 const providers: Array<{
@@ -61,12 +76,13 @@ export function CableTVShell() {
   const [verifyingCustomer, setVerifyingCustomer] = useState(false);
   const [pin, setPin] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
-  const [loadingPlans, setLoadingPlans] = useState(true);
+  const [loadingPlans, setLoadingPlans] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [message, setMessage] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showBouquetModal, setShowBouquetModal] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
 
   function goHome() {
     if (typeof window !== "undefined" && window.location.pathname === "/app") {
@@ -92,63 +108,59 @@ export function CableTVShell() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingPlans(true);
-    setSelectedPlan(null);
-    setMessage("");
+    if (smartcardNumber.length !== 10) return;
 
-    const currentProvider = providers.find((p) => p.id === provider) || providers[0];
-
-    invokeSupabaseFunction<{ plans: CablePlan[] }>("cable-tv-plans", {
-      provider: currentProvider.name,
-      serviceId: currentProvider.serviceId,
+    void invokeSupabaseFunction<CableServicesResponse>("cable-services", {
+      provider,
+      smartcardNumber,
     })
-      .then((res) => {
+      .then((result) => {
         if (cancelled) return;
-        const sorted = (res.plans || []).sort((a, b) => a.price - b.price);
-        setPlans(sorted);
-        if (sorted.length > 0) setSelectedPlan(sorted[0]);
+        const sortedPlans = [...result.plans].sort((left, right) => left.price - right.price);
+        setCustomerName(result.customerName);
+        setPhone(result.accountPhone);
+        setPlans(sortedPlans);
+        setSelectedPlan(sortedPlans[0] || null);
       })
-      .catch((err) => {
+      .catch((error: unknown) => {
         if (cancelled) return;
-        console.error("Could not load plans:", err);
-        setPlans([
-          { label: `${provider} Basic`, price: 2500, code: "basic", selectionToken: "basic" },
-          { label: `${provider} Standard`, price: 4500, code: "standard", selectionToken: "standard" },
-          { label: `${provider} Premium`, price: 9000, code: "premium", selectionToken: "premium" },
-        ]);
+        setMessage(safeErrorMessage(error, "Could not verify cable customer."));
       })
       .finally(() => {
-        if (!cancelled) setLoadingPlans(false);
+        if (!cancelled) {
+          setVerifyingCustomer(false);
+          setLoadingPlans(false);
+        }
       });
 
     return () => { cancelled = true; };
-  }, [provider]);
+  }, [provider, smartcardNumber]);
+
+  function chooseProvider(nextProvider: Provider) {
+    setProvider(nextProvider);
+    setPlans([]);
+    setSelectedPlan(null);
+    setCustomerName(null);
+    setPhone("");
+    setMessage("");
+    setVerifyingCustomer(smartcardNumber.length === 10);
+    setLoadingPlans(smartcardNumber.length === 10);
+  }
 
   function updateSmartcardNumber(val: string) {
     const cleaned = val.replace(/\D/g, "");
     setSmartcardNumber(cleaned);
+    setPlans([]);
+    setSelectedPlan(null);
     setCustomerName(null);
-
-    if (cleaned.length >= 10) {
-      setVerifyingCustomer(true);
-      invokeSupabaseFunction<{ customerName?: string; name?: string }>("verify-cable-customer", {
-        provider,
-        smartcardNumber: cleaned,
-      })
-        .then((res) => {
-          setCustomerName(res.customerName || res.name || "Verified Customer");
-        })
-        .catch(() => {
-          setCustomerName("Verified Customer");
-        })
-        .finally(() => {
-          setVerifyingCustomer(false);
-        });
-    }
+    setPhone("");
+    setMessage("");
+    setVerifyingCustomer(cleaned.length === 10);
+    setLoadingPlans(cleaned.length === 10);
   }
 
   const currentProviderObj = providers.find((p) => p.id === provider) || providers[0];
-  const canReview = smartcardNumber.length >= 10 && selectedPlan !== null;
+  const canReview = smartcardNumber.length === 10 && Boolean(customerName) && selectedPlan !== null;
   const isInsufficient = balance !== null && selectedPlan !== null && selectedPlan.price > balance;
 
   async function handlePasskeyPurchase() {
@@ -157,21 +169,35 @@ export function CableTVShell() {
     setMessage("");
 
     try {
-      const optionsRes = await invokeSupabaseFunction<{ options: any }>("webauthn-authenticate-options", {});
-      const authResponse = await startAuthentication({ optionsJSON: optionsRes.options });
+      const options = await invokeSupabaseFunction<PublicKeyCredentialRequestOptionsJSON>("passkey-auth", {
+        action: "transaction-options",
+        purchase: {
+          network: provider,
+          phone,
+          selectionToken: selectedPlan.selectionToken,
+        },
+      });
+      const authResponse = await startAuthentication({ optionsJSON: options });
+      const { transactionAuthorization } = await invokeSupabaseFunction<{
+        transactionAuthorization: string;
+      }>("passkey-auth", {
+        action: "transaction-verify",
+        response: authResponse,
+      });
 
-      const purchaseRes = await invokeSupabaseFunction<any>("process-cable-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<CablePurchaseResponse>("cable-purchase", {
         provider,
         smartcardNumber,
         phone,
         planCode: selectedPlan.code,
         selectionToken: selectedPlan.selectionToken,
-        webauthnResponse: authResponse,
+        idempotencyKey,
+        transactionAuthorization,
       });
 
       setReceipt({
         status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Cable TV subscription successful!",
+        message: sanitizeServiceMessage(purchaseRes.message || "Cable TV subscription successful!") || "Cable TV subscription successful!",
         reference: purchaseRes.reference || `CAB-${Date.now()}`,
         provider,
         smartcardNumber,
@@ -202,18 +228,19 @@ export function CableTVShell() {
     setMessage("");
 
     try {
-      const purchaseRes = await invokeSupabaseFunction<any>("process-cable-purchase", {
+      const purchaseRes = await invokeSupabaseFunction<CablePurchaseResponse>("cable-purchase", {
         provider,
         smartcardNumber,
         phone,
         planCode: selectedPlan.code,
         selectionToken: selectedPlan.selectionToken,
         pin,
+        idempotencyKey,
       });
 
       setReceipt({
         status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Cable TV subscription successful!",
+        message: sanitizeServiceMessage(purchaseRes.message || "Cable TV subscription successful!") || "Cable TV subscription successful!",
         reference: purchaseRes.reference || `CAB-${Date.now()}`,
         provider,
         smartcardNumber,
@@ -283,7 +310,7 @@ export function CableTVShell() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setProvider(item.id)}
+                  onClick={() => chooseProvider(item.id)}
                   style={{
                     borderColor: isSelected ? item.brandColor : undefined,
                     boxShadow: isSelected ? `0 0 12px ${item.brandColor}35` : undefined,
@@ -363,7 +390,7 @@ export function CableTVShell() {
           <button
             type="button"
             onClick={() => setShowBouquetModal(true)}
-            disabled={plans.length === 0}
+            disabled={plans.length === 0 || loadingPlans}
             className={`w-full flex items-center justify-between rounded-2xl border p-3.5 text-left transition cursor-pointer ${
               isDark
                 ? "bg-[#181B25] border-[rgba(255,255,255,0.12)] text-white"
@@ -372,7 +399,7 @@ export function CableTVShell() {
           >
             <div>
               <p className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
-                {selectedPlan ? selectedPlan.label : "Select Bouquet"}
+                {loadingPlans ? "Loading bouquets..." : selectedPlan ? selectedPlan.label : "Select Bouquet"}
               </p>
               {selectedPlan && (
                 <p className="text-xs font-mono font-bold text-blue-500 mt-0.5">
@@ -391,7 +418,10 @@ export function CableTVShell() {
           <button
             type="button"
             disabled={!canReview || purchasing}
-            onClick={() => setShowCheckout(true)}
+            onClick={() => {
+              setIdempotencyKey(crypto.randomUUID());
+              setShowCheckout(true);
+            }}
             className="w-full h-12 rounded-xl flex items-center justify-center text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-98 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {purchasing

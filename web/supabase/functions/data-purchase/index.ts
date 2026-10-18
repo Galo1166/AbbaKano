@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("vtu_transactions")
-      .select("id, transaction_type, status, provider_reference")
+      .select("id, transaction_type, status, provider_reference, provider_response")
       .eq("user_id", user.id)
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
@@ -182,6 +182,87 @@ Deno.serve(async (req) => {
           message: "This data purchase request has already failed.",
           reference: existing.provider_reference || `ABBA-${existing.id}`,
         }, 409);
+      }
+      const previousProviderResponse = existing.provider_response;
+      if (
+        existing.status === "processing" &&
+        existing.provider_reference &&
+        previousProviderResponse &&
+        typeof previousProviderResponse === "object" &&
+        !Array.isArray(previousProviderResponse) &&
+        previousProviderResponse.status === true
+      ) {
+        const { error: retrySettlementError } = await supabaseAdmin.rpc(
+          "settle_data_purchase",
+          {
+            p_transaction_id: existing.id,
+            p_provider_reference: existing.provider_reference,
+            p_provider_response: previousProviderResponse,
+          },
+        );
+        if (retrySettlementError) {
+          console.error("Data purchase settlement retry failed:", retrySettlementError);
+          return jsonResponse({
+            status: "pending",
+            message: "Your data purchase is being checked. Do not submit it again yet.",
+            reference: existing.provider_reference,
+          }, 202);
+        }
+
+        const { data: ledgerEntry, error: ledgerLookupError } = await supabaseAdmin
+          .from("wallet_ledger")
+          .select("metadata")
+          .eq("user_id", user.id)
+          .eq("transaction_id", existing.id)
+          .maybeSingle();
+        if (ledgerLookupError || !ledgerEntry) {
+          console.error(
+            "Could not load the retried data ledger entry:",
+            ledgerLookupError || "Ledger entry was not found.",
+          );
+        } else {
+          const existingMetadata =
+            ledgerEntry.metadata &&
+            typeof ledgerEntry.metadata === "object" &&
+            !Array.isArray(ledgerEntry.metadata)
+              ? ledgerEntry.metadata
+              : {};
+          const { error: ledgerUpdateError } = await supabaseAdmin
+            .from("wallet_ledger")
+            .update({
+              description: selection.label,
+              metadata: {
+                ...existingMetadata,
+                plan_label: selection.label,
+                plan_code: `${selection.serviceId}:${selection.planCode}`,
+              },
+            })
+            .eq("user_id", user.id)
+            .eq("transaction_id", existing.id);
+          if (ledgerUpdateError) {
+            console.error("Could not save retried data plan details to the ledger:", ledgerUpdateError);
+          }
+        }
+
+        const { data: wallet, error: walletError } = await supabaseAdmin
+          .from("wallets")
+          .select("balance_kobo")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (walletError) {
+          console.error("Could not load wallet after data settlement retry:", walletError);
+          return jsonResponse({
+            status: "success",
+            message: "Data purchase completed successfully.",
+            reference: existing.provider_reference,
+          }, 200);
+        }
+        return jsonResponse({
+          status: "success",
+          message: "Data purchase completed successfully.",
+          reference: existing.provider_reference,
+          balance_kobo: wallet?.balance_kobo,
+        });
       }
       return jsonResponse({
         status: "pending",
@@ -352,6 +433,24 @@ Deno.serve(async (req) => {
     );
 
     let finalBalanceKobo: number | undefined;
+    const { error: providerResponseSaveError } = await supabaseAdmin
+      .from("vtu_transactions")
+      .update({
+        provider_reference: providerReference,
+        provider_response: providerPayload,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", transactionId)
+      .eq("status", "processing");
+    if (providerResponseSaveError) {
+      console.error("Could not save accepted data provider response:", providerResponseSaveError);
+      return jsonResponse({
+        status: "pending",
+        message: "Your data purchase is being checked. Do not submit it again yet.",
+        reference: providerReference,
+      }, 202);
+    }
+
     const { data: settlementData, error: settlementError } = await supabaseAdmin.rpc(
       "settle_data_purchase",
       {

@@ -50,6 +50,7 @@ function mapServerTx(tx: any): TransactionRecord {
   const statusMap: Record<string, string> = {
     success: 'SUCCESSFUL',
     pending: 'PENDING',
+    processing: 'PENDING',
     failed: 'FAILED',
   };
   const rawRef = tx.reference ?? tx.id;
@@ -122,7 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const [walletRes, txRes, depositRes, referralRes] = await Promise.allSettled([
         supabase.from('wallets').select('balance_kobo').eq('user_id', user.id).maybeSingle(),
-        supabase.from('vtu_transactions').select('id, transaction_type, amount_kobo, status, created_at, account_number').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+        supabase.from('vtu_transactions').select('id, transaction_type, amount_kobo, status, created_at, account_number, phone_number').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
         supabase.from('deposits').select('id, amount_kobo, status, created_at, reference').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
         supabase.functions.invoke('referral-services', { body: { action: 'summary' } }),
       ]);
@@ -143,12 +144,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (txRes.status === 'fulfilled' && !txRes.value.error) {
         const vtuTransactions = (txRes.value.data || [])
-          .filter((tx) => !isPendingExpired(tx.status, tx.created_at))
           .map((tx) => mapServerTx({
             ...tx,
             type: String(tx.transaction_type || '').toLowerCase(),
             amount: Number(tx.amount_kobo || 0) / 100,
-            label: tx.account_number || tx.transaction_type,
+            label: tx.transaction_type === 'data' ? 'Data purchase' : tx.account_number || tx.transaction_type,
+            recipient: tx.phone_number || tx.account_number || '',
             reference: String(tx.id),
           }));
 

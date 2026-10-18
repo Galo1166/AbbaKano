@@ -3,8 +3,17 @@
 import Link from "next/link";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { invokeSupabaseFunction, setRememberDevicePreference, supabase } from "@/lib/supabase";
 import { GENERIC_SERVICE_ERROR, isServiceFailure, reportServiceFailure } from "@/lib/userFeedback";
+
+function getRedirectTarget() {
+  const requestedTarget = new URLSearchParams(window.location.search).get("redirect") || "/app";
+  const target = new URL(requestedTarget, window.location.origin);
+  return target.origin === window.location.origin
+    ? `${target.pathname}${target.search}${target.hash}`
+    : "/app";
+}
 
 function normalizePhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
@@ -20,6 +29,7 @@ function normalizePhone(phone: string) {
 }
 
 export function LoginForm() {
+  const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [rememberDevice, setRememberDevice] = useState(false);
@@ -47,21 +57,9 @@ export function LoginForm() {
       const { data, error } = await supabase.auth.signInWithPassword(credentials);
 
       if (error) throw error;
-      if (!data.user) throw new Error("Could not create a login session.");
+      if (!data.user || !data.session) throw new Error("Could not create a login session.");
 
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw sessionError || new Error("Login succeeded, but session could not be restored.");
-      }
-
-      // Respect ?redirect= parameter
-      const params = new URLSearchParams(window.location.search);
-      const target = params.get("redirect") || "/app";
-      window.location.assign(target);
-
+      router.replace(getRedirectTarget());
     } catch (error) {
       console.error("Supabase login error:", error);
 
@@ -104,9 +102,7 @@ export function LoginForm() {
       });
       if (error) throw error;
 
-      const params = new URLSearchParams(window.location.search);
-      const target = params.get("redirect") || "/app";
-      window.location.assign(target);
+      router.replace(getRedirectTarget());
     } catch (error) {
       console.error("Passkey sign-in error:", error);
       if (error instanceof Error && (

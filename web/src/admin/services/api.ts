@@ -23,6 +23,27 @@ import { supabase } from "@/lib/supabase";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
+export type MonnifySettings = {
+  apiKey: string;
+  secretKey: string;
+  contractCode: string;
+  baseUrl: string;
+};
+
+/** Fetch Monnify DVA & Webhook settings */
+export async function fetchMonnifySettings(): Promise<MonnifySettings> {
+  return apiRequest<MonnifySettings>('/admin/monnify-settings');
+}
+
+/** Update Monnify DVA & Webhook settings */
+export async function updateMonnifySettings(settings: MonnifySettings): Promise<void> {
+  await apiRequest<void>('/admin/monnify-settings', {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  });
+}
+
+
 export type DashboardOverview = {
   totalVolumeToday: number;
   netMarginToday: number | null;
@@ -311,6 +332,45 @@ export async function manageAdminVtuPlans(
   return invokeSupabaseFunction("admin-vtu-plans", payload);
 }
 
+export type PriceOverride = {
+  id: string;
+  provider: "DSTV" | "GOTV" | "STARTIMES" | "MTN" | "AIRTEL" | "GLO" | "9MOBILE";
+  plan_code: string;
+  price: number;
+  enabled: boolean;
+  label?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProviderLivePlan = {
+  plan_code: string;
+  service_id: string;
+  name: string;
+  category: string;
+  cost_price: number;
+  selling_price: number;
+  enabled: boolean;
+  has_override: boolean;
+  override_id: string | null;
+  margin: number;
+};
+
+export async function managePriceOverrides(
+  payload: Record<string, unknown>,
+): Promise<{
+  overrides?: PriceOverride[];
+  override?: PriceOverride;
+  plans?: ProviderLivePlan[];
+  deleted?: boolean;
+}> {
+  return invokeSupabaseFunction("admin-cable-overrides", payload);
+}
+
+// Backwards-compatible aliases
+export const manageCablePriceOverrides = managePriceOverrides;
+export type CablePriceOverride = PriceOverride;
+
 export async function fetchMtnGeneralDataPlans(): Promise<MtnGeneralDataPlan[]> {
   const response = await apiRequest<{ plans: MtnGeneralDataPlan[] }>("/admin/vtu-data-plans/mtn-general");
   return response.plans;
@@ -405,6 +465,13 @@ export async function fetchInflows(
     hasNextPage: response.page * response.pageSize < response.total,
     metrics: response.metrics,
   };
+}
+
+export async function markDepositFailed(id: string): Promise<void> {
+  await invokeSupabaseFunction<{ success: boolean }>("admin-deposits", {
+    action: "mark_failed",
+    depositId: id,
+  });
 }
 
 // ─── Provider Balances ────────────────────────────────────────
@@ -551,7 +618,10 @@ export async function updateStaffMember(
 
 // ─── Margin Settings ──────────────────────────────────────────
 export async function fetchMarginSettings(): Promise<MarginSetting[]> {
-  const response = await apiRequest<{ margins: MarginSetting[] }>("/admin/settings/margins");
+  const response = await invokeSupabaseFunction<{ margins: MarginSetting[] }>(
+    "admin-settings",
+    { action: "get_margins" },
+  );
   return response.margins;
 }
 
@@ -559,9 +629,10 @@ export async function updateMargins(
   carrier: string,
   update: Partial<MarginSetting>
 ): Promise<ApiResponse<MarginSetting>> {
-  return apiRequest<ApiResponse<MarginSetting>>(`/admin/settings/margins/${carrier}`, {
-    method: "PATCH",
-    body: JSON.stringify(update),
+  return invokeSupabaseFunction<ApiResponse<MarginSetting>>("admin-settings", {
+    action: "update_margin",
+    carrier,
+    update,
   });
 }
 
@@ -676,15 +747,17 @@ export async function fetchSupportCases(): Promise<SupportCase[]> {
 
 // ─── System Settings ──────────────────────────────────────────
 export async function fetchSystemSettings(): Promise<SystemSettings> {
-  return apiRequest<SystemSettings>("/admin/settings");
+  return invokeSupabaseFunction<SystemSettings>("admin-settings", {
+    action: "get_settings",
+  });
 }
 
 export async function updateSystemSettings(
   updates: Partial<SystemSettings>
 ): Promise<ApiResponse<SystemSettings>> {
-  return apiRequest<ApiResponse<SystemSettings>>("/admin/settings", {
-    method: "PATCH",
-    body: JSON.stringify(updates),
+  return invokeSupabaseFunction<ApiResponse<SystemSettings>>("admin-settings", {
+    action: "update_settings",
+    settings: updates,
   });
 }
 

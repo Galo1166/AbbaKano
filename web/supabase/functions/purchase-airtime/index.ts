@@ -218,6 +218,30 @@ Deno.serve(async (req) => {
       if (!authorization) {
         return jsonResponse({ message: "Biometric authorization failed. Please try again." }, 401);
       }
+
+      // A biometric authorization is single-use.  Without consuming its
+      // challenge here, the signed authorization could be replayed until it
+      // expires with fresh idempotency keys.
+      const { data: consumed, error: consumeError } = await supabaseAdmin
+        .from("passkey_challenges")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("challenge", authorization.challenge)
+        .eq("purpose", "transaction")
+        .not("verified_at", "is", null)
+        .gt("expires_at", new Date().toISOString())
+        .select("user_id")
+        .maybeSingle();
+
+      if (consumeError || !consumed) {
+        if (consumeError) {
+          console.error("Passkey authorization consume failed:", consumeError);
+        }
+        return jsonResponse(
+          { message: "Biometric authorization has expired or was already used." },
+          403,
+        );
+      }
     }
 
     /*
