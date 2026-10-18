@@ -6,12 +6,11 @@ import {
   fetchMarginSettings,
   fetchSystemSettings,
   updateSystemSettings,
-  fetchMonnifySettings,
-  updateMonnifySettings,
+  updateMargins,
 } from "@admin/services/api";
 import PageHeader from "@admin/components/layout/PageHeader";
 import Toggle from "@admin/components/ui/Toggle";
-import type { MarginSetting, SystemSettings, MonnifySettings } from "@admin/types/telecom";
+import type { MarginSetting, SystemSettings } from "@admin/types/telecom";
 
 const CARRIER_IMAGES: Record<string, string> = {
   MTN: "/carriers/mtn.png",

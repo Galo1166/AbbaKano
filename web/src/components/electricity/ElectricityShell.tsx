@@ -188,8 +188,7 @@ export function ElectricityShell() {
       });
 
       setReceipt({
-        status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Electricity token generated successfully!",
+        message: sanitizeServiceMessage(purchaseRes.message || "") || "Electricity token generated successfully!",
         reference: purchaseRes.reference || `ELEC-${Date.now()}`,
         provider,
         meterNumber,
@@ -202,7 +201,7 @@ export function ElectricityShell() {
       setPin("");
       const updatedBal = await getWalletBalance();
       setBalance(updatedBal);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessage(safeErrorMessage(err, "An error occurred.") || "Biometric authentication failed.");
     } finally {
       setPurchasing(false);
@@ -233,8 +232,7 @@ export function ElectricityShell() {
       });
 
       setReceipt({
-        status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message) || "Electricity token generated successfully!",
+        message: sanitizeServiceMessage(purchaseRes.message || "") || "Electricity token generated successfully!",
         reference: purchaseRes.reference || `ELEC-${Date.now()}`,
         provider,
         meterNumber,
@@ -247,7 +245,7 @@ export function ElectricityShell() {
       setPin("");
       const updatedBal = await getWalletBalance();
       setBalance(updatedBal);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMessage(safeErrorMessage(err, "An error occurred.") || "Purchase could not be completed.");
     } finally {
       setPurchasing(false);
