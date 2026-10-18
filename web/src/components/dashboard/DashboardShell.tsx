@@ -17,6 +17,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { DataPurchaseShell, preloadDataPlans } from "@/components/data/DataPurchaseShell";
 import { AirtimeShell } from "@/components/airtime/AirtimeShell";
@@ -208,7 +209,7 @@ export function DashboardShell() {
         const rawBalanceKobo = Number(wallet?.balance_kobo || 0);
         let heldKobo = 0;
         if (resvResult?.data && Array.isArray(resvResult.data)) {
-          heldKobo = resvResult.data.reduce((sum: number, row: any) => sum + Number(row.amount_kobo || 0), 0);
+          heldKobo = resvResult.data.reduce((sum, row) => sum + Number(row.amount_kobo || 0), 0);
         }
         const availableBalance = Math.max(0, rawBalanceKobo - heldKobo) / 100;
 
@@ -244,27 +245,63 @@ export function DashboardShell() {
 
   // Live Realtime updates for wallet balance and transactions
   useEffect(() => {
-    let channel: any;
+    let cancelled = false;
+    let channel: RealtimeChannel | null = null;
+
     async function subscribeRealtime() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (error) {
+        console.error("Dashboard realtime session lookup failed:", error);
+        return;
+      }
+
+      const user = session?.user;
       if (!user) return;
 
-      channel = supabase
-        .channel(`dashboard-realtime-${user.id}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "wallets", filter: `user_id=eq.${user.id}` }, () => {
-          setReloadKey((k) => k + 1);
-        })
-        .on("postgres_changes", { event: "*", schema: "public", table: "wallet_reservations", filter: `user_id=eq.${user.id}` }, () => {
-          setReloadKey((k) => k + 1);
-        })
-        .on("postgres_changes", { event: "*", schema: "public", table: "vtu_transactions", filter: `user_id=eq.${user.id}` }, () => {
-          setReloadKey((k) => k + 1);
-        })
-        .subscribe();
+      const nextChannel = supabase.channel(
+        `dashboard-realtime-${user.id}-${crypto.randomUUID()}`,
+      );
+      nextChannel
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "wallets", filter: `user_id=eq.${user.id}` },
+          () => setReloadKey((current) => current + 1),
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "wallet_reservations", filter: `user_id=eq.${user.id}` },
+          () => setReloadKey((current) => current + 1),
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "vtu_transactions", filter: `user_id=eq.${user.id}` },
+          () => setReloadKey((current) => current + 1),
+        );
+
+      if (cancelled) {
+        await supabase.removeChannel(nextChannel);
+        return;
+      }
+
+      channel = nextChannel;
+      channel.subscribe((status, subscribeError) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("Dashboard realtime subscription failed:", subscribeError);
+        }
+      });
     }
-    void subscribeRealtime();
+
+    void subscribeRealtime().catch((error: unknown) => {
+      if (!cancelled) console.error("Dashboard realtime setup failed:", error);
+    });
+
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
     };
   }, []);
 
