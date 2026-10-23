@@ -10,6 +10,13 @@ const corsHeaders = {
 };
 
 const providers = ["AEDC", "IKEDC", "KEDCO", "PHED", "JED"];
+const providerDiscoMap: Record<string, string> = {
+  AEDC: "aedc",
+  IKEDC: "ikedc",
+  KEDCO: "kedco",
+  PHED: "portharcourt",
+  JED: "jos",
+};
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -304,7 +311,7 @@ Deno.serve(async (req) => {
       const result = await vtuGateRequest(baseUrl, apiKey, {
         service_id: selection.serviceId,
         meter_no: meterNumber,
-        disco: provider.toLowerCase(),
+        disco: providerDiscoMap[provider],
         amount: String(amount),
         phone_number: phone,
       });

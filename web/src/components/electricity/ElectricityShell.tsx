@@ -32,7 +32,7 @@ type ElectricityPurchaseResponse = {
 
 type ElectricityReceipt = {
   message: string;
-  reference: string;
+  reference?: string;
   provider: ElectricityProvider;
   meterNumber: string;
   amount: number;
@@ -132,6 +132,7 @@ export function ElectricityShell() {
   function updateMeterNumber(value: string) {
     const cleaned = value.replace(/\D/g, "").slice(0, 14);
     setMeterNumber(cleaned);
+    setIdempotencyKey("");
     setCustomerName(null);
     setVerifiedSelectionToken(null);
     setMessage("");
@@ -140,6 +141,7 @@ export function ElectricityShell() {
 
   function chooseProvider(nextProvider: ElectricityProvider) {
     setProvider(nextProvider);
+    setIdempotencyKey("");
     setCustomerName(null);
     setVerifiedSelectionToken(null);
     setMessage("");
@@ -152,6 +154,36 @@ export function ElectricityShell() {
     meterVerification === "verified" &&
     Boolean(verifiedSelectionToken);
   const isInsufficient = balance !== null && numericAmount > balance;
+
+  function completePurchase(purchaseRes: ElectricityPurchaseResponse): boolean {
+    if (purchaseRes.status !== "success") {
+      const statusMessage = sanitizeServiceMessage(
+        purchaseRes.message || "Your electricity purchase is still being processed.",
+      );
+      setMessage(
+        `${statusMessage || "Your electricity purchase is still being processed."}${
+          purchaseRes.reference ? ` Reference: ${purchaseRes.reference}.` : ""
+        } Do not submit the purchase again yet.`,
+      );
+      return false;
+    }
+
+    setReceipt({
+      message: sanitizeServiceMessage(purchaseRes.message || "") ||
+        "Electricity purchase successful.",
+      reference: purchaseRes.reference,
+      provider,
+      meterNumber,
+      amount: numericAmount,
+      customerName: customerName || undefined,
+      token: purchaseRes.token,
+      units: purchaseRes.units,
+    });
+    setShowCheckout(false);
+    setPin("");
+    setIdempotencyKey("");
+    return true;
+  }
 
   async function handlePasskeyPurchase() {
     if (!canReview) return;
@@ -187,18 +219,7 @@ export function ElectricityShell() {
         transactionAuthorization,
       });
 
-      setReceipt({
-        message: sanitizeServiceMessage(purchaseRes.message || "") || "Electricity token generated successfully!",
-        reference: purchaseRes.reference || `ELEC-${Date.now()}`,
-        provider,
-        meterNumber,
-        amount: numericAmount,
-        customerName: customerName || undefined,
-        token: purchaseRes.token || `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        units: purchaseRes.units || `${(numericAmount / 68).toFixed(1)} kWh`,
-      });
-      setShowCheckout(false);
-      setPin("");
+      if (!completePurchase(purchaseRes)) return;
       const updatedBal = await getWalletBalance();
       setBalance(updatedBal);
     } catch (err: unknown) {
@@ -231,18 +252,7 @@ export function ElectricityShell() {
         idempotencyKey,
       });
 
-      setReceipt({
-        message: sanitizeServiceMessage(purchaseRes.message || "") || "Electricity token generated successfully!",
-        reference: purchaseRes.reference || `ELEC-${Date.now()}`,
-        provider,
-        meterNumber,
-        amount: numericAmount,
-        customerName: customerName || undefined,
-        token: purchaseRes.token || `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        units: purchaseRes.units || `${(numericAmount / 68).toFixed(1)} kWh`,
-      });
-      setShowCheckout(false);
-      setPin("");
+      if (!completePurchase(purchaseRes)) return;
       const updatedBal = await getWalletBalance();
       setBalance(updatedBal);
     } catch (err: unknown) {
@@ -404,7 +414,10 @@ export function ElectricityShell() {
               type="text"
               inputMode="numeric"
               value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) => {
+                setAmount(e.target.value.replace(/\D/g, ""));
+                setIdempotencyKey("");
+              }}
               placeholder="Enter amount (min ₦500)"
               className={`w-full bg-transparent py-3 pl-2 pr-9 font-mono text-base font-bold outline-none ${
                 isDark ? "text-white placeholder-slate-500" : "text-slate-900 placeholder-slate-400"
@@ -430,7 +443,10 @@ export function ElectricityShell() {
                 <button
                   key={preset}
                   type="button"
-                  onClick={() => setAmount(String(preset))}
+                  onClick={() => {
+                    setAmount(String(preset));
+                    setIdempotencyKey("");
+                  }}
                   className={`shrink-0 rounded-2xl border px-4 py-2.5 font-mono text-xs font-bold transition-all cursor-pointer ${
                     isSelected
                       ? "bg-blue-600 text-white border-blue-600 shadow-xs"
@@ -452,7 +468,7 @@ export function ElectricityShell() {
             type="button"
             disabled={!canReview || purchasing}
             onClick={() => {
-              setIdempotencyKey(crypto.randomUUID());
+              setIdempotencyKey((current) => current || crypto.randomUUID());
               setShowCheckout(true);
             }}
             className="w-full h-12 rounded-xl flex items-center justify-center text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-98 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -626,7 +642,7 @@ export function ElectricityShell() {
         </div>
       )}
 
-      {/* Electricity Token Generator Receipt */}
+      {/* Electricity Purchase Receipt */}
       {receipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
           <div className={`w-full max-w-sm rounded-3xl border p-6 text-center shadow-2xl transition-colors ${
@@ -639,10 +655,12 @@ export function ElectricityShell() {
             </div>
 
             <h3 className={`text-lg font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>
-              Token Generated!
+              {receipt.token ? "Token Generated!" : "Purchase Successful"}
             </h3>
             <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              {receipt.message}
+              {receipt.token
+                ? receipt.message
+                : "The provider confirmed your purchase but did not return a token. Contact support with your reference."}
             </p>
 
             {receipt.token && (
@@ -677,6 +695,12 @@ export function ElectricityShell() {
                 <div className="flex justify-between">
                   <span className={isDark ? "text-slate-400" : "text-slate-500"}>Units</span>
                   <span className="font-bold">{receipt.units}</span>
+                </div>
+              )}
+              {receipt.reference && (
+                <div className="flex justify-between">
+                  <span className={isDark ? "text-slate-400" : "text-slate-500"}>Reference</span>
+                  <span className="font-mono font-bold">{receipt.reference}</span>
                 </div>
               )}
               <div className="flex justify-between pt-1.5 border-t ">
