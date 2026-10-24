@@ -194,12 +194,24 @@ export function LandingFooter() {
         </div>
 
         {/* Bottom Sub-bar */}
-        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-[var(--border)] pt-8 text-xs text-[var(--text-muted)] sm:flex-row">
-          <span className="font-medium">&copy; 2026 AbbaKano DataSub. All rights reserved.</span>
-          <div className="flex items-center gap-6 font-semibold">
-            <Link href="/privacy" className="hover:text-[var(--primary)] transition-colors">Privacy</Link>
-            <Link href="/terms" className="hover:text-[var(--primary)] transition-colors">Terms</Link>
-            <Link href="/support" className="hover:text-[var(--primary)] transition-colors">Resolution Desk</Link>
+        <div className="mt-14 border-t border-[var(--border)] pt-8 space-y-4">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row text-xs text-[var(--text-muted)]">
+            <div className="flex items-center gap-6 font-semibold">
+              <Link href="/privacy" className="hover:text-[var(--primary)] transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-[var(--primary)] transition-colors">Terms of Service</Link>
+              <Link href="/support" className="hover:text-[var(--primary)] transition-colors">Resolution Desk</Link>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Direct Telco &amp; Banking Switching Active</span>
+            </div>
+          </div>
+
+          {/* Corporate Ownership & Legal Declaration for Payment Gateway Verification */}
+          <div className="border-t border-[var(--border)]/40 pt-4 text-center">
+            <p className="mx-auto max-w-4xl text-[11px] sm:text-xs leading-relaxed text-[var(--text-muted)] font-normal">
+              &copy; 2026 AbbaKanoDatasub. All rights reserved. AbbaKanoDatasub is powered and wholly owned by ABBA KANO INVESTMENTS LTD (RC 9900043). Registered Office: Gwammaja, Dala LGA, Kano State, Nigeria.
+            </p>
           </div>
         </div>
       </div>

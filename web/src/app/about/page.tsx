@@ -37,6 +37,13 @@ export default function AboutPage() {
       </section>
 
       <section className="space-y-3 border-t border-[var(--border)] pt-6">
+        <h2 className="text-xl font-bold text-[var(--text)]">Corporate Structure &amp; Ownership</h2>
+        <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
+          AbbaKanoDatasub is powered and wholly owned by <strong className="font-semibold text-[var(--text)]">ABBA KANO INVESTMENTS LTD</strong> (RC 9900043). Registered Office: Gwammaja, Dala LGA, Kano State, Nigeria. All platform payments, billing, and automated banking operations are settled under this corporate identity.
+        </p>
+      </section>
+
+      <section className="space-y-3 border-t border-[var(--border)] pt-6">
         <h2 className="text-xl font-bold text-[var(--text)]">24/7 Human Accountability</h2>
         <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
           Unlike platforms that hide behind automated chatbots, AbbaKano DataSub maintains a fully staffed operations center in Kano State, Nigeria. Our team is available 24 hours a day, 7 days a week, 365 days a year to ensure every customer issue is resolved immediately.

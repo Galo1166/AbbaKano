@@ -11,9 +11,9 @@ export default function TermsPage() {
       lastUpdated="October 2026"
     >
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[var(--text)]">Acceptance and Eligibility</h2>
+        <h2 className="text-xl font-bold text-[var(--text)]">Acceptance and Corporate Identity</h2>
         <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
-          By registering an account or initiating any transaction on AbbaKano DataSub, you explicitly agree to these Terms and Conditions and our Privacy Policy. You must provide truthful, current identification details and be of legal age to enter into binding agreements.
+          AbbaKanoDatasub is powered and wholly owned by ABBA KANO INVESTMENTS LTD (RC 9900043). Registered Office: Gwammaja, Dala LGA, Kano State, Nigeria. By registering an account or initiating any transaction on AbbaKano DataSub, you explicitly agree to these Terms and Conditions and our Privacy Policy. You must provide truthful, current identification details and be of legal age to enter into binding agreements.
         </p>
       </section>
 
