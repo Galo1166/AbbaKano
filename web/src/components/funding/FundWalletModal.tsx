@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { useThemeMode } from "@/lib/theme";
@@ -15,10 +15,16 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
   const isDark = theme === "dark";
 
   const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
+  const [requiresIdentity, setRequiresIdentity] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("Customer");
+
+  // NIN submission state
+  const [ninInput, setNinInput] = useState<string>("");
+  const [generating, setGenerating] = useState<boolean>(false);
+  const [ninError, setNinError] = useState<string>("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -47,9 +53,10 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
           }
         }
 
-        const accounts = await fetchVirtualAccounts();
+        const result = await fetchVirtualAccounts();
         if (!cancelled) {
-          setVirtualAccounts(accounts);
+          setVirtualAccounts(result.accounts || []);
+          setRequiresIdentity(result.requiresIdentity === true);
         }
       } catch (err) {
         if (!cancelled) {
@@ -70,6 +77,31 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  async function handleGenerateAccounts(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const clean = ninInput.replace(/\D/g, "");
+    if (clean.length !== 11) {
+      setNinError("Please enter a valid 11-digit NIN.");
+      return;
+    }
+    setGenerating(true);
+    setNinError("");
+    try {
+      const result = await fetchVirtualAccounts({
+        type: "nin",
+        value: clean,
+      });
+      setVirtualAccounts(result.accounts || []);
+      setRequiresIdentity(result.requiresIdentity === true);
+      setToastMessage("Virtual Accounts Ready!");
+      setTimeout(() => setToastMessage(null), 2500);
+    } catch (err: unknown) {
+      setNinError(err instanceof Error ? err.message : "Failed to generate accounts.");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function copyToClipboard(accountNumber: string, bankName: string) {
     try {
@@ -138,10 +170,12 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
         </div>
 
         <p className={`text-xs mt-3 mb-4 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-          Transfer to any account below. Your wallet is automatically credited in 15–30 seconds.
+          {virtualAccounts.length > 0
+            ? "Transfer to any account below. Your wallet is automatically credited in 15–30 seconds."
+            : "Central Bank of Nigeria (CBN) regulations mandate identity verification before generating automated virtual accounts."}
         </p>
 
-        {/* Accounts List */}
+        {/* Accounts List OR NIN Verification View */}
         <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
           {loading ? (
             <div className="flex items-center justify-center py-12 gap-2 text-xs text-slate-400">
@@ -232,8 +266,98 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
               );
             })
           ) : (
-            <div className="py-8 text-center text-xs text-slate-400">
-              No dedicated accounts available. Please try again in a moment.
+            /* NIN Prompt View when user has no dedicated accounts yet */
+            <div className={`rounded-2xl border p-5 ${
+              isDark ? "bg-[#181B25] border-[#222634]" : "bg-slate-50 border-slate-200"
+            }`}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  CBN & FG Regulatory Compliance
+                </span>
+              </div>
+
+              <h3 className="text-sm font-bold tracking-tight">Identity Verification Required</h3>
+              <p className={`text-xs mt-1 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                Central Bank of Nigeria (CBN) regulations mandate your 11-digit National Identity Number (NIN) to automatically provision your dedicated virtual bank accounts.
+              </p>
+
+              <form onSubmit={handleGenerateAccounts} className="mt-4 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
+                  <label htmlFor="nin-input" className={isDark ? "text-slate-400" : "text-slate-500"}>
+                    11-Digit NIN Number
+                  </label>
+                  <span className={ninInput.replace(/\D/g, "").length === 11 ? "text-emerald-400" : "text-slate-500"}>
+                    {ninInput.replace(/\D/g, "").length} / 11
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <input
+                    id="nin-input"
+                    type="text"
+                    maxLength={11}
+                    value={ninInput}
+                    onChange={(e) => {
+                      setNinInput(e.target.value.replace(/\D/g, "").slice(0, 11));
+                      if (ninError) setNinError("");
+                    }}
+                    placeholder="Enter your 11-digit NIN"
+                    disabled={generating}
+                    className={`w-full rounded-xl border px-3.5 py-2.5 text-sm font-mono tracking-widest outline-none transition-colors ${
+                      isDark
+                        ? "bg-[#141721] border-[#2E354B] text-white focus:border-blue-500"
+                        : "bg-white border-slate-300 text-slate-900 focus:border-blue-600"
+                    }`}
+                  />
+                  {ninInput.replace(/\D/g, "").length === 11 && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </span>
+                  )}
+                </div>
+
+                {ninError && (
+                  <div className="mt-2.5 rounded-lg border border-rose-500/20 bg-rose-500/10 p-2.5 text-xs text-rose-400 flex items-center gap-2">
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>{ninError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={ninInput.replace(/\D/g, "").length !== 11 || generating}
+                  className={`mt-4 w-full flex items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs font-bold transition-all cursor-pointer ${
+                    ninInput.replace(/\D/g, "").length === 11 && !generating
+                      ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20"
+                      : "bg-slate-700/40 text-slate-500 cursor-not-allowed"
+                  }`}
+                >
+                  {generating ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Generating Dedicated Accounts...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Generate Virtual Accounts
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <p className={`mt-2.5 text-center text-[10px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                🔒 Your NIN is processed securely and encrypted for CBN regulatory compliance.
+              </p>
             </div>
           )}
         </div>
