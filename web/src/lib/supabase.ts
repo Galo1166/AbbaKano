@@ -111,5 +111,25 @@ export async function getWalletBalance(): Promise<number> {
   if (!resvRes.error && Array.isArray(resvRes.data)) {
     heldKobo = resvRes.data.reduce((sum, r) => sum + Number(r.amount_kobo || 0), 0);
   }
-  return Math.max(0, rawKobo - heldKobo) / 100;
+  const available = Math.max(0, rawKobo - heldKobo) / 100;
+  console.log('getWalletBalance fetched:', available);
+  return available;
 }
+
+export function subscribeToWallet(
+  userId: string,
+  onChange: (newBalKobo: number) => void
+) {
+  return supabase
+    .channel(`wallet-${userId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'wallets',
+      filter: `user_id=eq.${userId}`,
+    }, (payload) => {
+      const newBal = Number(payload.new?.balance_kobo ?? 0);
+      onChange(newBal);
+    })
+    .subscribe();
+}

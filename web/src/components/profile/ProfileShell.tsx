@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, subscribeToWallet, getWalletBalance } from "@/lib/supabase";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { useThemeMode } from "@/lib/theme";
@@ -46,6 +46,7 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
 
   const [user, setUser] = useState<UserProfile>(initialUser || {});
   const [balance, setBalance] = useState<number>(0);
+  const [userId, setUserId] = useState<string | null>(null);
   const [biometrics, setBiometrics] = useState(false);
   const [appLock, setAppLock] = useState(false);
   const [hasPin, setHasPin] = useState(false);
@@ -77,6 +78,7 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
       try {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser) return;
+        setUserId(authUser.id);
 
         const [profileRes, walletRes, resvRes] = await Promise.all([
           supabase.from("profiles").select("*").eq("id", authUser.id).maybeSingle(),
@@ -110,7 +112,44 @@ export function ProfileShell({ initialUser }: { initialUser?: UserProfile }) {
     void loadData();
   }, []);
 
-  async function handleToggleBiometrics() {
+  // Subscribe to wallet balance changes in real time
+  useEffect(() => {
+    if (!userId) return;
+    console.log('Setting up wallet realtime subscription for user', userId);
+    const channel = subscribeToWallet(userId, async (_newBalKobo: number) => {
+      console.log('Realtime wallet change detected for user', userId);
+      const bal = await getWalletBalance();
+      console.log('Fetched refreshed balance:', bal);
+      setBalance(bal);
+    });
+    return () => {
+      console.log('Removing wallet realtime subscription for user', userId);
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  // Fallback polling – fetch raw wallet balance every 5 seconds
+useEffect(() => {
+  if (!userId) return;
+  const interval = setInterval(async () => {
+    const { data, error } = await supabase
+      .from('wallets')
+      .select('balance_kobo')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) {
+      console.error('Polling wallet error:', error);
+      return;
+    }
+    const rawKobo = Number(data?.balance_kobo || 0);
+    const bal = rawKobo / 100;
+    console.log('[wallet‑poll] fetched raw balance →', bal);
+    setBalance(bal);
+  }, 5000);
+  return () => clearInterval(interval);
+}, [userId]);
+
+async function handleToggleBiometrics() {
     const next = !biometrics;
     setBiometrics(next);
     try {

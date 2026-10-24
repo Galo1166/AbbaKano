@@ -333,7 +333,7 @@ if (!transactionId) {
     500,
   );
 }
-  const serviceIds: Record<string, string> = {
+    const serviceIds: Record<string, string> = {
   MTN: "58",
   AIRTEL: "312",
   GLO: "243",
@@ -343,25 +343,20 @@ if (!transactionId) {
     const serviceId = serviceIds[network];
 
     if (!serviceId) {
-      await supabaseAdmin
-        .from("wallet_reservations")
-        .update({
-          status: "released",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("transaction_id", transactionId)
-
-      await supabaseAdmin
-        .from("vtu_transactions")
-        .update({
-          status: "failed",
-          provider_response: {
-            message:
-              "VTUGATE service ID is not configured for this network.",
+      const { error: releaseError } = await supabaseAdmin.rpc(
+        "release_airtime_reservation",
+        {
+          p_transaction_id: transactionId,
+          p_provider_response: {
+            message: "VTUGATE service ID is not configured for this network.",
           },
-          updated_at: new Date().toISOString(),
-        })
-       .eq("id", transactionId)
+        },
+      );
+      if (releaseError) {
+        console.error("Airtime reservation release failed:", releaseError);
+        return jsonResponse({ message: "Could not release the reserved balance. Please contact support." }, 500);
+      }
+
       return jsonResponse(
         {
           message:
@@ -408,22 +403,17 @@ if (!transactionId) {
      */
 
    if (!vtugateResponse.ok || vtugateData?.status !== true) {
-      await supabaseAdmin
-        .from("wallet_reservations")
-        .update({
-          status: "released",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("transaction_id", transactionId);
-
-      await supabaseAdmin
-        .from("vtu_transactions")
-        .update({
-          status: "failed",
-          provider_response: vtugateData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", transactionId);
+      const { error: releaseError } = await supabaseAdmin.rpc(
+        "release_airtime_reservation",
+        {
+          p_transaction_id: transactionId,
+          p_provider_response: vtugateData,
+        },
+      );
+      if (releaseError) {
+        console.error("Airtime reservation release failed:", releaseError);
+        return jsonResponse({ message: "The provider rejected this request, but the reserved balance could not be released. Please contact support." }, 500);
+      }
 
       return jsonResponse(
         {
@@ -449,36 +439,38 @@ const providerReference =
 
     /*
      * ----------------------------------------------------
-     * 15. Mark transaction successful
+     * 15. Save provider acceptance
      * ----------------------------------------------------
      */
 
-    const { error: transactionUpdateError } =
+    const { data: updatedTransaction, error: transactionUpdateError } =
       await supabaseAdmin
         .from("vtu_transactions")
         .update({
-          status: "success",
           provider_reference: providerReference,
           provider_response: vtugateData,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", transactionId);
+        .eq("id", transactionId)
+        .eq("status", "processing")
+        .select("id")
+        .maybeSingle();
 
-    if (transactionUpdateError) {
+    if (transactionUpdateError || !updatedTransaction) {
       console.error(
         "Transaction update failed:",
-        transactionUpdateError,
+        transactionUpdateError || "Transaction is no longer processing.",
       );
 
       return jsonResponse(
         {
           message:
-            "Airtime was accepted but transaction finalization failed. Please contact support.",
+            "Airtime was accepted and is being finalized. Do not submit it again yet.",
           reference:
             providerReference ||
             `ABBA-${transactionId}`,
-        },  
-        500,
+        },
+        202,
       );
     }
 
@@ -486,49 +478,42 @@ const providerReference =
      * ----------------------------------------------------
      * 16. Settle reservation
      *
-     * IMPORTANT:
-     * The wallet itself is not debited here yet.
-     *
-     * We will move this into an atomic PostgreSQL
-     * function so wallet balance + ledger + reservation
-     * are updated together.
+     * Wallet, ledger, reservation, and transaction status
+     * are updated atomically by the database function.
      * ----------------------------------------------------
      */
 
-   const { data: settlement, error: settlementError } =
-  await supabaseAdmin.rpc("settle_airtime_purchase", {
-    p_transaction_id: transactionId,
-  });
+    const { data: settlement, error: settlementError } =
+      await supabaseAdmin.rpc("settle_airtime_purchase", {
+        p_transaction_id: transactionId,
+        p_provider_reference: providerReference,
+        p_provider_response: vtugateData,
+      });
 
-if (settlementError) {
-  console.error(
-    "Airtime settlement failed:",
-    settlementError,
-  );
+    if (settlementError) {
+      console.error(
+        "Airtime settlement failed:",
+        settlementError,
+      );
 
-  return jsonResponse(
-    {
-      message:
-        "Airtime was accepted but wallet settlement failed. Please contact support.",
-      reference:
-        providerReference ||
-        `ABBA-${transactionId}`,
-    },
-    500,
-  );
-}
+      return jsonResponse(
+        {
+          message:
+            "Airtime was accepted and is being finalized. Do not submit it again yet.",
+          reference:
+            providerReference ||
+            `ABBA-${transactionId}`,
+        },
+        202,
+      );
+    }
 
-
-
-  return jsonResponse({
-  status: "success",
-  message:
-    "Airtime recharge completed successfully.",
-  reference:
-    providerReference ||
-    `ABBA-${transactionId}`,
-  balance_kobo: settlement?.balance_after_kobo,
-});
+    return jsonResponse({
+      status: "success",
+      message: "Airtime recharge completed successfully.",
+      reference: providerReference || `ABBA-${transactionId}`,
+      balance_kobo: settlement?.balance_after_kobo,
+    });
   } catch (error) {
     console.error("purchase-airtime error:", error);
 

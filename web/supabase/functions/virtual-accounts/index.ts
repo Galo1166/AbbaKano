@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createMonnifyReservedAccount, getMonnifyConfig } from "../_shared/monnify.ts";
+import { createMonnifyReservedAccount } from "../_shared/monnify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,7 +20,32 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return jsonResponse({ message: "Method not allowed" }, 405);
+  }
+
   try {
+    const requestBody: unknown = await req.json().catch(() => null);
+    if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) {
+      return jsonResponse({ message: "Invalid request body" }, 400);
+    }
+    const body = requestBody as Record<string, unknown>;
+    const bvn = typeof body.bvn === "string" ? body.bvn.trim() : "";
+    const nin = typeof body.nin === "string" ? body.nin.trim() : "";
+
+    if (
+      (body.bvn !== undefined && typeof body.bvn !== "string") ||
+      (body.nin !== undefined && typeof body.nin !== "string") ||
+      (bvn && nin) ||
+      (bvn && !/^\d{11}$/.test(bvn)) ||
+      (nin && !/^\d{11}$/.test(nin))
+    ) {
+      return jsonResponse(
+        { message: "Enter one valid 11-digit BVN or NIN." },
+        400,
+      );
+    }
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return jsonResponse({ message: "Missing authorization" }, 401);
@@ -71,6 +96,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ accounts: existingAccounts });
     }
 
+    if (!bvn && !nin) {
+      return jsonResponse({ accounts: [], requiresIdentity: true });
+    }
+
     // 2. If user doesn't have accounts yet, try to generate them now
     const { data: profile } = await supabaseAdmin
       .from("profiles")
@@ -87,6 +116,9 @@ Deno.serve(async (req) => {
       fullName,
       email,
       phone,
+    }, {
+      bvn: bvn || undefined,
+      nin: nin || undefined,
     });
 
     return jsonResponse({ accounts: createdAccounts });

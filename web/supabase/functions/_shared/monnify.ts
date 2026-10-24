@@ -14,7 +14,11 @@ export interface VirtualAccountItem {
   accountName: string;
 }
 
-let cachedAccessToken: { token: string; expiresAt: number } | null = null;
+let cachedAccessToken: {
+  token: string;
+  expiresAt: number;
+  configKey: string;
+} | null = null;
 
 export async function getMonnifyConfig(
   supabaseAdmin?: ReturnType<typeof createClient>,
@@ -22,9 +26,9 @@ export async function getMonnifyConfig(
   let apiKey = Deno.env.get("MONNIFY_API_KEY") || "";
   let secretKey = Deno.env.get("MONNIFY_SECRET_KEY") || "";
   let contractCode = Deno.env.get("MONNIFY_CONTRACT_CODE") || "";
-  let baseUrl = (
-    Deno.env.get("MONNIFY_BASE_URL") || "https://api.monnify.com"
-  ).replace(/\/$/, "");
+  let baseUrl = (Deno.env.get("MONNIFY_BASE_URL") || "")
+    .trim()
+    .replace(/\/$/, "");
 
   // If not in env, check admin_system_settings in database
   if ((!apiKey || !secretKey || !contractCode) && supabaseAdmin) {
@@ -39,7 +43,9 @@ export async function getMonnifyConfig(
         if (!apiKey && m.apiKey) apiKey = String(m.apiKey).trim();
         if (!secretKey && m.secretKey) secretKey = String(m.secretKey).trim();
         if (!contractCode && m.contractCode) contractCode = String(m.contractCode).trim();
-        if (m.baseUrl) baseUrl = String(m.baseUrl).trim().replace(/\/$/, "");
+        if (!baseUrl && m.baseUrl) {
+          baseUrl = String(m.baseUrl).trim().replace(/\/$/, "");
+        }
       }
     } catch (err) {
       console.warn("Could not load Monnify settings from database:", err);
@@ -50,11 +56,17 @@ export async function getMonnifyConfig(
     return null;
   }
 
+  baseUrl ||= "https://api.monnify.com";
   return { apiKey, secretKey, contractCode, baseUrl };
 }
 
 export async function getMonnifyAccessToken(config: MonnifyConfig): Promise<string> {
-  if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now()) {
+  const configKey = `${config.baseUrl}:${config.apiKey}:${config.secretKey}`;
+  if (
+    cachedAccessToken &&
+    cachedAccessToken.configKey === configKey &&
+    cachedAccessToken.expiresAt > Date.now()
+  ) {
     return cachedAccessToken.token;
   }
 
@@ -81,6 +93,7 @@ export async function getMonnifyAccessToken(config: MonnifyConfig): Promise<stri
   cachedAccessToken = {
     token,
     expiresAt: Date.now() + (expiresInSeconds - 300) * 1000,
+    configKey,
   };
 
   return token;
@@ -89,11 +102,11 @@ export async function getMonnifyAccessToken(config: MonnifyConfig): Promise<stri
 export async function createMonnifyReservedAccount(
   supabaseAdmin: ReturnType<typeof createClient>,
   user: { id: string; fullName: string; email: string; phone: string },
+  identity: { bvn?: string; nin?: string },
 ): Promise<VirtualAccountItem[]> {
   const config = await getMonnifyConfig(supabaseAdmin);
   if (!config) {
-    console.warn("Monnify API keys are not configured. Skipping DVA creation.");
-    return [];
+    throw new Error("Monnify is not configured.");
   }
 
   const accessToken = await getMonnifyAccessToken(config);
@@ -107,6 +120,8 @@ export async function createMonnifyReservedAccount(
     customerEmail: user.email,
     customerName: user.fullName,
     getAllAvailableBanks: true,
+    ...(identity.bvn ? { bvn: identity.bvn } : {}),
+    ...(identity.nin ? { nin: identity.nin } : {}),
   };
 
   const response = await fetch(
@@ -132,6 +147,10 @@ export async function createMonnifyReservedAccount(
   }
 
   const accountsRaw = payload.responseBody?.accounts || [];
+  if (!Array.isArray(accountsRaw) || accountsRaw.length === 0) {
+    throw new Error("Monnify did not return any virtual accounts.");
+  }
+
   const items: VirtualAccountItem[] = [];
 
   for (const acc of accountsRaw) {
@@ -146,7 +165,7 @@ export async function createMonnifyReservedAccount(
 
     items.push({ bankName, bankCode, accountNumber, accountName });
 
-    await supabaseAdmin
+    const { error: saveError } = await supabaseAdmin
       .from("user_virtual_accounts")
       .upsert(
         {
@@ -162,6 +181,13 @@ export async function createMonnifyReservedAccount(
         },
         { onConflict: "user_id,bank_name,account_number" },
       );
+    if (saveError) {
+      throw new Error(`Could not save the Monnify virtual account: ${saveError.message}`);
+    }
+  }
+
+  if (items.length === 0) {
+    throw new Error("Monnify returned virtual accounts with incomplete details.");
   }
 
   return items;

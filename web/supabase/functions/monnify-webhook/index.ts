@@ -59,12 +59,20 @@ Deno.serve(async (req) => {
       throw new Error("Missing Monnify event data");
     }
 
-    const transactionReference = String(eventData.transactionReference || "").trim();
+    const transactionReference = String(
+      eventData.transactionReference || eventData.paymentReference || "",
+    ).trim();
     const paymentReference = String(eventData.paymentReference || transactionReference).trim();
-    const amountPaid = Number(eventData.amountPaid || eventData.totalPayable || 0);
+    const amountPaid = Number(eventData.amountPaid ?? eventData.totalPayable ?? 0);
     const amountKobo = Math.round(amountPaid * 100);
 
-    if (!paymentReference || amountKobo <= 0) {
+    if (
+      !paymentReference ||
+      !transactionReference ||
+      !Number.isFinite(amountPaid) ||
+      !Number.isSafeInteger(amountKobo) ||
+      amountKobo <= 0
+    ) {
       throw new Error(`Invalid payment details: ref=${paymentReference}, amount=${amountPaid}`);
     }
 

@@ -461,59 +461,14 @@ Deno.serve(async (req) => {
     );
 
     if (settlementError) {
-      console.warn("settle_data_purchase RPC returned error, performing direct fallback settlement:", settlementError);
-      const { data: trans } = await supabaseAdmin
-        .from("vtu_transactions")
-        .select("user_id, amount_kobo, network, phone_number, provider, metadata")
-        .eq("id", transactionId)
-        .maybeSingle();
-
-      const { data: resv } = await supabaseAdmin
-        .from("wallet_reservations")
-        .select("id, wallet_id, amount_kobo")
-        .eq("transaction_id", transactionId)
-        .maybeSingle();
-
-      if (trans && resv) {
-        const { data: w } = await supabaseAdmin
-          .from("wallets")
-          .select("id, balance_kobo")
-          .eq("id", resv.wallet_id)
-          .maybeSingle();
-
-        if (w) {
-          const newBalance = Math.max(0, Number(w.balance_kobo) - Number(resv.amount_kobo));
-          finalBalanceKobo = newBalance;
-          await supabaseAdmin.from("wallets").update({ balance_kobo: newBalance, updated_at: new Date().toISOString() }).eq("id", w.id);
-          await supabaseAdmin.from("wallet_reservations").update({ status: "settled", updated_at: new Date().toISOString() }).eq("id", resv.id);
-          await supabaseAdmin.from("vtu_transactions").update({
-            status: "success",
-            provider_reference: providerReference,
-            provider_response: providerPayload,
-            updated_at: new Date().toISOString(),
-          }).eq("id", transactionId);
-          await supabaseAdmin.from("wallet_ledger").insert({
-            user_id: trans.user_id,
-            wallet_id: w.id,
-            transaction_id: transactionId,
-            entry_type: "purchase",
-            amount_kobo: -Number(resv.amount_kobo),
-            balance_before_kobo: w.balance_kobo,
-            balance_after_kobo: newBalance,
-            description: selection.label || "Data purchase",
-            metadata: {
-              network: trans.network,
-              phone_number: trans.phone_number,
-              provider: trans.provider,
-              provider_reference: providerReference,
-              plan_code: providerCode,
-            },
-          });
-        }
-      }
-    } else {
-      finalBalanceKobo = (settlementData as any)?.balance_after_kobo;
+      console.error("Data purchase settlement failed:", settlementError);
+      return jsonResponse({
+        status: "pending",
+        message: "Your data purchase is being finalized. Do not submit it again yet.",
+        reference: providerReference,
+      }, 202);
     }
+    finalBalanceKobo = (settlementData as any)?.balance_after_kobo;
 
     const { data: ledgerEntry, error: ledgerLookupError } = await supabaseAdmin
       .from("wallet_ledger")
