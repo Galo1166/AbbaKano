@@ -31,6 +31,7 @@ import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { ReferEarnShell } from "@/components/referral/ReferEarnShell";
 import { useThemeMode } from "@/lib/theme";
+import { preloadVirtualAccounts } from "@/lib/virtualAccounts";
 
 type DashboardData = {
   user: {
@@ -152,7 +153,9 @@ export function DashboardShell() {
     void preloadDataPlans().catch((error) => {
       console.error("Background data-plan preload failed:", error);
     });
+    preloadVirtualAccounts();
   }, []);
+
 
   useEffect(() => {
     let cancelled = false;

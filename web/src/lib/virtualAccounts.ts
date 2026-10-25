@@ -16,9 +16,32 @@ export interface VirtualAccountResult {
   requiresIdentity: boolean;
 }
 
-const VIRTUAL_ACCOUNT_CACHE_TTL_MS = 5 * 60 * 1000;
+const VIRTUAL_ACCOUNT_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min — DVAs don't change
 const virtualAccountCache = new Map<string, { accounts: VirtualAccount[]; expiresAt: number }>();
 const virtualAccountRequests = new Map<string, Promise<VirtualAccountResult>>();
+
+/**
+ * Synchronously returns cached virtual accounts for the given userId,
+ * or null if the cache is empty / expired. Used to skip loading spinners.
+ */
+export function getCachedVirtualAccounts(userId: string): VirtualAccountResult | null {
+  const cached = virtualAccountCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return { accounts: cached.accounts, requiresIdentity: false };
+  }
+  return null;
+}
+
+/**
+ * Fire-and-forget prefetch — call on app/dashboard mount so accounts are
+ * ready by the time the user opens Fund Wallet.
+ */
+export function preloadVirtualAccounts(): void {
+  void fetchVirtualAccounts().catch(() => {
+    // Silently swallow — this is a background optimization only
+  });
+}
+
 
 function normalizeVirtualAccount(value: unknown): VirtualAccount | null {
   if (!value || typeof value !== "object") return null;

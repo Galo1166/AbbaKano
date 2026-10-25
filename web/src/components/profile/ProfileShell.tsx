@@ -145,7 +145,7 @@ useEffect(() => {
     const bal = rawKobo / 100;
     console.log('[wallet‑poll] fetched raw balance →', bal);
     setBalance(bal);
-  }, 5000);
+  }, 86400000);
   return () => clearInterval(interval);
 }, [userId]);
 
