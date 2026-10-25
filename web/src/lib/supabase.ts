@@ -128,8 +128,8 @@ export function subscribeToWallet(
       table: 'wallets',
       filter: `user_id=eq.${userId}`,
     }, (payload) => {
-      const newBal = Number(payload.new?.balance_kobo ?? 0);
+      const newBal = Number((payload.new as Record<string, any>)?.balance_kobo ?? 0);
       onChange(newBal);
     })
     .subscribe();
-}
+}

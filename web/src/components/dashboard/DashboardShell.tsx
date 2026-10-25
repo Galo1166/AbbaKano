@@ -137,6 +137,23 @@ export function DashboardShell() {
   useEffect(() => {
     void preloadAllDataPlans();
   }, []);
+
+  // Refresh once when the user returns to the app. This recovers from a
+  // suspended Realtime connection without making recurring polling requests.
+  useEffect(() => {
+    function refreshAfterReturn() {
+      if (document.visibilityState === "visible") {
+        setReloadKey((current) => current + 1);
+      }
+    }
+
+    window.addEventListener("focus", refreshAfterReturn);
+    document.addEventListener("visibilitychange", refreshAfterReturn);
+    return () => {
+      window.removeEventListener("focus", refreshAfterReturn);
+      document.removeEventListener("visibilitychange", refreshAfterReturn);
+    };
+  }, []);
   const isDark = theme === "dark";
 
   function toggleBalanceVisibility() {

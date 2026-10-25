@@ -40,7 +40,6 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("Customer");
 
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -203,10 +202,12 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
         </div>
 
         <p className={`text-xs mt-3 mb-4 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-          Transfer to any account below. Your wallet is automatically credited in 15–30 seconds.
+          {virtualAccounts.length > 0
+            ? "Transfer to any account below. Your wallet is automatically credited in 15–30 seconds."
+            : "Central Bank of Nigeria (CBN) regulations mandate identity verification before generating automated virtual accounts."}
         </p>
 
-        {/* Accounts List */}
+        {/* Accounts List OR NIN Verification View */}
         <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
           {loading ? (
             <div className="flex items-center justify-center py-12 gap-2 text-xs text-slate-400">
@@ -528,8 +529,30 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
               );
             })
           ) : (
-            <div className="py-8 text-center text-xs text-slate-400">
-              No dedicated accounts available. Please try again in a moment.
+            /* Empty state when accounts are not yet provisioned */
+            <div className={`rounded-2xl border p-5 text-center ${
+              isDark ? "bg-[#181B25] border-[#222634]" : "bg-slate-50 border-slate-200"
+            }`}>
+              <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                Your dedicated bank account details are not available yet. Please try again shortly.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoading(true);
+                  setError("");
+                  fetchVirtualAccounts()
+                    .then((res) => {
+                      setVirtualAccounts(res.accounts || []);
+                      setRequiresIdentity(res.requiresIdentity === true);
+                    })
+                    .catch((err) => setError(err instanceof Error ? err.message : "Failed to load accounts."))
+                    .finally(() => setLoading(false));
+                }}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-500 cursor-pointer"
+              >
+                Refresh Accounts
+              </button>
             </div>
           )}
         </div>
