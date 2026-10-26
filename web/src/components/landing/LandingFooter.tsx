@@ -201,10 +201,6 @@ export function LandingFooter() {
               <Link href="/terms" className="hover:text-[var(--primary)] transition-colors">Terms of Service</Link>
               <Link href="/support" className="hover:text-[var(--primary)] transition-colors">Resolution Desk</Link>
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Direct Telco &amp; Banking Switching Active</span>
-            </div>
           </div>
 
           {/* Corporate Ownership & Legal Declaration for Payment Gateway Verification */}

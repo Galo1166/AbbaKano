@@ -308,11 +308,7 @@ export function FundWalletShell() {
   const isDark = theme === "dark";
 
   // ── Initialise from cache synchronously so the page never flickers ────────
-  const initialCache = (() => {
-    const session = supabase.auth.currentSession;
-    if (!session) return null;
-    return getCachedVirtualAccounts(session.user.id);
-  })();
+  const initialCache = getCachedVirtualAccounts();
 
   const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>(
     initialCache?.accounts ?? [],
@@ -333,8 +329,7 @@ export function FundWalletShell() {
     // If the cache was already warm on mount, skip the network fetch entirely
     // (fetchVirtualAccounts will still return cached data, but we'd flash the
     //  loading state before the async call resolves — so we gate it here too).
-    const session = supabase.auth.currentSession;
-    if (session && getCachedVirtualAccounts(session.user.id)) return;
+    if (getCachedVirtualAccounts()) return;
 
     let cancelled = false;
 
@@ -488,11 +483,7 @@ export function FundWalletShell() {
                   </p>
                 </div>
               </div>
-              {!accountsLoading && virtualAccounts.length > 0 && (
-                <span className="shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
-                  AUTO-SYNC
-                </span>
-              )}
+              
             </div>
 
             {accountsLoading ? (
@@ -553,9 +544,7 @@ export function FundWalletShell() {
                           Dedicated virtual account
                         </p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
-                        AUTO-SYNC
-                      </span>
+                      
                     </div>
 
                     <div className={`mt-3 rounded-lg border p-3 ${

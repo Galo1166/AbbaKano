@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useThemeMode } from "@/lib/theme";
-import { fetchVirtualAccounts, getCachedVirtualAccounts, type VirtualAccount, type VirtualAccountIdentity } from "@/lib/virtualAccounts";
+import { fetchVirtualAccounts, getCachedVirtualAccounts, formatBeneficiaryAccountName, type VirtualAccount, type VirtualAccountIdentity } from "@/lib/virtualAccounts";
 import { supabase } from "@/lib/supabase";
 
 
@@ -19,20 +19,14 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
   // ── Initialise from cache synchronously so modal opens instantly ──────────
   // useState lazy initializer: runs exactly once on mount.
   const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>(() => {
-    const session = supabase.auth.currentSession;
-    if (!session) return [];
-    return getCachedVirtualAccounts(session.user.id)?.accounts ?? [];
+    return getCachedVirtualAccounts()?.accounts ?? [];
   });
   const [loading, setLoading] = useState<boolean>(() => {
-    const session = supabase.auth.currentSession;
-    if (!session) return true;
-    return getCachedVirtualAccounts(session.user.id) === null;
+    return getCachedVirtualAccounts() === null;
   });
   const [error, setError] = useState("");
   const [requiresIdentity, setRequiresIdentity] = useState<boolean>(() => {
-    const session = supabase.auth.currentSession;
-    if (!session) return false;
-    return getCachedVirtualAccounts(session.user.id)?.requiresIdentity ?? false;
+    return getCachedVirtualAccounts()?.requiresIdentity ?? false;
   });
   const [identityType, setIdentityType] = useState<VirtualAccountIdentity["type"]>("nin");
   const [identityValue, setIdentityValue] = useState("");
@@ -44,8 +38,8 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
     if (!isOpen) return;
 
     // Skip the network fetch if the cache is already warm
-    const session = supabase.auth.currentSession;
-    if (session && getCachedVirtualAccounts(session.user.id)) {
+    const cached = getCachedVirtualAccounts();
+    if (cached) {
       // Still load user name for the beneficiary label
       void (async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -451,7 +445,7 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
             </div>
           ) : virtualAccounts.length > 0 ? (
             virtualAccounts.map((account) => {
-              const beneficiaryName = `AbbaKano - ${userName} (${account.bankName})`;
+              const beneficiaryName = formatBeneficiaryAccountName(account.accountName, userName);
 
               return (
                 <div
@@ -475,10 +469,7 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                       </h3>
                     </div>
 
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                      Auto-Credit
-                    </span>
+                    
                   </div>
 
                   {/* Account Number Box */}
@@ -513,17 +504,34 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                   </div>
 
                   {/* Beneficiary Name Row */}
-                  <div className="mt-2.5 px-1">
-                    <span className={`block text-[10px] font-semibold uppercase tracking-wider ${
-                      isDark ? "text-slate-500" : "text-slate-400"
+                  <div className={`mt-2.5 rounded-xl border p-3 ${
+                    isDark ? "bg-[#1C1F29] border-[#222634]" : "bg-white border-slate-200"
+                  }`}>
+                    <span className={`block text-[10px] font-bold uppercase tracking-wider ${
+                      isDark ? "text-slate-400" : "text-slate-500"
                     }`}>
                       Beneficiary Account Name
                     </span>
-                    <p className={`mt-0.5 text-xs font-bold truncate ${
-                      isDark ? "text-slate-200" : "text-slate-800"
-                    }`}>
-                      {beneficiaryName}
-                    </p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs sm:text-sm font-bold tracking-wide truncate">
+                        {beneficiaryName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void copyToClipboard(beneficiaryName, "Beneficiary Name")}
+                        className={`flex h-7 items-center gap-1 rounded-md border px-2.5 text-[11px] font-bold transition-colors cursor-pointer ${
+                          isDark
+                            ? "bg-[#252B3D] border-[#2E354B] text-slate-200 hover:bg-[#2E364E]"
+                            : "bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-200"
+                        }`}
+                        aria-label="Copy beneficiary account name"
+                      >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                        </svg>
+                        Copy
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

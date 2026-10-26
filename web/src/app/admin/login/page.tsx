@@ -87,11 +87,6 @@ export default function LoginPage() {
           <span className="material-symbols-outlined text-[18px]">arrow_back</span>
           <span>Back to Landing</span>
         </Link>
-
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span>Console Operational</span>
-        </div>
       </header>
 
       {/* ── Main Login Form ── */}

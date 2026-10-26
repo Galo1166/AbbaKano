@@ -488,20 +488,11 @@ export function DashboardShell() {
               ? "bg-[#141721] border-[#222634]"
               : "bg-gradient-to-br from-[#FFFFFF] via-[#F0F5FF] to-[#E4EDFD] border-[rgba(37,99,235,0.16)] shadow-[0_4px_12px_rgba(37,99,235,0.08)]"
           }`}>
-            {/* Header: Label + Instant Active */}
+            {/* Header */}
             <div className="flex items-center justify-between mb-3">
               <span className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>
                 WALLET BALANCE
               </span>
-
-              <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
-                isDark
-                  ? "bg-[#083321] border-[#105436] text-[#10b981]"
-                  : "bg-[#d1fae5] border-[#a7f3d0] text-[#059669]"
-              }`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>Instant Active</span>
-              </div>
             </div>
 
             {/* Balance Row */}

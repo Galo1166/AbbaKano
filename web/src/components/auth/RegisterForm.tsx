@@ -19,23 +19,7 @@ function useLocationSearch() {
   );
 }
 
-// 5-Rule Password Evaluator from Mobile App parity
-function getPasswordStrength(pwd: string) {
-  const rules = [
-    { label: "8+ chars", met: pwd.length >= 8 },
-    { label: "A-Z", met: /[A-Z]/.test(pwd) },
-    { label: "a-z", met: /[a-z]/.test(pwd) },
-    { label: "0-9", met: /[0-9]/.test(pwd) },
-    { label: "Symbol", met: /[^A-Za-z0-9]/.test(pwd) },
-  ];
-  const metCount = rules.filter((r) => r.met).length;
 
-  if (pwd.length === 0) return { scoreText: "Empty", scoreColor: "bg-slate-500", percent: 0, rules };
-  if (metCount <= 2) return { scoreText: "Weak", scoreColor: "bg-red-500", percent: 25, rules };
-  if (metCount === 3) return { scoreText: "Fair", scoreColor: "bg-amber-500", percent: 50, rules };
-  if (metCount === 4) return { scoreText: "Good", scoreColor: "bg-blue-500", percent: 75, rules };
-  return { scoreText: "Strong", scoreColor: "bg-emerald-500", percent: 100, rules };
-}
 
 export function RegisterForm() {
   const router = useRouter();
@@ -62,7 +46,7 @@ export function RegisterForm() {
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const pwdStrength = getPasswordStrength(values.password);
+  
 
   function updateValue(name: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -182,15 +166,7 @@ export function RegisterForm() {
           <label className="text-xs font-bold text-[var(--text)]">
             Account Password
           </label>
-          {values.password && (
-            <span className={`text-[10px] font-bold uppercase ${
-              pwdStrength.scoreText === "Weak" ? "text-red-500" :
-              pwdStrength.scoreText === "Fair" ? "text-amber-500" :
-              pwdStrength.scoreText === "Good" ? "text-blue-500" : "text-emerald-500"
-            }`}>
-              {pwdStrength.scoreText}
-            </span>
-          )}
+          
         </div>
         <div className="relative flex items-center">
           <input
@@ -219,29 +195,6 @@ export function RegisterForm() {
             )}
           </button>
         </div>
-
-        {/* Real-time Strength Meter Bar */}
-        {values.password && (
-          <div className="mt-2 space-y-1.5">
-            <div className="h-1.5 w-full bg-slate-700/30 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-300 ${pwdStrength.scoreColor}`}
-                style={{ width: `${pwdStrength.percent}%` }}
-              />
-            </div>
-            <div className="flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-[var(--text-muted)]">
-              {pwdStrength.rules.map((rule) => (
-                <span
-                  key={rule.label}
-                  className={`inline-flex items-center gap-1 ${rule.met ? "text-emerald-500 font-bold" : "opacity-60"}`}
-                >
-                  <span>{rule.met ? (<svg className="h-3 w-3 inline text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>) : "•"}</span>
-                  <span>{rule.label}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Confirm Password */}

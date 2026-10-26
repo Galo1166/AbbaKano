@@ -302,9 +302,6 @@ async function handleToggleBiometrics() {
               <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white font-extrabold text-lg shadow-sm">
                 {initials}
               </div>
-              <span className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 ${
-                isDark ? "border-[#141721]" : "border-white"
-              }`} />
             </div>
 
             <div className="min-w-0 flex-1 space-y-1">

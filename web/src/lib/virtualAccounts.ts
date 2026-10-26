@@ -24,10 +24,18 @@ const virtualAccountRequests = new Map<string, Promise<VirtualAccountResult>>();
  * Synchronously returns cached virtual accounts for the given userId,
  * or null if the cache is empty / expired. Used to skip loading spinners.
  */
-export function getCachedVirtualAccounts(userId: string): VirtualAccountResult | null {
-  const cached = virtualAccountCache.get(userId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return { accounts: cached.accounts, requiresIdentity: false };
+export function getCachedVirtualAccounts(userId?: string): VirtualAccountResult | null {
+  if (userId) {
+    const cached = virtualAccountCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { accounts: cached.accounts, requiresIdentity: false };
+    }
+    return null;
+  }
+  for (const cached of virtualAccountCache.values()) {
+    if (cached && cached.expiresAt > Date.now()) {
+      return { accounts: cached.accounts, requiresIdentity: false };
+    }
   }
   return null;
 }
@@ -42,6 +50,25 @@ export function preloadVirtualAccounts(): void {
   });
 }
 
+
+
+export function formatBeneficiaryAccountName(rawAccountName?: string, userFullName?: string): string {
+  const PREFIX = "ABBA KANO INVESTMENTS LMITED- ";
+  const raw = (rawAccountName || "").trim();
+  if (raw) {
+    const namePart = raw
+      .replace(/^ABBA\s*KANO\s*INVESTMENTS?\s*(?:LIMITED|LMITED)?\s*[-–:]*\s*/i, "")
+      .replace(/^AbbaKano\s*[-–:]*\s*/i, "")
+      .replace(/\s*\([^)]*\)$/, "")
+      .trim();
+    const first = namePart.split(/\s+/)[0] || "";
+    if (first) {
+      return `${PREFIX}${first.toUpperCase()}`;
+    }
+  }
+  const fallbackFirst = (userFullName || "CUSTOMER").trim().split(/\s+/)[0] || "CUSTOMER";
+  return `${PREFIX}${fallbackFirst.toUpperCase()}`;
+}
 
 function normalizeVirtualAccount(value: unknown): VirtualAccount | null {
   if (!value || typeof value !== "object") return null;
@@ -65,7 +92,7 @@ function normalizeVirtualAccount(value: unknown): VirtualAccount | null {
   return {
     bankName: bankName.trim(),
     accountNumber: accountNumber.trim(),
-    accountName: accountName.trim(),
+    accountName: formatBeneficiaryAccountName(accountName),
   };
 }
 
