@@ -109,7 +109,7 @@ export async function fetchVirtualAccounts(
 
   const userId = session.user.id;
   const cached = virtualAccountCache.get(userId);
-  if (!identity && cached && cached.expiresAt > Date.now()) {
+  if (!identity && cached && cached.expiresAt > Date.now() && cached.accounts.length > 0) {
     return { accounts: cached.accounts, requiresIdentity: false };
   }
   if (cached) virtualAccountCache.delete(userId);
@@ -118,29 +118,49 @@ export async function fetchVirtualAccounts(
   const pending = virtualAccountRequests.get(requestKey);
   if (pending) return pending;
 
+  const checkDatabaseFallback = async (): Promise<VirtualAccount[]> => {
+    try {
+      const { data: tableData } = await supabase
+        .from("user_virtual_accounts")
+        .select("bank_name, account_number, account_name")
+        .eq("user_id", userId);
+
+      if (Array.isArray(tableData) && tableData.length > 0) {
+        return tableData
+          .map(normalizeVirtualAccount)
+          .filter((account): account is VirtualAccount => account !== null);
+      }
+    } catch {
+      // ignore table fallback failure
+    }
+    return [];
+  };
+
   const body = identity ? { [identity.type]: identity.value } : {};
-  const request = invokeSupabaseFunction<{
-    accounts?: unknown;
-    requiresIdentity?: boolean;
-  }>("virtual-accounts", body)
-    .then((response) => {
-      if (!Array.isArray(response.accounts)) {
-        throw new Error("The virtual account response was invalid.");
+
+  // 10s timeout to prevent indefinite hangs
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Request timed out. Please try again.")), 10000)
+  );
+
+  const request = Promise.race([
+    invokeSupabaseFunction<{
+      accounts?: unknown;
+      requiresIdentity?: boolean;
+    }>("virtual-accounts", body),
+    timeoutPromise
+  ])
+    .then(async (response) => {
+      let accounts: VirtualAccount[] = [];
+      if (Array.isArray(response.accounts)) {
+        accounts = response.accounts
+          .map(normalizeVirtualAccount)
+          .filter((account): account is VirtualAccount => account !== null);
       }
 
-      const accounts = response.accounts
-        .map(normalizeVirtualAccount)
-        .filter((account): account is VirtualAccount => account !== null);
-
-      if (accounts.length !== response.accounts.length) {
-        throw new Error("The virtual account details could not be read.");
-      }
-
-      if (response.requiresIdentity === true) {
-        return { accounts, requiresIdentity: true };
-      }
-      if (identity && accounts.length === 0) {
-        throw new Error("No virtual accounts were returned. Please try again.");
+      // If edge function returned 0 accounts, check database fallback
+      if (accounts.length === 0 && !identity) {
+        accounts = await checkDatabaseFallback();
       }
 
       if (accounts.length > 0) {
@@ -148,10 +168,35 @@ export async function fetchVirtualAccounts(
           accounts,
           expiresAt: Date.now() + VIRTUAL_ACCOUNT_CACHE_TTL_MS,
         });
+        return { accounts, requiresIdentity: false };
       }
-      return { accounts, requiresIdentity: false };
+
+      if (response.requiresIdentity === true) {
+        return { accounts: [], requiresIdentity: true };
+      }
+
+      if (identity && accounts.length === 0) {
+        throw new Error("No virtual accounts were returned. Please verify your details.");
+      }
+
+      return { accounts: [], requiresIdentity: true };
     })
-    .finally(() => virtualAccountRequests.delete(requestKey));
+    .catch(async (err) => {
+      if (!identity) {
+        const fallbackAccounts = await checkDatabaseFallback();
+        if (fallbackAccounts.length > 0) {
+          virtualAccountCache.set(userId, {
+            accounts: fallbackAccounts,
+            expiresAt: Date.now() + VIRTUAL_ACCOUNT_CACHE_TTL_MS,
+          });
+          return { accounts: fallbackAccounts, requiresIdentity: false };
+        }
+      }
+      throw err;
+    })
+    .finally(() => {
+      virtualAccountRequests.delete(requestKey);
+    });
 
   virtualAccountRequests.set(requestKey, request);
   return request;

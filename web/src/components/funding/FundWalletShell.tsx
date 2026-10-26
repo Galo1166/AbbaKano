@@ -329,7 +329,13 @@ export function FundWalletShell() {
     // If the cache was already warm on mount, skip the network fetch entirely
     // (fetchVirtualAccounts will still return cached data, but we'd flash the
     //  loading state before the async call resolves — so we gate it here too).
-    if (getCachedVirtualAccounts()) return;
+    const cached = getCachedVirtualAccounts();
+    if (cached && cached.accounts.length > 0) {
+      setVirtualAccounts(cached.accounts);
+      setRequiresIdentity(false);
+      setAccountsLoading(false);
+      return;
+    }
 
     let cancelled = false;
 

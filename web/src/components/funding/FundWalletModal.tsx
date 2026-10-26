@@ -37,13 +37,12 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
   useEffect(() => {
     if (!isOpen) return;
 
-    // Skip the network fetch if the cache is already warm
-    const cached = getCachedVirtualAccounts();
-    if (cached) {
-      // Still load user name for the beneficiary label
-      void (async () => {
+    let cancelled = false;
+
+    const fetchUserName = async () => {
+      try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user || cancelled) return;
         const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
         if (fullName) {
           setUserName(fullName as string);
@@ -53,36 +52,33 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
             .select("full_name")
             .eq("id", user.id)
             .maybeSingle();
-          if (profile?.full_name) setUserName(profile.full_name as string);
+          if (profile?.full_name && !cancelled) {
+            setUserName(profile.full_name as string);
+          }
         }
-      })();
+      } catch {
+        // silent fallback
+      }
+    };
+
+    // 1. If cache is warm and has accounts, display immediately
+    const cached = getCachedVirtualAccounts();
+    if (cached && cached.accounts.length > 0) {
+      setVirtualAccounts(cached.accounts);
+      setRequiresIdentity(false);
+      setLoading(false);
+      setError("");
+      void fetchUserName();
       return;
     }
 
-    let cancelled = false;
-
+    // 2. Otherwise load virtual accounts
     async function loadData() {
       setLoading(true);
       setError("");
 
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user && !cancelled) {
-          const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
-          if (fullName) {
-            setUserName(fullName);
-          } else {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("full_name")
-              .eq("id", user.id)
-              .maybeSingle();
-            if (profile?.full_name && !cancelled) {
-              setUserName(profile.full_name);
-            }
-          }
-        }
-
+        void fetchUserName();
         const result = await fetchVirtualAccounts();
         if (!cancelled) {
           setVirtualAccounts(result.accounts);
