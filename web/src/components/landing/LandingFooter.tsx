@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-const SUPPORT_PHONE_DISPLAY = "+234 813 333 9850";
+const SUPPORT_PHONE_DISPLAY = "+234 9019597577";
 const SUPPORT_EMAIL = "abbakanocommunicationcenter@gmail.com";
 const COMMUNITY_URL = "https://chat.whatsapp.com/DEpJ8XD2yWy1lKyLEHj4Di";
 
