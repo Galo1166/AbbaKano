@@ -59,7 +59,7 @@ export function LandingFooter() {
             <div className="mt-6 flex flex-col gap-1.5 text-xs">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-[var(--text)]">Customer Desk:</span>
-                <a href="tel:+2348133339850" className="font-semibold hover:text-[var(--primary)] text-[var(--text)]">
+                <a href="tel:+2349019597577" className="font-semibold hover:text-[var(--primary)] text-[var(--text)]">
                   {SUPPORT_PHONE_DISPLAY}
                 </a>
               </div>
