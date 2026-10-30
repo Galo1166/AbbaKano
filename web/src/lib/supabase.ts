@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   GENERIC_SERVICE_ERROR,
   isServiceFailure,
-  reportServiceFailure,
+  showErrorToast,
 } from "@/lib/userFeedback";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
@@ -78,14 +78,17 @@ export async function invokeSupabaseFunction<T>(
       }
     }
     if (isServiceFailure(message, status)) {
-      reportServiceFailure(error);
+      console.error(
+        `Supabase Edge Function "${functionName}" failed (HTTP ${status ?? "unknown"}): ${message}`,
+      );
+      showErrorToast();
       throw new Error(GENERIC_SERVICE_ERROR);
     }
     throw new Error(message);
   }
   if (data === null) {
-    const error = new Error(`${functionName} returned no response.`);
-    reportServiceFailure(error);
+    console.error(`Supabase Edge Function "${functionName}" returned no response.`);
+    showErrorToast();
     throw new Error(GENERIC_SERVICE_ERROR);
   }
   return data;

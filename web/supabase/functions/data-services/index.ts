@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createDataPlanToken } from "../_shared/data-plan-token.ts";
+import { ALRAHUZ_NETWORK_IDS, callAlrahuzApi } from "../_shared/alrahuzdata.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,8 @@ const planCache = new Map<
   string,
   { expiresAt: number; plans: Record<string, unknown>[] }
 >();
+
+let alrahuzUserDataCache: { data: Record<string, unknown>; expiresAt: number } | null = null;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -78,32 +81,6 @@ function sortPlans(plans: Record<string, unknown>[]) {
   });
 }
 
-async function fetchVtuGate(
-  baseUrl: string,
-  apiKey: string,
-  endpoint: string,
-  params: Record<string, string> = {},
-) {
-  const response = await fetch(`${baseUrl}${endpoint}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams(params),
-    signal: AbortSignal.timeout(15000),
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || payload?.status !== true) {
-    throw new Error(
-      payload?.message ||
-        `VTU Gate request failed with HTTP ${response.status}`,
-    );
-  }
-  return payload;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -120,9 +97,9 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const apiKey = Deno.env.get("VTUGATE_API_KEY");
+    const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
-    if (!supabaseUrl || !anonKey || !apiKey || !rawSecretKeys) {
+    if (!supabaseUrl || !anonKey || !alrahuzToken || !rawSecretKeys) {
       console.error("Data service function configuration is incomplete.");
       return jsonResponse({ message: "Data plans are temporarily unavailable." }, 500);
     }
@@ -171,91 +148,96 @@ Deno.serve(async (req) => {
       ]),
     );
 
-    const baseUrl = (Deno.env.get("VTU_GATE_BASE_URL") ||
-      "https://api.vtugate.com/api/v1").replace(/\/$/, "");
-    const servicesResponse = await fetchVtuGate(
-      baseUrl,
-      apiKey,
-      "/fetchallservices",
-    );
-    const services = (servicesResponse.data || []).filter(
-      (service: Record<string, unknown>) =>
-        service.service_type === "data" &&
-        normalizeNetwork(service.network_name) === network,
-    );
+    const plans: Record<string, unknown>[] = [];
 
-    const batches = await Promise.allSettled(
-      services.map(async (service: Record<string, unknown>) => {
-        const serviceId = String(service.service_id || "");
-        if (!/^\d+$/.test(serviceId)) return [];
+    if (alrahuzToken) {
+      try {
+        let alrahuzData: Record<string, unknown> | null = null;
+        if (alrahuzUserDataCache && alrahuzUserDataCache.expiresAt > Date.now()) {
+          alrahuzData = alrahuzUserDataCache.data;
+        } else {
+          const userRes = await callAlrahuzApi<Record<string, unknown>>("/user/", {
+            method: "GET",
+            token: alrahuzToken,
+            timeoutMs: 15000,
+          });
+          if (userRes.ok && userRes.data) {
+            alrahuzData = userRes.data;
+            alrahuzUserDataCache = { data: alrahuzData, expiresAt: Date.now() + 300000 };
+          }
+        }
 
-        const response = await fetchVtuGate(
-          baseUrl,
-          apiKey,
-          "/fetchdataplans",
-          { service_id: serviceId },
-        );
-        const planCategory = normalizeCategory(service.data_type);
-        if (category && category !== planCategory) return [];
+        if (alrahuzData) {
+          const dataplans = alrahuzData.Dataplans as Record<string, unknown> | undefined;
+          const networkKey = `${network}_PLAN`;
+          const networkPlansGroup = dataplans?.[networkKey] as Record<string, unknown> | undefined;
+          const rawPlans = (Array.isArray(networkPlansGroup?.ALL)
+            ? networkPlansGroup.ALL
+            : []) as Record<string, unknown>[];
 
-        const plans = await Promise.all(
-          (response.data?.data_plans || []).map(
-            async (plan: Record<string, unknown>) => {
-              const label = String(plan.name || "").trim();
-              const planCode = String(plan.code || "").trim();
-              const apiPrice = Number(plan.price);
-              if (
-                !label ||
-                !planCode ||
-                !Number.isFinite(apiPrice) ||
-                apiPrice <= 0 ||
-                apiPrice > 100000
-              ) {
-                return null;
-              }
+          const networkId = String(ALRAHUZ_NETWORK_IDS[network] || "1");
 
-              const override = overrideMap.get(planCode) || overrideMap.get(`${serviceId}:${planCode}`);
-              // All plans are turned off by default until the admin explicitly enables them
-              if (!override || override.enabled !== true) {
-                return null;
-              }
+          for (const item of rawPlans) {
+            const planId = String(item.id || item.dataplan_id || "");
+            if (!planId) continue;
 
-              const finalPrice = override && Number.isFinite(override.price) && override.price > 0
+            const planType = String(item.plan_type || "GENERAL");
+            const planCategory = normalizeCategory(planType);
+            if (category && category !== planCategory) continue;
+
+            const apiPrice = Number(item.plan_amount || 0);
+            if (!Number.isFinite(apiPrice) || apiPrice <= 0) continue;
+
+            const override =
+              overrideMap.get(planId) ||
+              overrideMap.get(`${networkId}:${planId}`) ||
+              overrideMap.get(`alrahuz:${planId}`);
+
+            // ALL plans are turned OFF by default until the admin explicitly enables/edits them
+            if (!override || override.enabled !== true) {
+              continue;
+            }
+
+            const finalPrice =
+              override && Number.isFinite(override.price) && override.price > 0
                 ? override.price
                 : apiPrice;
-              const displayLabel = override?.label || label;
 
-              const selectionToken = await createDataPlanToken(
-                {
-                  provider: "vtugate",
-                  network,
-                  label: displayLabel,
-                  serviceId,
-                  planCode,
-                  price: finalPrice,
-                },
-                signingSecret,
-              );
-              return {
+            const sizeClean = String(item.plan || "").replace(/\.0+(GB|MB|TB|KB)/i, "$1");
+            const validityClean = String(item.month_validate || "")
+              .replace(/\{.*?\}/g, "")
+              .replace(/validity/i, "")
+              .trim();
+            const displayLabel =
+              override?.label ||
+              `${sizeClean} ${planType}${validityClean ? ` - ${validityClean}` : ""}`;
+
+            const selectionToken = await createDataPlanToken(
+              {
+                provider: "alrahuzdata",
+                network,
                 label: displayLabel,
+                serviceId: networkId,
+                planCode: planId,
                 price: finalPrice,
-                code: `${serviceId}:${planCode}`,
-                category: planCategory,
-                provider: "vtugate",
-                selectionToken,
-              };
-            },
-          ),
-        );
-        return plans.filter(
-          (plan): plan is Record<string, unknown> => plan !== null,
-        );
-      }),
-    );
+              },
+              signingSecret,
+            );
 
-    const plans = batches.flatMap((batch) =>
-      batch.status === "fulfilled" ? batch.value : [],
-    );
+            plans.push({
+              label: displayLabel,
+              price: finalPrice,
+              code: `alrahuz:${planId}`,
+              category: planCategory,
+              provider: "alrahuzdata",
+              selectionToken,
+            });
+          }
+        }
+      } catch (alrahuzErr) {
+        console.warn("ALRAHUZDATA live plan fetch error:", alrahuzErr);
+      }
+    }
     const { data: catalogPlans, error: catalogError } = await supabaseAdmin
       .from("admin_vtu_plans")
       .select("id, network, category, capacity, capacity_mb, duration, price_kobo, enabled")
@@ -275,7 +257,8 @@ Deno.serve(async (req) => {
       provider: "admin-catalog",
       purchaseAvailable: false,
     }));
-    const allPlans = sortPlans([...plans, ...adminPlans]);
+    const alrahuzPlans = plans.filter((plan) => plan.provider === "alrahuzdata");
+    const allPlans = sortPlans([...alrahuzPlans, ...adminPlans]);
     if (allPlans.length === 0) {
       return jsonResponse({
         plans: [],

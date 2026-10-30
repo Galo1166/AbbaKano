@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ALRAHUZ_NETWORK_IDS, callAlrahuzApi } from "../_shared/alrahuzdata.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,6 +75,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const apiKey = Deno.env.get("VTUGATE_API_KEY");
+    const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN");
     const baseUrl = (Deno.env.get("VTU_GATE_BASE_URL") || "https://api.vtugate.com/api/v1").replace(/\/$/, "");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
 
@@ -129,13 +131,9 @@ Deno.serve(async (req) => {
       if (!supportedProviders.includes(provider)) {
         return jsonResponse({ message: "Choose a valid provider." }, 400);
       }
-      if (!apiKey) {
-        return jsonResponse({ message: "VTU Gate API key is not configured." }, 500);
+      if (!apiKey && !alrahuzToken) {
+        return jsonResponse({ message: "VTU Provider API key is not configured." }, 500);
       }
-
-      // Fetch live services from VTU Gate
-      const servicesResponse = await fetchVtuGate(baseUrl, apiKey, "/fetchallservices");
-      const isMobile = ["MTN", "AIRTEL", "GLO", "9MOBILE"].includes(provider);
 
       let rawPlans: Array<{
         plan_code: string;
@@ -145,36 +143,81 @@ Deno.serve(async (req) => {
         cost_price: number;
       }> = [];
 
-      if (isMobile) {
-        const services = (servicesResponse.data || []).filter(
-          (service: Record<string, unknown>) =>
-            service.service_type === "data" &&
-            normalizeNetwork(service.network_name) === provider,
-        );
+      const isMobile = ["MTN", "AIRTEL", "GLO", "9MOBILE"].includes(provider);
 
-        const batches = await Promise.allSettled(
-          services.map(async (service: Record<string, unknown>) => {
-            const serviceId = String(service.service_id || "");
-            if (!/^\d+$/.test(serviceId)) return [];
+      // If ALRAHUZDATA is active:
+      if (alrahuzToken && (!apiKey || isMobile)) {
+        try {
+          const alrahuzUserRes = await callAlrahuzApi<Record<string, unknown>>("/user/", {
+            method: "GET",
+            token: alrahuzToken,
+            timeoutMs: 15000,
+          });
 
-            const plansResponse = await fetchVtuGate(
-              baseUrl,
-              apiKey,
-              "/fetchdataplans",
-              { service_id: serviceId },
-            );
+          if (alrahuzUserRes.ok && alrahuzUserRes.data) {
+            const dataplans = alrahuzUserRes.data.Dataplans as Record<string, unknown> | undefined;
+            const networkKey = `${provider}_PLAN`;
+            const networkPlansGroup = dataplans?.[networkKey] as Record<string, unknown> | undefined;
+            const plansList = (Array.isArray(networkPlansGroup?.ALL)
+              ? networkPlansGroup.ALL
+              : []) as Record<string, unknown>[];
 
-            return (plansResponse.data?.data_plans || []).map((p: Record<string, unknown>) => ({
-              plan_code: String(p.code || "").trim(),
-              service_id: serviceId,
-              name: String(p.name || "").trim(),
-              category: String(service.data_type || "GENERAL").toUpperCase(),
-              cost_price: Number(p.price || 0),
-            })).filter((p: { plan_code: string; cost_price: number }) => p.plan_code && p.cost_price > 0);
-          }),
-        );
+            rawPlans = plansList
+              .map((p) => {
+                const planId = String(p.id || p.dataplan_id || "");
+                const planType = String(p.plan_type || "GENERAL");
+                const sizeLabel = String(p.plan || "");
+                const validity = String(p.month_validate || "");
+                const displayName = `${sizeLabel} ${planType}${validity ? ` (${validity})` : ""}`;
+                return {
+                  plan_code: planId,
+                  service_id: String(p.network || ALRAHUZ_NETWORK_IDS[provider] || "1"),
+                  name: displayName,
+                  category: planType.toUpperCase(),
+                  cost_price: Number(p.plan_amount || 0),
+                };
+              })
+              .filter((p) => p.plan_code && p.cost_price > 0);
+          }
+        } catch (alrahuzErr) {
+          console.warn("ALRAHUZDATA admin plan fetch error:", alrahuzErr);
+        }
+      }
 
-        rawPlans = batches.flatMap((b) => (b.status === "fulfilled" ? b.value : []));
+      // If VTU Gate is configured and no mobile plans loaded from Alrahuz:
+      if (rawPlans.length === 0 && apiKey) {
+        const servicesResponse = await fetchVtuGate(baseUrl, apiKey, "/fetchallservices");
+        if (isMobile) {
+          const services = (servicesResponse.data || []).filter(
+            (service: Record<string, unknown>) =>
+              service.service_type === "data" &&
+              normalizeNetwork(service.network_name) === provider,
+          );
+
+          const batches = await Promise.allSettled(
+            services.map(async (service: Record<string, unknown>) => {
+              const serviceId = String(service.service_id || "");
+              if (!/^\d+$/.test(serviceId)) return [];
+
+              const plansResponse = await fetchVtuGate(
+                baseUrl,
+                apiKey,
+                "/fetchdataplans",
+                { service_id: serviceId },
+              );
+
+              return (plansResponse.data?.data_plans || []).map((p: Record<string, unknown>) => ({
+                plan_code: String(p.code || "").trim(),
+                service_id: serviceId,
+                name: String(p.name || "").trim(),
+                category: String(service.data_type || "GENERAL").toUpperCase(),
+                cost_price: Number(p.price || 0),
+              })).filter((p: { plan_code: string; cost_price: number }) => p.plan_code && p.cost_price > 0);
+            }),
+          );
+
+          rawPlans = batches.flatMap((b) => (b.status === "fulfilled" ? b.value : []));
+        }
       }
 
       // Fetch DB overrides for this provider

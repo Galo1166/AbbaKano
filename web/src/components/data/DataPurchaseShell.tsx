@@ -33,14 +33,23 @@ type PurchaseResponse = {
   reference?: string;
 };
 
+type PurchaseStatus = "success" | "pending" | "failed";
+
 type Receipt = {
-  status: string;
+  status: PurchaseStatus;
   message: string;
   reference?: string;
   label: string;
   network: Network;
   phone: string;
 };
+
+function normalizePurchaseStatus(status?: string): PurchaseStatus {
+  const normalized = status?.toLowerCase();
+  if (normalized === "success" || normalized === "completed") return "success";
+  if (normalized === "failed") return "failed";
+  return "pending";
+}
 
 interface ParsedPlanInfo {
   capacity: string;
@@ -185,7 +194,6 @@ export function DataPurchaseShell() {
   const [errorMessage, setErrorMessage] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
-  const [hasPasskey, setHasPasskey] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -200,6 +208,8 @@ export function DataPurchaseShell() {
   function chooseNetwork(net: Network) {
     setNetwork(net);
     setSelectedPlan(null);
+    setLoading(true);
+    setErrorMessage("");
   }
 
   function choosePhone(val: string) {
@@ -208,6 +218,8 @@ export function DataPurchaseShell() {
     if (autoDetected && autoDetected !== network) {
       setNetwork(autoDetected);
       setSelectedPlan(null);
+      setLoading(true);
+      setErrorMessage("");
     }
   }
 
@@ -227,24 +239,6 @@ export function DataPurchaseShell() {
 
   useEffect(() => {
     let cancelled = false;
-    const cached = getCachedPlans(network);
-    if (cached && cached.length > 0) {
-      const sorted = [...cached].sort((a, b) => {
-        const capA = planCapacity(a.label);
-        const capB = planCapacity(b.label);
-        if (capA !== capB) return capA - capB;
-        return a.price - b.price;
-      });
-      setPlans(sorted);
-      setLoading(false);
-      const inCurrentCat = sorted.filter((p) => (p.category || "GENERAL").toUpperCase() === category);
-      if (inCurrentCat.length > 0) setSelectedPlan(inCurrentCat[0]);
-      else if (sorted.length > 0) setSelectedPlan(sorted[0]);
-    } else {
-      setLoading(true);
-    }
-    setErrorMessage("");
-
     loadCachedPlans(network)
       .then((loaded) => {
         if (cancelled) return;
@@ -273,7 +267,7 @@ export function DataPurchaseShell() {
       });
 
     return () => { cancelled = true; };
-  }, [network, reloadKey]);
+  }, [network, category, reloadKey]);
 
   const availablePlans = plans.filter((p) => {
     const planCat = (p.category || "GENERAL").toUpperCase();
@@ -332,9 +326,14 @@ export function DataPurchaseShell() {
         transactionAuthorization,
       });
 
+      const status = normalizePurchaseStatus(purchaseRes.status);
       setReceipt({
-        status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message || "Data purchase successful!") || "Data purchase successful!",
+        status,
+        message: sanitizeServiceMessage(purchaseRes.message || (
+          status === "pending"
+            ? "Your data purchase is being checked. Do not submit it again yet."
+            : "Data purchase successful!"
+        )) || "Data purchase status is being checked.",
         reference: purchaseRes.reference || `DATA-${Date.now()}`,
         label: selectedPlan.label,
         network,
@@ -343,7 +342,7 @@ export function DataPurchaseShell() {
       setShowCheckout(false);
       setPin("");
       setReloadKey((k) => k + 1);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorMessage(safeErrorMessage(err, "An error occurred.") || "Biometric authentication failed.");
     } finally {
       isExecutingRef.current = false;
@@ -372,9 +371,14 @@ export function DataPurchaseShell() {
         idempotencyKey,
       });
 
+      const status = normalizePurchaseStatus(purchaseRes.status);
       setReceipt({
-        status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message || "Data purchase successful!") || "Data purchase successful!",
+        status,
+        message: sanitizeServiceMessage(purchaseRes.message || (
+          status === "pending"
+            ? "Your data purchase is being checked. Do not submit it again yet."
+            : "Data purchase successful!"
+        )) || "Data purchase status is being checked.",
         reference: purchaseRes.reference || `DATA-${Date.now()}`,
         label: selectedPlan.label,
         network,
@@ -383,7 +387,7 @@ export function DataPurchaseShell() {
       setShowCheckout(false);
       setPin("");
       setReloadKey((k) => k + 1);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorMessage(safeErrorMessage(err, "An error occurred.") || "Purchase could not be completed.");
     } finally {
       setPurchasing(false);
@@ -911,14 +915,29 @@ export function DataPurchaseShell() {
           <div className={`w-full max-w-sm rounded-3xl border p-6 text-center shadow-2xl transition-colors ${
             isDark ? "bg-[#141721] border-[#222634] text-white" : "bg-white border-slate-200 text-slate-900"
           }`}>
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500">
+            <div className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${
+              receipt.status === "pending"
+                ? "bg-amber-500/15 text-amber-500"
+                : receipt.status === "failed"
+                  ? "bg-rose-500/15 text-rose-500"
+                  : "bg-emerald-500/15 text-emerald-500"
+            }`}>
               <svg className="h-8 w-8 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                {receipt.status === "pending" ? (
+                  <>
+                    <circle cx="12" cy="12" r="9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+                  </>
+                ) : receipt.status === "failed" ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                )}
               </svg>
             </div>
 
             <h3 className={`text-lg font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>
-              Transaction Successful!
+              {receipt.status === "pending" ? "Transaction Pending" : receipt.status === "failed" ? "Transaction Failed" : "Transaction Successful!"}
             </h3>
             <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
               {receipt.message}

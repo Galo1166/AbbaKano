@@ -162,27 +162,40 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
           throw new Error("Your session has expired. Please log in again.");
         }
 
-        const { data: deposits, error: depositsError } = await supabase
-          .from("deposits")
-          .select("id, reference, amount_kobo, provider, status, provider_reference, created_at, metadata")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        // These collections are independent. Fetching them together avoids
+        // adding a full network round trip for each section of the history.
+        const [depositsResult, ledgerResult, purchasesResult] = await Promise.all([
+          supabase
+            .from("deposits")
+            .select("id, reference, amount_kobo, provider, status, provider_reference, created_at, metadata")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("wallet_ledger")
+            .select("id, transaction_id, deposit_id, entry_type, amount_kobo, balance_before_kobo, balance_after_kobo, description, metadata, created_at")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("vtu_transactions")
+            .select("id, transaction_type, status, amount_kobo, phone_number, account_number, network, provider_reference, metadata, created_at")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false }),
+        ]);
 
-        if (depositsError) throw depositsError;
+        if (depositsResult.error) throw depositsResult.error;
+        if (ledgerResult.error) throw ledgerResult.error;
+        if (purchasesResult.error) throw purchasesResult.error;
 
-        const { data: ledger, error: ledgerError } = await supabase
-          .from("wallet_ledger")
-          .select("id, transaction_id, deposit_id, entry_type, amount_kobo, balance_before_kobo, balance_after_kobo, description, metadata, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
+        const deposits = depositsResult.data;
+        const ledger = ledgerResult.data;
+        const purchases = purchasesResult.data;
 
-        if (ledgerError) throw ledgerError;
-
-        const transactionIds = [...new Set(
+        const transactionIds = new Set(
           (ledger || [])
             .map((entry) => entry.transaction_id)
-            .filter((id): id is number => id !== null),
-        )];
+            .filter((id): id is number => id !== null)
+            .map(Number),
+        );
 
         const transactionsById = new Map<
           number,
@@ -199,29 +212,18 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
           }
         >();
 
-        if (transactionIds.length > 0) {
-          const { data: purchaseTransactions, error: purchaseTransactionsError } =
-            await supabase
-              .from("vtu_transactions")
-              .select("id, transaction_type, status, phone_number, account_number, network, metadata")
-              .eq("user_id", user.id)
-              .in("id", transactionIds);
-
-          if (purchaseTransactionsError) throw purchaseTransactionsError;
-
-          for (const transaction of purchaseTransactions || []) {
-            transactionsById.set(Number(transaction.id), {
-              transaction_type: transaction.transaction_type,
-              status: transaction.status,
-              phone_number: transaction.phone_number,
-              account_number: transaction.account_number,
-              network: transaction.network,
-              plan_code: (transaction.metadata?.plan_code as string) || null,
-              plan_label: (transaction.metadata?.plan_label as string) || null,
-              token: transaction.metadata?.token as string | undefined,
-              units: transaction.metadata?.units as string | undefined,
-            });
-          }
+        for (const transaction of purchases || []) {
+          transactionsById.set(Number(transaction.id), {
+            transaction_type: transaction.transaction_type,
+            status: transaction.status,
+            phone_number: transaction.phone_number,
+            account_number: transaction.account_number,
+            network: transaction.network,
+            plan_code: (transaction.metadata?.plan_code as string) || null,
+            plan_label: (transaction.metadata?.plan_label as string) || null,
+            token: transaction.metadata?.token as string | undefined,
+            units: transaction.metadata?.units as string | undefined,
+          });
         }
 
         const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -284,20 +286,11 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
             };
           });
 
-        const ledgerTransactionIds = new Set(transactionIds.map(Number));
-        const { data: unsettledPurchases, error: unsettledPurchasesError } = await supabase
-          .from("vtu_transactions")
-          .select("id, transaction_type, status, amount_kobo, phone_number, account_number, network, provider_reference, metadata, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (unsettledPurchasesError) throw unsettledPurchasesError;
-
         // Pending and failed purchases have no wallet-ledger entry. Include
         // them explicitly so the web and mobile histories agree while a
         // reservation is awaiting reconciliation.
-        const unledgeredPurchaseTransactions: Transaction[] = (unsettledPurchases || [])
-          .filter((transaction) => !ledgerTransactionIds.has(Number(transaction.id)))
+        const unledgeredPurchaseTransactions: Transaction[] = (purchases || [])
+          .filter((transaction) => !transactionIds.has(Number(transaction.id)))
           .map((transaction) => ({
             id: transaction.provider_reference || `ABBA-${transaction.id}`,
             type: transaction.transaction_type || "purchase",
