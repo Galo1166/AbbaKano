@@ -6,6 +6,13 @@ import {
   isAlrahuzSuccess,
   isAlrahuzPending,
 } from "../_shared/alrahuzdata.ts";
+import {
+  BILALSADASUB_NETWORK_IDS,
+  bilalSadaSubStatus,
+  bilalSadaSubTransactionStatus,
+  callBilalSadaSub,
+  type BilalSadaSubResponse,
+} from "../_shared/bilalsadasub.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -94,10 +101,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!alrahuzToken) {
-      return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 500);
-    }
-
     /*
      * ----------------------------------------------------
      * 2. Read request
@@ -161,6 +164,18 @@ Deno.serve(async (req) => {
       );
     }
 
+    const bilalToken = Deno.env.get("BILALSADASUB_API_TOKEN") || "";
+    const { data: settingsRow, error: settingsError } = await supabaseAdmin
+      .from("admin_system_settings")
+      .select("settings")
+      .eq("id", true)
+      .single();
+    if (settingsError) {
+      console.error("Could not load active airtime provider:", settingsError);
+      return jsonResponse({ message: "Could not verify the active airtime provider." }, 500);
+    }
+    const chosenProvider = String(settingsRow.settings?.airtimeProviderPrimary || "ALRAHUZDATA")
+      .toUpperCase();
     /*
      * ----------------------------------------------------
      * 4. Validate phone
@@ -195,6 +210,104 @@ Deno.serve(async (req) => {
         },
         400,
       );
+    }
+
+    const { data: existingTransaction, error: existingTransactionError } =
+      await supabaseAdmin
+        .from("vtu_transactions")
+        .select("id, transaction_type, status, provider_reference, provider")
+        .eq("user_id", user.id)
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle();
+    if (existingTransactionError) {
+      console.error("Airtime idempotency lookup failed:", existingTransactionError);
+      return jsonResponse({ message: "Could not check this purchase request." }, 500);
+    }
+    if (existingTransaction) {
+      if (existingTransaction.transaction_type !== "airtime") {
+        return jsonResponse({ message: "This idempotency key was used for another purchase." }, 409);
+      }
+      if (
+        existingTransaction.status === "processing" &&
+        existingTransaction.provider === "bilalsadasub" &&
+        existingTransaction.provider_reference &&
+        bilalToken.trim()
+      ) {
+        let requeryResponse: BilalSadaSubResponse | null = null;
+        let requeryHttpStatus: number | null = null;
+        try {
+          const result = await callBilalSadaSub<BilalSadaSubResponse>(
+            `/api/requery/${encodeURIComponent(existingTransaction.provider_reference)}`,
+            { token: bilalToken, timeoutMs: 15000 },
+          );
+          requeryResponse = result.data;
+          requeryHttpStatus = result.status;
+        } catch (requeryError) {
+          console.error("BilalSadaSub airtime requery outcome is unknown:", requeryError);
+        }
+        const status = bilalSadaSubTransactionStatus(requeryResponse);
+        if (status === "success") {
+          const { error: settlementError } = await supabaseAdmin.rpc(
+            "settle_airtime_purchase",
+            {
+              p_transaction_id: existingTransaction.id,
+              p_provider_reference: existingTransaction.provider_reference,
+              p_provider_response: requeryResponse,
+            },
+          );
+          if (settlementError) {
+            console.error("BilalSadaSub airtime requery settlement failed:", settlementError);
+            return jsonResponse({
+              status: "pending",
+              message: "Your airtime purchase is being checked. Do not submit it again yet.",
+              reference: existingTransaction.provider_reference,
+            }, 202);
+          }
+          return jsonResponse({
+            status: "success",
+            message: "Airtime recharge completed successfully.",
+            reference: existingTransaction.provider_reference,
+          });
+        }
+        if (
+          status === "failed" ||
+          (requeryHttpStatus === 404 && bilalSadaSubStatus(requeryResponse) === "fail")
+        ) {
+          const { error: releaseError } = await supabaseAdmin.rpc(
+            "release_airtime_reservation",
+            {
+              p_transaction_id: existingTransaction.id,
+              p_provider_response: requeryResponse,
+            },
+          );
+          if (releaseError) {
+            console.error("BilalSadaSub failed airtime requery release failed:", releaseError);
+            return jsonResponse({
+              status: "pending",
+              message: "The provider rejected the purchase, but wallet release needs support review.",
+              reference: existingTransaction.provider_reference,
+            }, 202);
+          }
+          return jsonResponse({
+            status: "failed",
+            message: "BilalSadaSub rejected the airtime purchase and the reserved balance was released.",
+            reference: existingTransaction.provider_reference,
+          });
+        }
+      }
+      return jsonResponse({
+        status:
+          existingTransaction.status === "success"
+            ? "success"
+            : existingTransaction.status,
+        message:
+          existingTransaction.status === "success"
+            ? "Airtime purchase already completed."
+            : "This airtime request is already being processed.",
+        reference:
+          existingTransaction.provider_reference ||
+          `ABBA-${existingTransaction.id}`,
+      });
     }
 
     if (!transactionAuthorization) {
@@ -254,43 +367,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    /*
-     * ----------------------------------------------------
-     * 6. Check for duplicate request
-     * ----------------------------------------------------
-     */
-
-    const { data: existingTransaction } =
-      await supabaseAdmin
-        .from("vtu_transactions")
-        .select(
-          `
-            id,
-            status,
-            provider_reference,
-            phone_number,
-            network,
-            amount_kobo
-          `,
-        )
-        .eq("user_id", user.id)
-        .eq("idempotency_key", idempotencyKey)
-        .maybeSingle();
-
-    if (existingTransaction) {
-      return jsonResponse({
-        status:
-          existingTransaction.status === "success"
-            ? "success"
-            : existingTransaction.status,
-        message:
-          existingTransaction.status === "success"
-            ? "Airtime purchase already completed."
-            : "This airtime request is already being processed.",
-        reference:
-          existingTransaction.provider_reference ||
-          `ABBA-${existingTransaction.id}`,
-      });
+    if (!["ALRAHUZDATA", "BILALSADASUB"].includes(chosenProvider)) {
+      return jsonResponse({ message: "The configured airtime provider is not supported." }, 500);
+    }
+    if (chosenProvider === "ALRAHUZDATA" && !alrahuzToken) {
+      return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 503);
+    }
+    if (chosenProvider === "BILALSADASUB" && !bilalToken.trim()) {
+      return jsonResponse({ message: "BILALSADASUB_API_TOKEN is not configured." }, 503);
     }
 
 const { data: reservationResult, error: reservationError } =
@@ -349,7 +433,6 @@ if (!transactionId) {
      * ----------------------------------------------------
      */
 
-    const chosenProvider = "ALRAHUZDATA";
     let providerData: Record<string, unknown> | null = null;
     let providerReference = `ABBA-${transactionId}`;
     let isSuccess = false;
@@ -357,46 +440,104 @@ if (!transactionId) {
     let providerNeedsReconciliation = false;
     let failureMessage = "Provider rejected the airtime request.";
 
-    const alrahuzNetworkId = ALRAHUZ_NETWORK_IDS[network];
-    if (!alrahuzNetworkId) {
-      await supabaseAdmin.rpc("release_airtime_reservation", {
-        p_transaction_id: transactionId,
-        p_provider_response: {
-          message: `ALRAHUZDATA network ID for ${network} is not configured.`,
+    if (chosenProvider === "ALRAHUZDATA") {
+      const alrahuzNetworkId = ALRAHUZ_NETWORK_IDS[network];
+      if (!alrahuzNetworkId) {
+        await supabaseAdmin.rpc("release_airtime_reservation", {
+          p_transaction_id: transactionId,
+          p_provider_response: {
+            message: `ALRAHUZDATA network ID for ${network} is not configured.`,
+          },
+        });
+        return jsonResponse(
+          { message: `ALRAHUZDATA does not support network: ${network}` },
+          400,
+        );
+      }
+
+      console.log(`Dispatching airtime to ALRAHUZDATA: network=${alrahuzNetworkId}, amount=${amount}, phone=${phone}`);
+      const alrahuzResult = await callAlrahuzApi<Record<string, unknown>>("/topup/", {
+        method: "POST",
+        token: alrahuzToken,
+        body: {
+          network: alrahuzNetworkId,
+          amount,
+          mobile_number: phone,
+          Ported_number: true,
+          airtime_type: "VTU",
         },
+        timeoutMs: 45000,
       });
-      return jsonResponse(
-        { message: `ALRAHUZDATA does not support network: ${network}` },
-        400,
-      );
-    }
 
-    console.log(`Dispatching airtime to ALRAHUZDATA: network=${alrahuzNetworkId}, amount=${amount}, phone=${phone}`);
-    const alrahuzResult = await callAlrahuzApi<Record<string, unknown>>("/topup/", {
-      method: "POST",
-      token: alrahuzToken,
-      body: {
-        network: alrahuzNetworkId,
-        amount,
-        mobile_number: phone,
-        Ported_number: true,
-        airtime_type: "VTU",
-      },
-      timeoutMs: 45000,
-    });
+      providerData = alrahuzResult.data || { error: alrahuzResult.error };
+      isSuccess = alrahuzResult.ok && isAlrahuzSuccess(alrahuzResult.data);
+      isPending = isAlrahuzPending(alrahuzResult.data);
+      providerNeedsReconciliation =
+        (!alrahuzResult.ok && alrahuzResult.status >= 500) ||
+        (!isSuccess && isPending);
+      failureMessage =
+        alrahuzResult.error ||
+        String(alrahuzResult.data?.message || alrahuzResult.data?.msg || alrahuzResult.data?.detail || "ALRAHUZDATA rejected the airtime request.");
 
-    providerData = alrahuzResult.data || { error: alrahuzResult.error };
-    isSuccess = alrahuzResult.ok && isAlrahuzSuccess(alrahuzResult.data);
-    isPending = isAlrahuzPending(alrahuzResult.data);
-    providerNeedsReconciliation =
-      (!alrahuzResult.ok && alrahuzResult.status >= 500) ||
-      (!isSuccess && isPending);
-    failureMessage =
-      alrahuzResult.error ||
-      String(alrahuzResult.data?.message || alrahuzResult.data?.msg || alrahuzResult.data?.detail || "ALRAHUZDATA rejected the airtime request.");
-
-    if (alrahuzResult.data?.id) {
-      providerReference = String(alrahuzResult.data.id);
+      if (alrahuzResult.data?.id) {
+        providerReference = String(alrahuzResult.data.id);
+      }
+    } else {
+      const networkId = BILALSADASUB_NETWORK_IDS[network];
+      const requestId = `ABBA-AIRTIME-${transactionId}`;
+      if (!networkId) {
+        await supabaseAdmin.rpc("release_airtime_reservation", {
+          p_transaction_id: transactionId,
+          p_provider_response: { message: `BilalSadaSub does not support network: ${network}` },
+        });
+        return jsonResponse({ message: `BilalSadaSub does not support network: ${network}` }, 400);
+      }
+      providerReference = requestId;
+      const { error: requestIdSaveError } = await supabaseAdmin
+        .from("vtu_transactions")
+        .update({
+          provider_reference: providerReference,
+          service_provider: "bilalsadasub",
+          provider: "bilalsadasub",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transactionId)
+        .eq("status", "processing");
+      if (requestIdSaveError) {
+        console.error("Could not save BilalSadaSub airtime request ID:", requestIdSaveError);
+        return jsonResponse({
+          status: "pending",
+          message: "Your airtime purchase is being checked. Do not submit it again yet.",
+          reference: providerReference,
+        }, 202);
+      }
+      try {
+        const bilalResult = await callBilalSadaSub<BilalSadaSubResponse>("/api/topup", {
+          method: "POST",
+          token: bilalToken,
+          body: {
+            network: networkId,
+            phone: `234${phone.slice(1)}`,
+            plan_type: "VTU",
+            amount,
+            "request-id": requestId,
+          },
+          timeoutMs: 45000,
+        });
+        providerData = bilalResult.data;
+        const status = bilalSadaSubStatus(bilalResult.data);
+        isSuccess = status === "success";
+        isPending = status !== "success" && status !== "fail" && status !== "failed";
+        providerNeedsReconciliation = isPending;
+        failureMessage = bilalResult.error ||
+          String(bilalResult.data?.message || "BilalSadaSub rejected the airtime request.");
+        if (typeof bilalResult.data?.reference === "string" && bilalResult.data.reference) {
+          providerReference = bilalResult.data.reference;
+        }
+      } catch (providerError) {
+        console.error("BilalSadaSub airtime purchase outcome is unknown:", providerError);
+        providerNeedsReconciliation = true;
+      }
     }
 
     console.log(`${chosenProvider} response:`, JSON.stringify(providerData));
@@ -407,8 +548,8 @@ if (!transactionId) {
         .update({
           provider_reference: providerReference,
           provider_response: providerData,
-          service_provider: "alrahuzdata",
-          provider: "alrahuzdata",
+          service_provider: chosenProvider.toLowerCase(),
+          provider: chosenProvider.toLowerCase(),
           updated_at: new Date().toISOString(),
         })
         .eq("id", transactionId)
@@ -444,9 +585,10 @@ if (!transactionId) {
 
       return jsonResponse(
         {
+          ...(chosenProvider === "BILALSADASUB" ? { status: "failed" } : {}),
           message: failureMessage,
         },
-        400,
+        chosenProvider === "BILALSADASUB" ? 200 : 400,
       );
     }
 

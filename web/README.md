@@ -46,6 +46,31 @@ npm run start
 
 The app uses the Supabase client in `src/lib/supabase.ts`. Customer and admin backend operations are implemented in `supabase/functions`.
 
+## BilalSadaSub provider setup
+
+BilalSadaSub API tokens are server-side secrets. Generate an access token by sending
+`POST https://bilalsadasub.com/api/user` with HTTP Basic Auth using the BilalSadaSub
+account username and password. For example, curl can prompt for the password when
+only the account username is supplied:
+
+```bash
+curl --user "<account-username>" --request POST \
+  https://bilalsadasub.com/api/user \
+  --header "Accept: application/json"
+```
+
+Store the returned `AccessToken` as the
+`BILALSADASUB_API_TOKEN` Supabase Edge Function secret; never add it to `.env.local`,
+browser code, source control, or chat.
+
+After setting the secret and applying migrations, deploy `admin-settings`,
+`admin-cable-overrides`, `data-services`, `data-purchase`, and `purchase-airtime`.
+Super admins can then choose BilalSadaSub separately for airtime and data in
+Admin Settings. Configure BilalSadaSub plan prices and enable the desired plans
+in VTU Services before switching customer data routing to it. Uncertain purchase
+responses remain pending and are resolved through the provider requery endpoint;
+the system does not automatically retry a purchase through another provider.
+
 ## Supabase deployment
 
 From the `web` directory, deploy the functions required by the feature being changed:

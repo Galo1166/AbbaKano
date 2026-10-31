@@ -33,6 +33,8 @@ const settingKeys = [
   "maxSingleManualCredit",
   "vtuGatewayPrimary",
   "vtuGatewayFallback",
+  "airtimeProviderPrimary",
+  "dataProviderPrimary",
 ] as const;
 
 const marginFields = {
@@ -213,6 +215,13 @@ Deno.serve(async (req) => {
           return jsonResponse({ message: `Enter a valid ${key}.` }, 400);
         }
         if (
+          ["airtimeProviderPrimary", "dataProviderPrimary"].includes(key) &&
+          value !== "ALRAHUZDATA" &&
+          value !== "BILALSADASUB"
+        ) {
+          return jsonResponse({ message: `Choose a supported provider for ${key}.` }, 400);
+        }
+        if (
           ["lowBalanceThresholdNaira", "dualApprovalAmountThreshold", "maxSingleManualCredit"].includes(key) &&
           (typeof value !== "number" || !Number.isFinite(value) || value < 0)
         ) {
@@ -238,6 +247,15 @@ Deno.serve(async (req) => {
         .eq("id", true)
         .single();
       if (readError) throw readError;
+
+      const bilalProviderActive =
+        (updates.airtimeProviderPrimary ?? current.settings.airtimeProviderPrimary) === "BILALSADASUB" ||
+        (updates.dataProviderPrimary ?? current.settings.dataProviderPrimary) === "BILALSADASUB";
+      if (bilalProviderActive && !Deno.env.get("BILALSADASUB_API_TOKEN")?.trim()) {
+        return jsonResponse({
+          message: "Configure the BILALSADASUB_API_TOKEN Supabase secret before routing purchases to BilalSadaSub.",
+        }, 400);
+      }
 
       const { data, error } = await admin
         .from("admin_system_settings")

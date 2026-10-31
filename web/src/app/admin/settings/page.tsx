@@ -270,6 +270,7 @@ export default function SettingsPage() {
       <div className="bg-surface-container-lowest rounded-2xl p-1.5 shadow-card border border-outline-variant/30 flex flex-wrap gap-1">
         {[
           { id: "margins", label: "Wholesale Margins", icon: "cell_tower" },
+          { id: "providers", label: "Provider Routing", icon: "route" },
           { id: "maintenance", label: "App Maintenance", icon: "build" },
           { id: "alerts", label: "Alert Contacts", icon: "contact_phone" },
         ].map((tab) => (
@@ -403,6 +404,41 @@ export default function SettingsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {activeTab === "providers" && settings && (
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-6 space-y-6">
+          <div>
+            <h2 className="font-bold text-base text-on-surface mb-1">Purchase Provider Routing</h2>
+            <p className="text-xs sm:text-sm text-on-surface-variant">
+              Choose the provider independently for customer airtime and data purchases. Routing changes require an audit reason and do not automatically fail over.
+            </p>
+          </div>
+          {([
+            ["airtimeProviderPrimary", "Airtime provider"],
+            ["dataProviderPrimary", "Data provider"],
+          ] as const).map(([key, label]) => (
+            <div key={key} className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <label htmlFor={key} className="text-sm font-semibold text-on-surface">{label}</label>
+              <select
+                id={key}
+                value={settings[key]}
+                onChange={(event) =>
+                  setSettings((current) =>
+                    current ? { ...current, [key]: event.target.value as SystemSettings[typeof key] } : current
+                  )
+                }
+                className="h-11 px-3 bg-surface-container-low rounded-xl text-sm text-on-surface outline-none border border-outline-variant/30 focus:border-primary"
+              >
+                <option value="ALRAHUZDATA">ALRAHUZDATA</option>
+                <option value="BILALSADASUB">BilalSadaSub</option>
+              </select>
+            </div>
+          ))}
+          <p className="text-xs text-on-surface-variant border-t border-outline-variant/20 pt-4">
+            BilalSadaSub routing is available only after its API token is configured as a Supabase Edge Function secret.
+          </p>
         </div>
       )}
 

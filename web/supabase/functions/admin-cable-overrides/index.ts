@@ -1,6 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { recordAdminAuditEvent as recordAuditEvent } from "../_shared/admin-audit.ts";
 import { ALRAHUZ_NETWORK_IDS, callAlrahuzApi } from "../_shared/alrahuzdata.ts";
+import {
+  BILALSADASUB_NETWORK_IDS,
+  callBilalSadaSub,
+  type BilalSadaSubResponse,
+} from "../_shared/bilalsadasub.ts";
 import { formatDataCapacity } from "../_shared/data-capacity.ts";
 
 const corsHeaders = {
@@ -22,7 +27,7 @@ function normalizeNetwork(value: unknown): string {
 }
 
 const supportedProviders = ["DSTV", "GOTV", "STARTIMES", "MTN", "AIRTEL", "GLO", "9MOBILE"];
-const dataPlanSources = ["VTUGATE", "ALRAHUZDATA"];
+const dataPlanSources = ["VTUGATE", "ALRAHUZDATA", "BILALSADASUB"];
 
 async function fetchVtuGate(
   baseUrl: string,
@@ -60,6 +65,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const apiKey = Deno.env.get("VTUGATE_API_KEY") || Deno.env.get("VTU_GATE_API_KEY");
     const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN");
+    const bilalToken = Deno.env.get("BILALSADASUB_API_TOKEN");
     const baseUrl = (Deno.env.get("VTUGATE_BASE_URL") ||
       Deno.env.get("VTU_GATE_BASE_URL") ||
       "https://api.vtugate.com/api/v1").replace(/\/$/, "");
@@ -176,6 +182,40 @@ Deno.serve(async (req) => {
             };
           })
           .filter((p) => p.plan_code && p.cost_price > 0);
+      } else if (sourceProvider === "BILALSADASUB") {
+        if (!bilalToken?.trim()) {
+          return jsonResponse({ message: "BILALSADASUB_API_TOKEN is not configured." }, 503);
+        }
+        const bilalResponse = await callBilalSadaSub<BilalSadaSubResponse>(
+          `/api/v1/plans/data?network=${provider}`,
+          { token: bilalToken, timeoutMs: 15000 },
+        );
+        if (
+          !bilalResponse.ok ||
+          !bilalResponse.data ||
+          bilalResponse.data.status !== "success" ||
+          !Array.isArray(bilalResponse.data.data)
+        ) {
+          return jsonResponse({
+            message: bilalResponse.error || "Could not load BilalSadaSub plans.",
+          }, 502);
+        }
+        const networkId = BILALSADASUB_NETWORK_IDS[provider];
+        rawPlans = (bilalResponse.data.data as Record<string, unknown>[])
+          .map((plan) => {
+            const planType = String(plan.plan_type || "GENERAL");
+            const planName = String(plan.plan_name || "").trim();
+            const validity = String(plan.plan_day || "").trim();
+            return {
+              plan_code: String(plan.plan_id || ""),
+              service_id: String(networkId),
+              name: `${planName}${planType.toLowerCase() === "general" ? "" : ` ${planType}`}${validity ? ` (${validity})` : ""}`,
+              category: planType.toUpperCase(),
+              cost_price: Number(plan.amount || 0),
+              source_provider: sourceProvider,
+            };
+          })
+          .filter((plan) => plan.plan_code && plan.name && plan.cost_price > 0);
       } else {
         if (!apiKey) {
           return jsonResponse({ message: "VTUGATE API key is not configured." }, 503);

@@ -15,12 +15,13 @@ import { useThemeMode } from "@/lib/theme";
 
 type Network = "MTN" | "AIRTEL" | "GLO" | "9MOBILE";
 type Receipt = {
-  status: string;
+  status: "success" | "pending" | "failed";
   message: string;
   reference?: string;
   network: Network;
   phone: string;
   amount: number;
+  idempotencyKey: string;
 };
 
 type AirtimePurchaseResponse = {
@@ -54,6 +55,13 @@ function formatNaira(amount: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
 }
 
+function normalizeAirtimeStatus(status?: string): Receipt["status"] {
+  const normalized = status?.toLowerCase();
+  if (normalized === "success" || normalized === "completed") return "success";
+  if (normalized === "failed" || normalized === "fail") return "failed";
+  return "pending";
+}
+
 export function AirtimeShell() {
   const router = useRouter();
   const { theme } = useThemeMode();
@@ -67,6 +75,7 @@ export function AirtimeShell() {
   const [purchasing, setPurchasing] = useState(false);
   const [message, setMessage] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [checkingReceiptStatus, setCheckingReceiptStatus] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
 
@@ -140,12 +149,13 @@ export function AirtimeShell() {
       });
 
       setReceipt({
-        status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message || "Airtime recharge successful!") || "Airtime recharge successful!",
+        status: normalizeAirtimeStatus(purchaseRes.status),
+        message: sanitizeServiceMessage(purchaseRes.message || "Airtime purchase status is being checked.") || "Airtime purchase status is being checked.",
         reference: purchaseRes.reference || `AIR-${Date.now()}`,
         network: selectedNetwork,
         phone,
         amount: numericAmount,
+        idempotencyKey,
       });
       setShowCheckout(false);
       setPin("");
@@ -179,12 +189,13 @@ export function AirtimeShell() {
       });
 
       setReceipt({
-        status: purchaseRes.status || "completed",
-        message: sanitizeServiceMessage(purchaseRes.message || "Airtime recharge successful!") || "Airtime recharge successful!",
+        status: normalizeAirtimeStatus(purchaseRes.status),
+        message: sanitizeServiceMessage(purchaseRes.message || "Airtime purchase status is being checked.") || "Airtime purchase status is being checked.",
         reference: purchaseRes.reference || `AIR-${Date.now()}`,
         network: selectedNetwork,
         phone,
         amount: numericAmount,
+        idempotencyKey,
       });
       setShowCheckout(false);
       setPin("");
@@ -194,6 +205,41 @@ export function AirtimeShell() {
       setMessage(safeErrorMessage(err, "An error occurred.") || "Airtime purchase could not be completed.");
     } finally {
       setPurchasing(false);
+    }
+  }
+
+  async function checkPendingPurchaseStatus() {
+    if (!receipt || receipt.status !== "pending" || checkingReceiptStatus) return;
+    setCheckingReceiptStatus(true);
+    try {
+      const response = await invokeSupabaseFunction<AirtimePurchaseResponse>("purchase-airtime", {
+        network: receipt.network,
+        phone: receipt.phone,
+        amount: receipt.amount,
+        idempotencyKey: receipt.idempotencyKey,
+      });
+      const status = normalizeAirtimeStatus(response.status);
+      setReceipt((current) => current ? {
+        ...current,
+        status,
+        message: sanitizeServiceMessage(response.message || "Purchase status checked.") ||
+          "Purchase status checked.",
+        reference: response.reference || current.reference,
+      } : current);
+      if (status !== "pending") {
+        try {
+          setBalance(await getWalletBalance());
+        } catch (balanceError) {
+          console.error("Wallet balance refresh after airtime status check failed:", balanceError);
+        }
+      }
+    } catch (error) {
+      setReceipt((current) => current ? {
+        ...current,
+        message: safeErrorMessage(error, "Could not check the purchase status. Try again shortly."),
+      } : current);
+    } finally {
+      setCheckingReceiptStatus(false);
     }
   }
 
@@ -632,14 +678,33 @@ export function AirtimeShell() {
           <div className={`w-full max-w-sm rounded-3xl border p-6 text-center shadow-2xl transition-colors ${
             isDark ? "bg-[#141721] border-[#222634] text-white" : "bg-white border-slate-200 text-slate-900"
           }`}>
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500">
+            <div className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${
+              receipt.status === "pending"
+                ? "bg-amber-500/15 text-amber-500"
+                : receipt.status === "failed"
+                  ? "bg-rose-500/15 text-rose-500"
+                  : "bg-emerald-500/15 text-emerald-500"
+            }`}>
               <svg className="h-8 w-8 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                {receipt.status === "pending" ? (
+                  <>
+                    <circle cx="12" cy="12" r="9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+                  </>
+                ) : receipt.status === "failed" ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                )}
               </svg>
             </div>
 
             <h3 className={`text-lg font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>
-              Recharge Successful!
+              {receipt.status === "pending"
+                ? "Transaction Pending"
+                : receipt.status === "failed"
+                  ? "Transaction Failed"
+                  : "Recharge Successful!"}
             </h3>
             <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
               {receipt.message}
@@ -668,13 +733,23 @@ export function AirtimeShell() {
               )}
             </div>
 
+            {receipt.status === "pending" && (
+              <button
+                type="button"
+                onClick={() => void checkPendingPurchaseStatus()}
+                disabled={checkingReceiptStatus}
+                className="mt-5 w-full h-11 rounded-xl border border-blue-600 text-blue-600 font-bold text-xs transition hover:bg-blue-50 disabled:opacity-50 cursor-pointer"
+              >
+                {checkingReceiptStatus ? "Checking status..." : "Check status"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
                 setReceipt(null);
                 goHome();
               }}
-              className="mt-5 w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
+              className="mt-3 w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
             >
               Done
             </button>

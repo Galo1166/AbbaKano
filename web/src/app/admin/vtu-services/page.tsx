@@ -72,7 +72,7 @@ export default function VtuServicesPage() {
   const [savingPlanId, setSavingPlanId] = useState<number | null>(null);
 
   // Live Provider Data Plans State
-  const [dataProvider, setDataProvider] = useState<"VTUGATE" | "ALRAHUZDATA">("VTUGATE");
+  const [dataProvider, setDataProvider] = useState<"VTUGATE" | "ALRAHUZDATA" | "BILALSADASUB">("VTUGATE");
   const [dataNetwork, setDataNetwork] = useState<"MTN" | "AIRTEL" | "GLO" | "9MOBILE">("MTN");
   const [dataCategoryFilter, setDataCategoryFilter] = useState<string>("ALL");
   const [dataSearchQuery, setDataSearchQuery] = useState<string>("");
@@ -686,7 +686,7 @@ export default function VtuServicesPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Select a source provider and network to manage that provider’s plans independently. Customer purchases continue to use ALRAHUZDATA.
+              Select a source provider and network to manage that provider’s plans independently. Customer purchases use the provider selected in Admin Settings.
             </p>
           </div>
           <button
@@ -704,7 +704,7 @@ export default function VtuServicesPage() {
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-slate-600">Provider:</span>
-          {(["VTUGATE", "ALRAHUZDATA"] as const).map((provider) => (
+          {(["VTUGATE", "ALRAHUZDATA", "BILALSADASUB"] as const).map((provider) => (
             <button
               key={provider}
               type="button"
