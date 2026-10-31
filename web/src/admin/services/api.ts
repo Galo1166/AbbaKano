@@ -47,6 +47,7 @@ export async function updateMonnifySettings(settings: MonnifySettings): Promise<
 export type DashboardOverview = {
   totalVolumeToday: number;
   netMarginToday: number | null;
+  totalUserBalance?: number;
   activeUsers: number;
   totalUsers: number;
   newUsersToday: number;
