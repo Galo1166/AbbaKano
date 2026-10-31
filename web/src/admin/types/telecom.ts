@@ -92,14 +92,15 @@ export interface InflowRecord {
 export interface ProviderBalance {
   id: string;
   providerName: string;
-  carrier: Carrier;
-  balance: number;
+  carrier: Carrier | "ALRAHUZDATA";
+  balance: number | null;
   status: ProviderStatus;
   estimatedRunwayHours: number;
   lowBalanceThreshold: number;
   lastRefillAt: string;
   refillBankName: string;
   refillAccountNumber: string;
+  error?: string;
   fundingOptions?: ProviderFundingOption[];
 }
 

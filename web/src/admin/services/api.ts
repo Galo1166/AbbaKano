@@ -488,28 +488,47 @@ export async function markDepositFailed(id: string, reason: string): Promise<voi
 
 // ─── Provider Balances ────────────────────────────────────────
 export async function fetchProviderBalances(): Promise<ProviderBalance[]> {
-  const response = await invokeSupabaseFunction<{
-    provider: "VTUGATE";
-    providerName: string;
-    balance: number;
-    status: ProviderBalance["status"];
-    lastCheckedAt: string;
-    lowBalanceThreshold: number;
-    fundingOptions: ProviderFundingOption[];
-  }>("admin-provider-balances", {});
-  return [{
-    id: "vtugate",
-    providerName: response.providerName,
-    carrier: "VTUGATE",
-    balance: response.balance,
-    status: response.status,
-    estimatedRunwayHours: 0,
-    lowBalanceThreshold: response.lowBalanceThreshold,
-    lastRefillAt: response.lastCheckedAt,
-    refillBankName: "",
-    refillAccountNumber: "",
-    fundingOptions: response.fundingOptions,
-  }];
+  const providerNames = ["VTUGATE", "ALRAHUZDATA"] as const;
+  return Promise.all(providerNames.map(async (provider) => {
+    const identity = provider === "VTUGATE"
+      ? { id: "vtugate", providerName: "VTUGATE", carrier: "VTUGATE" as const }
+      : { id: "alrahuzdata", providerName: "ALRAHUZDATA", carrier: "ALRAHUZDATA" as const };
+    try {
+      const response = await invokeSupabaseFunction<{
+        provider: "VTUGATE" | "ALRAHUZDATA";
+        providerName: string;
+        balance: number;
+        status: ProviderBalance["status"];
+        lastCheckedAt: string;
+        lowBalanceThreshold: number;
+        fundingOptions: ProviderFundingOption[];
+      }>("admin-provider-balances", { provider });
+      return {
+        ...identity,
+        balance: response.balance,
+        status: response.status,
+        estimatedRunwayHours: 0,
+        lowBalanceThreshold: response.lowBalanceThreshold,
+        lastRefillAt: response.lastCheckedAt,
+        refillBankName: "",
+        refillAccountNumber: "",
+        fundingOptions: response.fundingOptions,
+      };
+    } catch (error) {
+      return {
+        ...identity,
+        balance: null,
+        status: "OFFLINE" as const,
+        estimatedRunwayHours: 0,
+        lowBalanceThreshold: 0,
+        lastRefillAt: new Date().toISOString(),
+        refillBankName: "",
+        refillAccountNumber: "",
+        error: error instanceof Error ? error.message : `Could not load ${provider} balance.`,
+        fundingOptions: [],
+      };
+    }
+  }));
 }
 
 export async function initiateProviderRefill(
