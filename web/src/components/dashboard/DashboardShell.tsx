@@ -42,7 +42,6 @@ type DashboardData = {
     biometrics_enabled?: boolean;
     app_lock_enabled?: boolean;
     has_transaction_pin?: boolean;
-    has_passkey?: boolean;
     referralCount?: number;
     referralEarnings?: number;
     referralCommissionBalance?: number;
@@ -178,6 +177,7 @@ export function DashboardShell() {
     let cancelled = false;
 
     async function hydrateDashboard() {
+      let failedStep = "session lookup";
       try {
         setErrorMessage("");
         const {
@@ -194,6 +194,7 @@ export function DashboardShell() {
 
         const user = session.user;
 
+        failedStep = "dashboard queries";
         const [profileResult, walletResult, resvResult] = await Promise.all([
           supabase
             .from("profiles")
@@ -203,7 +204,8 @@ export function DashboardShell() {
               role,
               status,
               biometrics_enabled,
-              app_lock_enabled
+              app_lock_enabled,
+              has_transaction_pin
             `)
             .eq("id", user.id)
             .maybeSingle(),
@@ -222,8 +224,18 @@ export function DashboardShell() {
         ]);
 
         if (cancelled) return;
-        if (profileResult.error) throw profileResult.error;
-        if (walletResult.error) throw walletResult.error;
+        if (profileResult.error) {
+          failedStep = "profiles query";
+          throw profileResult.error;
+        }
+        if (walletResult.error) {
+          failedStep = "wallets query";
+          throw walletResult.error;
+        }
+        if (resvResult.error) {
+          failedStep = "wallet reservations query";
+          throw resvResult.error;
+        }
 
         const profile = profileResult.data;
         const wallet = walletResult.data;
@@ -242,15 +254,24 @@ export function DashboardShell() {
             phone: profile?.phone || "",
             biometrics_enabled: profile?.biometrics_enabled,
             app_lock_enabled: profile?.app_lock_enabled,
+            has_transaction_pin: profile?.has_transaction_pin,
           },
           balance: availableBalance,
         });
       } catch (error) {
         if (cancelled) return;
-        console.error("Dashboard loading error:", error);
-        setErrorMessage(
-          error instanceof Error ? error.message : "Could not load your wallet."
-        );
+        const errorDetails = error && typeof error === "object"
+          ? error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown }
+          : null;
+        const diagnostic = [
+          error instanceof Error ? `${error.name}: ${error.message}` : undefined,
+          typeof errorDetails?.message === "string" ? errorDetails.message : undefined,
+          typeof errorDetails?.code === "string" ? `code=${errorDetails.code}` : undefined,
+          typeof errorDetails?.details === "string" ? errorDetails.details : undefined,
+          typeof errorDetails?.hint === "string" ? errorDetails.hint : undefined,
+        ].filter((part): part is string => Boolean(part)).join(" | ") || String(error);
+        console.error(`Dashboard loading error [${failedStep}]: ${diagnostic}`);
+        setErrorMessage("Could not load your wallet.");
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -368,7 +389,7 @@ export function DashboardShell() {
   if (activeTab === "tv" || activeTab === "cable-tv") return <CableTVShell />;
   if (activeTab === "funding" || activeTab === "fund-wallet") return <FundWalletShell />;
   if (activeTab === "history") return <HistoryShell />;
-  if (activeTab === "profile") return <ProfileShell initialUser={data?.user} />;
+  if (activeTab === "profile") return <ProfileShell initialUser={data?.user} initialBalance={data?.balance} />;
   if (activeTab === "referral") return <ReferEarnShell initialUser={data?.user} />;
 
   return (

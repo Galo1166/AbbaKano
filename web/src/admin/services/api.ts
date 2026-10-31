@@ -135,8 +135,18 @@ export async function fetchAdminSession(): Promise<AdminSession> {
 }
 
 export async function logoutAdmin(): Promise<void> {
+  let auditError: unknown;
+  try {
+    await recordAdminSessionEvent("logout");
+  } catch (error) {
+    auditError = error;
+  }
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+  if (auditError) {
+    console.error("Admin signed out but the logout audit event could not be saved:", auditError);
+    throw new Error("Signed out, but the logout event could not be saved to the audit log.");
+  }
 }
 
 type BackendTransaction = {
@@ -467,10 +477,11 @@ export async function fetchInflows(
   };
 }
 
-export async function markDepositFailed(id: string): Promise<void> {
+export async function markDepositFailed(id: string, reason: string): Promise<void> {
   await invokeSupabaseFunction<{ success: boolean }>("admin-deposits", {
     action: "mark_failed",
     depositId: id,
+    reason,
   });
 }
 
@@ -511,6 +522,19 @@ export async function initiateProviderRefill(
 }
 
 // ─── Audit Logs ───────────────────────────────────────────────
+export async function recordAdminSessionEvent(event: "login" | "logout"): Promise<void> {
+  await invokeSupabaseFunction<{ success: boolean }>("admin-audit-logs", {
+    recordEvent: event,
+  });
+}
+
+export async function recordAdminPageView(path: string): Promise<void> {
+  await invokeSupabaseFunction<{ success: boolean }>("admin-audit-logs", {
+    recordEvent: "page_view",
+    path,
+  });
+}
+
 function parseAuditDetails(details: unknown): string {
   if (!details) return "Administrative action recorded";
   if (typeof details === "string") {
@@ -552,13 +576,24 @@ function parseAuditDetails(details: unknown): string {
 export async function fetchAuditLogs(
   page = 1,
   pageSize = 20,
-  filters?: { staffName?: string; action?: string; search?: string; stream?: "user" | "admin" }
+  filters?: {
+    staffName?: string;
+    action?: string;
+    search?: string;
+    stream?: "all" | "user" | "admin";
+    from?: string;
+    to?: string;
+    actorRole?: string;
+  }
 ): Promise<PaginatedResponse<AuditLog> & {
-  metrics: { totalEvents: number; depositEvents: number; vtuEvents: number };
+  metrics: { totalEvents: number; depositEvents: number; vtuEvents: number; adminEvents: number };
+  actions: string[];
+  roles: string[];
 }> {
   const response = await invokeSupabaseFunction<{
-    auditLogs: Array<{
+    auditLogs?: Array<{
       id: string;
+      actor_user_id?: string | null;
       action: string;
       details: unknown;
       ip_address?: string | null;
@@ -566,37 +601,69 @@ export async function fetchAuditLogs(
       actor?: string | null;
       role?: string | null;
     }>;
-    total: number;
-    page: number;
-    pageSize: number;
-    metrics: { totalEvents: number; depositEvents: number; vtuEvents: number };
+    total?: number;
+    page?: number;
+    pageSize?: number;
+    actions?: unknown;
+    roles?: unknown;
+    metrics?: Partial<Record<"totalEvents" | "depositEvents" | "vtuEvents" | "adminEvents", number>>;
   }>("admin-audit-logs", {
     page,
     pageSize,
     action: filters?.action || null,
     search: filters?.search || filters?.staffName || null,
-    stream: filters?.stream || "user",
+    stream: filters?.stream || "all",
+    from: filters?.from || null,
+    to: filters?.to || null,
+    actorRole: filters?.actorRole || null,
   });
+
+  if (!Array.isArray(response.auditLogs)) {
+    throw new Error("Audit log response did not contain a valid event list.");
+  }
 
   const results = response.auditLogs.map((entry) => ({
     id: String(entry.id),
+    actorUserId: entry.actor_user_id || undefined,
     staffName: entry.actor || "System",
     role: (entry.role?.toUpperCase() || "SYSTEM") as AuditLog["role"],
     action: entry.action as AuditLog["action"],
     target: typeof entry.details === "object" && entry.details && "target" in entry.details ? String((entry.details as Record<string, unknown>).target ?? "Admin action") : "Admin action",
     details: parseAuditDetails(entry.details),
+    rawDetails: entry.details,
     device: entry.role?.toUpperCase() === "SYSTEM" ? "Supabase event trigger" : "Admin Console",
     ipAddress: entry.ip_address || undefined,
     timestamp: entry.created_at,
   }));
+  const total = typeof response.total === "number" && Number.isFinite(response.total)
+    ? response.total
+    : results.length;
+  const responseMetrics = response.metrics || {};
+  const metricValue = (key: "totalEvents" | "depositEvents" | "vtuEvents" | "adminEvents") =>
+    typeof responseMetrics[key] === "number" && Number.isFinite(responseMetrics[key])
+      ? responseMetrics[key]
+      : 0;
+  const actions = Array.isArray(response.actions)
+    ? response.actions.filter((action): action is string => typeof action === "string")
+    : [...new Set(results.map((entry) => entry.action))];
+  const roles = Array.isArray(response.roles)
+    ? response.roles.filter((role): role is string => typeof role === "string")
+    : [...new Set(results.map((entry) => entry.role))];
 
   return {
     data: results,
-    total: response.total,
-    page: response.page,
-    pageSize: response.pageSize,
-    hasNextPage: response.page * response.pageSize < response.total,
-    metrics: response.metrics,
+    total,
+    page: response.page ?? page,
+    pageSize: response.pageSize ?? pageSize,
+    hasNextPage: (response.page ?? page) * (response.pageSize ?? pageSize) < total,
+    metrics: {
+      totalEvents: metricValue("totalEvents"),
+      depositEvents: metricValue("depositEvents"),
+      vtuEvents: metricValue("vtuEvents"),
+      adminEvents: metricValue("adminEvents"),
+    },
+    actions,
+    roles,
   };
 }
 
@@ -627,12 +694,14 @@ export async function fetchMarginSettings(): Promise<MarginSetting[]> {
 
 export async function updateMargins(
   carrier: string,
-  update: Partial<MarginSetting>
+  update: Partial<MarginSetting>,
+  reason: string,
 ): Promise<ApiResponse<MarginSetting>> {
   return invokeSupabaseFunction<ApiResponse<MarginSetting>>("admin-settings", {
     action: "update_margin",
     carrier,
     update,
+    reason,
   });
 }
 
@@ -688,12 +757,14 @@ export async function fetchCustomers(
 
 export async function updateCustomerStatus(
   customerId: string,
-  status: "ACTIVE" | "BLOCKED"
+  status: "ACTIVE" | "BLOCKED",
+  reason: string,
 ): Promise<void> {
   await invokeSupabaseFunction("admin-users", {
     action: "update_status",
     userId: customerId,
     status: status.toLowerCase(),
+    reason,
   });
 }
 
@@ -753,11 +824,13 @@ export async function fetchSystemSettings(): Promise<SystemSettings> {
 }
 
 export async function updateSystemSettings(
-  updates: Partial<SystemSettings>
+  updates: Partial<SystemSettings>,
+  reason: string,
 ): Promise<ApiResponse<SystemSettings>> {
   return invokeSupabaseFunction<ApiResponse<SystemSettings>>("admin-settings", {
     action: "update_settings",
     settings: updates,
+    reason,
   });
 }
 

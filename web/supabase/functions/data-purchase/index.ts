@@ -1,6 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyDataPlanToken } from "../_shared/data-plan-token.ts";
 import { verifyTransactionAuthorization } from "../_shared/transaction-authorization.ts";
+import {
+  ALRAHUZ_NETWORK_IDS,
+  callAlrahuzApi,
+  isAlrahuzSuccess,
+  isAlrahuzPending,
+} from "../_shared/alrahuzdata.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,8 +108,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
-    const providerKey = Deno.env.get("VTUGATE_API_KEY");
-    if (!supabaseUrl || !anonKey || !rawSecretKeys || !providerKey) {
+    const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN") || "";
+    if (!supabaseUrl || !anonKey || !rawSecretKeys || !alrahuzToken) {
       console.error("Data purchase function configuration is incomplete.");
       return jsonResponse({ message: "Data purchase is temporarily unavailable." }, 500);
     }
@@ -148,7 +154,7 @@ Deno.serve(async (req) => {
       serviceKey,
       network,
     );
-    if (!selection) {
+    if (!selection || selection.provider !== "alrahuzdata") {
       return jsonResponse({
         message: "This data plan is no longer available. Reload plans and choose again.",
       }, 400);
@@ -157,7 +163,7 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("vtu_transactions")
-      .select("id, transaction_type, status, provider_reference, provider_response")
+      .select("id, transaction_type, status, provider, provider_reference, provider_response")
       .eq("user_id", user.id)
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
@@ -186,11 +192,12 @@ Deno.serve(async (req) => {
       const previousProviderResponse = existing.provider_response;
       if (
         existing.status === "processing" &&
+        existing.provider === "alrahuzdata" &&
         existing.provider_reference &&
         previousProviderResponse &&
         typeof previousProviderResponse === "object" &&
         !Array.isArray(previousProviderResponse) &&
-        previousProviderResponse.status === true
+        isAlrahuzSuccess(previousProviderResponse as Record<string, unknown>)
       ) {
         const { error: retrySettlementError } = await supabaseAdmin.rpc(
           "settle_data_purchase",
@@ -353,86 +360,96 @@ Deno.serve(async (req) => {
       }, reservation.transaction_status === "success" ? 200 : 202);
     }
 
-    const baseUrl = (Deno.env.get("VTU_GATE_BASE_URL") ||
-      "https://api.vtugate.com/api/v1").replace(/\/$/, "");
-    let providerResponse: Response;
-    let providerData: Record<string, unknown> | null;
-    try {
-      providerResponse = await fetch(`${baseUrl}/buydata`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${providerKey}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body: new URLSearchParams({
-          service_id: selection.serviceId,
-          phone_number: phone,
-          amount: String(selection.price),
-          plan_code: selection.planCode,
-        }),
-        signal: AbortSignal.timeout(45000),
-      });
-      providerData = await providerResponse.json().catch(() => null);
-    } catch (providerError) {
-      console.error("VTU Gate data purchase outcome is unknown:", providerError);
-      return jsonResponse({
-        status: "pending",
-        message: "Your data purchase is being checked. Do not submit it again yet.",
-        reference: `ABBA-${transactionId}`,
-      }, 202);
-    }
+    let providerPayload: Record<string, unknown> | null = null;
+    let providerReference = `ABBA-${transactionId}`;
+    let providerPending = false;
 
-    if (providerResponse.status >= 500) {
-      await supabaseAdmin
-        .from("vtu_transactions")
-        .update({
-          provider_response: providerData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", transactionId)
-        .eq("status", "processing");
-      return jsonResponse({
-        status: "pending",
-        message: "Your data purchase is being checked. Do not submit it again yet.",
-        reference: `ABBA-${transactionId}`,
-      }, 202);
-    }
-
-    if (!providerResponse.ok || providerData?.status !== true) {
-      const rejection = providerData || {
-        message: `VTU Gate rejected the request with HTTP ${providerResponse.status}.`,
-      };
-      const { error: releaseError } = await supabaseAdmin.rpc(
-        "release_data_reservation",
-        {
-          p_transaction_id: transactionId,
-          p_provider_response: rejection,
-        },
-      );
-      if (releaseError) {
-        console.error("Could not release failed data reservation:", releaseError);
-        return jsonResponse({
-          message: "Provider rejected the purchase, but wallet release needs support review.",
-          reference: `ABBA-${transactionId}`,
-        }, 500);
+    if (selection.provider === "alrahuzdata") {
+      if (!alrahuzToken) {
+        return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 500);
       }
-      return jsonResponse({
-        message: String(providerData?.message || "VTU Gate rejected the data purchase."),
-      }, 400);
+      const alrahuzNetwork = Number(selection.serviceId) || ALRAHUZ_NETWORK_IDS[network] || 1;
+      const alrahuzPlan = Number(selection.planCode);
+
+      console.log(`Dispatching data to ALRAHUZDATA: network=${alrahuzNetwork}, plan=${alrahuzPlan}, phone=${phone}`);
+      let alrahuzRes;
+      try {
+        alrahuzRes = await callAlrahuzApi<Record<string, unknown>>("/data/", {
+          method: "POST",
+          token: alrahuzToken,
+          body: {
+            network: alrahuzNetwork,
+            mobile_number: phone,
+            plan: alrahuzPlan,
+            Ported_number: true,
+          },
+          timeoutMs: 45000,
+        });
+      } catch (providerError) {
+        console.error("ALRAHUZDATA data purchase outcome is unknown:", providerError);
+        return jsonResponse({
+          status: "pending",
+          message: "Your data purchase is being checked. Do not submit it again yet.",
+          reference: `ABBA-${transactionId}`,
+        }, 202);
+      }
+
+      providerPayload = alrahuzRes.data || { error: alrahuzRes.error };
+
+      if (!alrahuzRes.ok && alrahuzRes.status >= 500) {
+        await supabaseAdmin
+          .from("vtu_transactions")
+          .update({
+            provider_response: providerPayload,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", transactionId)
+          .eq("status", "processing");
+        return jsonResponse({
+          status: "pending",
+          message: "Your data purchase is being checked. Do not submit it again yet.",
+          reference: `ABBA-${transactionId}`,
+        }, 202);
+      }
+
+      const isSuccess = alrahuzRes.ok && isAlrahuzSuccess(alrahuzRes.data);
+      const isPending = isAlrahuzPending(alrahuzRes.data);
+      providerPending = !isSuccess && isPending;
+
+      if (!isSuccess && !isPending) {
+        const rejection = providerPayload || {
+          message: alrahuzRes.error || "ALRAHUZDATA rejected the data purchase.",
+        };
+        const { error: releaseError } = await supabaseAdmin.rpc(
+          "release_data_reservation",
+          {
+            p_transaction_id: transactionId,
+            p_provider_response: rejection,
+          },
+        );
+        if (releaseError) {
+          console.error("Could not release failed data reservation:", releaseError);
+          return jsonResponse({
+            message: "Provider rejected the purchase, but wallet release needs support review.",
+            reference: `ABBA-${transactionId}`,
+          }, 500);
+        }
+        return jsonResponse({
+          message: String(
+            alrahuzRes.error ||
+            alrahuzRes.data?.message ||
+            alrahuzRes.data?.msg ||
+            alrahuzRes.data?.detail ||
+            "ALRAHUZDATA rejected the data purchase.",
+          ),
+        }, 400);
+      }
+
+      if (alrahuzRes.data?.id) {
+        providerReference = String(alrahuzRes.data.id);
+      }
     }
 
-    const providerPayload = providerData as Record<string, unknown>;
-    const providerResult = providerPayload.data as Record<string, unknown> | undefined;
-    const providerReference = String(
-      providerResult?.external_reference ||
-        providerResult?.transaction_id ||
-        providerPayload.reference ||
-        providerPayload.transaction_id ||
-        `ABBA-${transactionId}`,
-    );
-
-    let finalBalanceKobo: number | undefined;
     const { error: providerResponseSaveError } = await supabaseAdmin
       .from("vtu_transactions")
       .update({
@@ -444,6 +461,14 @@ Deno.serve(async (req) => {
       .eq("status", "processing");
     if (providerResponseSaveError) {
       console.error("Could not save accepted data provider response:", providerResponseSaveError);
+      return jsonResponse({
+        status: "pending",
+        message: "Your data purchase is being checked. Do not submit it again yet.",
+        reference: providerReference,
+      }, 202);
+    }
+
+    if (providerPending) {
       return jsonResponse({
         status: "pending",
         message: "Your data purchase is being checked. Do not submit it again yet.",
@@ -468,7 +493,7 @@ Deno.serve(async (req) => {
         reference: providerReference,
       }, 202);
     }
-    finalBalanceKobo = (settlementData as any)?.balance_after_kobo;
+    const finalBalanceKobo = (settlementData as { balance_after_kobo?: number } | null)?.balance_after_kobo;
 
     const { data: ledgerEntry, error: ledgerLookupError } = await supabaseAdmin
       .from("wallet_ledger")

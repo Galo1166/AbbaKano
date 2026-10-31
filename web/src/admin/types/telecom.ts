@@ -45,7 +45,16 @@ export type AuditAction =
   | "vtu.status_changed"
   | "admin.vtu_plan_created"
   | "admin.vtu_plan_updated"
-  | "admin.vtu_plan_deleted";
+  | "admin.vtu_plan_deleted"
+  | "admin.wallet_adjusted"
+  | "admin.margin_updated"
+  | "admin.system_settings_updated"
+  | "admin.referral_settings_updated"
+  | "admin.price_override_upserted"
+  | "admin.price_override_deleted"
+  | "admin.login"
+  | "admin.logout"
+  | "admin.page_view";
 
 // ─── Transaction ──────────────────────────────────────────────
 export interface Transaction {
@@ -107,11 +116,13 @@ export interface ProviderFundingOption {
 // ─── Audit Log ────────────────────────────────────────────────
 export interface AuditLog {
   id: string;
+  actorUserId?: string;
   staffName: string;
   role: StaffRole;
   action: AuditAction;
   target: string;             // e.g. "Customer: 08031234567" or "MTN Margin"
   details: string;            // Human-readable description
+  rawDetails: unknown;
   device: string;             // e.g. "Office Laptop (Kano HQ)"
   ipAddress?: string;
   timestamp: string;

@@ -81,6 +81,7 @@ export default function VtuServicesPage() {
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [savingPlanCode, setSavingPlanCode] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [auditReason, setAuditReason] = useState("");
 
   // Cable Price Overrides State
   const [cableOverrides, setCableOverrides] = useState<CablePriceOverride[]>([]);
@@ -162,6 +163,11 @@ export default function VtuServicesPage() {
 
   async function createPlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setPlansError("Enter a reason of at least 5 characters for this plan change.");
+      return;
+    }
     setCreatingPlan(true);
     setPlansError(null);
     try {
@@ -171,10 +177,12 @@ export default function VtuServicesPage() {
         capacity: planForm.capacity.trim(),
         price: Number(planForm.price),
         enabled: true,
+        reason,
       });
       if (!response.plan) throw new Error("The created plan was not returned.");
       setPlans((current) => [...current, response.plan!].sort((a, b) => a.capacity_mb - b.capacity_mb));
       setPlanForm(emptyPlanForm);
+      setAuditReason("");
     } catch (error) {
       setPlansError(error instanceof Error ? error.message : "Could not create plan.");
     } finally {
@@ -183,6 +191,11 @@ export default function VtuServicesPage() {
   }
 
   async function updatePlan(plan: AdminVtuPlan, changes: Partial<PlanForm> & { enabled?: boolean }) {
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setPlansError("Enter a reason of at least 5 characters for this plan change.");
+      return;
+    }
     setSavingPlanId(plan.id);
     setPlansError(null);
     try {
@@ -195,9 +208,11 @@ export default function VtuServicesPage() {
         duration: changes.duration || plan.duration,
         price: Number(changes.price ?? plan.price_kobo / 100),
         enabled: typeof changes.enabled === "boolean" ? changes.enabled : plan.enabled,
+        reason,
       });
       if (!response.plan) throw new Error("The updated plan was not returned.");
       setPlans((current) => current.map((item) => item.id === plan.id ? response.plan! : item));
+      setAuditReason("");
     } catch (error) {
       setPlansError(error instanceof Error ? error.message : "Could not update plan.");
     } finally {
@@ -207,11 +222,17 @@ export default function VtuServicesPage() {
 
   async function deletePlan(plan: AdminVtuPlan) {
     if (!window.confirm(`Delete ${plan.network} ${plan.capacity} plan?`)) return;
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setPlansError("Enter a reason of at least 5 characters for this plan change.");
+      return;
+    }
     setSavingPlanId(plan.id);
     setPlansError(null);
     try {
-      await manageAdminVtuPlans({ action: "delete", id: plan.id });
+      await manageAdminVtuPlans({ action: "delete", id: plan.id, reason });
       setPlans((current) => current.filter((item) => item.id !== plan.id));
+      setAuditReason("");
     } catch (error) {
       setPlansError(error instanceof Error ? error.message : "Could not delete plan.");
     } finally {
@@ -236,6 +257,11 @@ export default function VtuServicesPage() {
 
   async function saveCableOverride(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setCableError("Enter a reason of at least 5 characters for this price change.");
+      return;
+    }
     setSavingCable(true);
     setCableError(null);
     try {
@@ -244,6 +270,7 @@ export default function VtuServicesPage() {
         provider: cableForm.provider,
         plan_code: cableForm.plan_code.trim(),
         price: Number(cableForm.price),
+        reason,
       });
       if (!res.override) throw new Error("Could not save price override.");
       setCableOverrides((current) => {
@@ -254,6 +281,7 @@ export default function VtuServicesPage() {
         return [...current, res.override!];
       });
       setCableForm({ provider: "DSTV", plan_code: "", price: "" });
+      setAuditReason("");
     } catch (err) {
       setCableError(err instanceof Error ? err.message : "Failed to save price override.");
     } finally {
@@ -264,6 +292,11 @@ export default function VtuServicesPage() {
   async function updateCablePrice(item: CablePriceOverride, newPrice: string) {
     const price = Number(newPrice);
     if (!Number.isFinite(price) || price <= 0 || price === item.price) return;
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setCableError("Enter a reason of at least 5 characters for this price change.");
+      return;
+    }
     setActionCableId(item.id);
     setCableError(null);
     try {
@@ -272,10 +305,12 @@ export default function VtuServicesPage() {
         provider: item.provider,
         plan_code: item.plan_code,
         price,
+        reason,
       });
       if (res.override) {
         setCableOverrides((current) => current.map((o) => o.id === item.id ? res.override! : o));
       }
+      setAuditReason("");
     } catch (err) {
       setCableError(err instanceof Error ? err.message : "Failed to update price.");
     } finally {
@@ -285,6 +320,11 @@ export default function VtuServicesPage() {
 
   async function deleteCableOverride(item: CablePriceOverride) {
     if (!window.confirm(`Remove custom price for ${item.provider} (${item.plan_code})?`)) return;
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setCableError("Enter a reason of at least 5 characters for this price change.");
+      return;
+    }
     setActionCableId(item.id);
     setCableError(null);
     try {
@@ -292,8 +332,10 @@ export default function VtuServicesPage() {
         action: "delete",
         provider: item.provider,
         plan_code: item.plan_code,
+        reason,
       });
       setCableOverrides((current) => current.filter((o) => o.id !== item.id));
+      setAuditReason("");
     } catch (err) {
       setCableError(err instanceof Error ? err.message : "Failed to delete price override.");
     } finally {
@@ -334,6 +376,11 @@ export default function VtuServicesPage() {
       alert("Please enter a valid price in Naira.");
       return;
     }
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setLivePlansError("Enter a reason of at least 5 characters for this price change.");
+      return;
+    }
     setSavingPlanCode(plan.plan_code);
     setLivePlansError(null);
     setSuccessMsg(null);
@@ -345,6 +392,7 @@ export default function VtuServicesPage() {
         price: priceVal,
         enabled: true,
         label: plan.name,
+        reason,
       });
       setLivePlans((current) =>
         current.map((p) =>
@@ -360,6 +408,7 @@ export default function VtuServicesPage() {
         ),
       );
       setSuccessMsg(`Saved & activated ${plan.name} at ₦${priceVal.toLocaleString()}`);
+      setAuditReason("");
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err) {
       setLivePlansError(err instanceof Error ? err.message : "Failed to save price.");
@@ -370,6 +419,11 @@ export default function VtuServicesPage() {
   const saveLivePlanPrice = savePlanPrice;
 
   async function toggleLivePlanActive(plan: ProviderLivePlan, newEnabled: boolean) {
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setLivePlansError("Enter a reason of at least 5 characters for this plan change.");
+      return;
+    }
     setSavingPlanCode(plan.plan_code);
     setLivePlansError(null);
     try {
@@ -381,6 +435,7 @@ export default function VtuServicesPage() {
         price: currentPrice,
         enabled: newEnabled,
         label: plan.name,
+        reason,
       });
       setLivePlans((current) =>
         current.map((p) =>
@@ -393,6 +448,7 @@ export default function VtuServicesPage() {
             : p,
         ),
       );
+      setAuditReason("");
     } catch (err) {
       setLivePlansError(err instanceof Error ? err.message : "Failed to toggle plan.");
     } finally {
@@ -402,6 +458,11 @@ export default function VtuServicesPage() {
 
   async function resetLivePlanPrice(plan: ProviderLivePlan) {
     if (!window.confirm(`Reset "${plan.name}" to provider default cost price of ₦${plan.cost_price}?`)) return;
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setLivePlansError("Enter a reason of at least 5 characters for this price change.");
+      return;
+    }
     setSavingPlanCode(plan.plan_code);
     setLivePlansError(null);
     try {
@@ -409,6 +470,7 @@ export default function VtuServicesPage() {
         action: "delete",
         provider: dataNetwork,
         plan_code: plan.plan_code,
+        reason,
       });
       setPriceDrafts((prev) => ({ ...prev, [plan.plan_code]: String(plan.cost_price) }));
       setLivePlans((current) =>
@@ -424,6 +486,7 @@ export default function VtuServicesPage() {
             : p,
         ),
       );
+      setAuditReason("");
     } catch (err) {
       setLivePlansError(err instanceof Error ? err.message : "Failed to reset price.");
     } finally {
@@ -456,6 +519,21 @@ export default function VtuServicesPage() {
           </div>
         }
       />
+
+      <label className="block space-y-1.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-950">
+        Reason for the next plan or price change <span className="text-rose-700">*</span>
+        <textarea
+          value={auditReason}
+          onChange={(event) => setAuditReason(event.target.value)}
+          maxLength={500}
+          rows={2}
+          placeholder="Explain why this plan, price, or override needs to change"
+          className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-primary"
+        />
+        <span className="block font-normal text-amber-900/80">
+          This explanation is saved with the admin audit record and cleared after a successful change.
+        </span>
+      </label>
 
       {serviceError && (
         <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs font-medium text-rose-900" role="alert">

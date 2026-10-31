@@ -32,18 +32,23 @@ const resolveCarrierImage = (carrier: string) => CARRIER_IMAGES[String(carrier |
 
 export default function SettingsPage() {
   const [margins, setMargins] = useState<MarginSetting[]>([]);
+  const [initialMargins, setInitialMargins] = useState<MarginSetting[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [initialSettings, setInitialSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [activeTab, setActiveTab] = useState("margins");
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [auditReason, setAuditReason] = useState("");
 
   useEffect(() => {
     Promise.all([fetchMarginSettings(), fetchSystemSettings()]).then(([m, s]) => {
       setMargins(m);
+      setInitialMargins(m);
       setSettings(s);
+      setInitialSettings(s);
       setLoading(false);
     }).catch((error: unknown) => {
       setLoadError(error instanceof Error ? error.message : "Could not load admin settings.");
@@ -52,16 +57,64 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = async () => {
+    const reason = auditReason.trim();
+    if (reason.length < 5) {
+      setSaveError("Enter a reason of at least 5 characters for these settings changes.");
+      return;
+    }
+    let settingsSaved = false;
+    const savedMarginCarriers = new Set<string>();
     setSaving(true);
     setSaveError("");
     try {
-      await Promise.all([
-        updateSystemSettings(settings || {}),
-        ...margins.map((margin) => updateMargins(margin.carrier, margin)),
-      ]);
+      const settingsUpdates = Object.fromEntries(
+        Object.entries(settings || {}).filter(([key, value]) =>
+          JSON.stringify(value) !== JSON.stringify(initialSettings?.[key as keyof SystemSettings])
+        ),
+      ) as Partial<SystemSettings>;
+      const marginUpdates = margins.filter((margin) => {
+        const initial = initialMargins.find((item) => item.carrier === margin.carrier);
+        return initial && (
+          initial.wholesaleBase !== margin.wholesaleBase ||
+          initial.smeMargin !== margin.smeMargin ||
+          initial.giftingMargin !== margin.giftingMargin ||
+          initial.airtimePercent !== margin.airtimePercent ||
+          initial.isSalesActive !== margin.isSalesActive
+        );
+      });
+      if (Object.keys(settingsUpdates).length === 0 && marginUpdates.length === 0) {
+        setSavedNotice("No settings changes to save.");
+        setTimeout(() => setSavedNotice(null), 3500);
+        return;
+      }
+
+      if (Object.keys(settingsUpdates).length > 0) {
+        await updateSystemSettings(settingsUpdates, reason);
+        settingsSaved = true;
+      }
+      for (const margin of marginUpdates) {
+        await updateMargins(margin.carrier, {
+          wholesaleBase: margin.wholesaleBase,
+          smeMargin: margin.smeMargin,
+          giftingMargin: margin.giftingMargin,
+          airtimePercent: margin.airtimePercent,
+          isSalesActive: margin.isSalesActive,
+        }, reason);
+        savedMarginCarriers.add(margin.carrier);
+      }
+      setInitialSettings(settings);
+      setInitialMargins(margins);
+      setAuditReason("");
       setSavedNotice("Settings saved successfully.");
       setTimeout(() => setSavedNotice(null), 3500);
     } catch (error) {
+      if (settingsSaved) setInitialSettings(settings);
+      if (savedMarginCarriers.size > 0) {
+        setInitialMargins((current) => current.map((initial) => {
+          if (!savedMarginCarriers.has(initial.carrier)) return initial;
+          return margins.find((margin) => margin.carrier === initial.carrier) || initial;
+        }));
+      }
       setSaveError(error instanceof Error ? error.message : "Could not save admin settings.");
     } finally {
       setSaving(false);
@@ -132,6 +185,20 @@ export default function SettingsPage() {
           {saveError}
         </div>
       )}
+      <label className="block space-y-1.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-950">
+        Reason for these settings changes <span className="text-rose-700">*</span>
+        <textarea
+          value={auditReason}
+          onChange={(event) => setAuditReason(event.target.value)}
+          maxLength={500}
+          rows={2}
+          placeholder="Explain why these settings or pricing margins need to change"
+          className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-primary"
+        />
+        <span className="block font-normal text-amber-900/80">
+          The reason is saved with each audit entry. Only values that changed are written.
+        </span>
+      </label>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">

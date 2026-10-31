@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAlrahuzApi } from "../_shared/alrahuzdata.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,9 +62,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const apiKey = Deno.env.get("VTUGATE_API_KEY") || Deno.env.get("VTU_GATE_API_KEY");
-    if (!supabaseUrl || !anonKey || !apiKey) {
+    const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN");
+    if (!supabaseUrl || !anonKey || (!apiKey && !alrahuzToken)) {
       console.error("Admin provider balances function configuration is incomplete.");
-      return jsonResponse({ message: "VTUGATE balance lookup is not configured." }, 500);
+      return jsonResponse({ message: "Provider balance lookup is not configured." }, 500);
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -73,6 +75,45 @@ Deno.serve(async (req) => {
     if (authError || !user) return jsonResponse({ message: "Unauthorized." }, 401);
     if (user.app_metadata.admin_role !== "super_admin") {
       return jsonResponse({ message: "Super-admin access is required." }, 403);
+    }
+
+    const lowBalanceThreshold = Number(
+      Deno.env.get("VTUGATE_LOW_BALANCE_THRESHOLD_NAIRA") ||
+        Deno.env.get("VTU_GATE_LOW_BALANCE_THRESHOLD_NAIRA") ||
+        500000,
+    );
+
+    // If ALRAHUZDATA is the primary gateway or only token available:
+    if (alrahuzToken && !apiKey) {
+      const alrahuzResult = await callAlrahuzApi<Record<string, unknown>>("/user/", {
+        method: "GET",
+        token: alrahuzToken,
+      });
+
+      if (!alrahuzResult.ok || !alrahuzResult.data) {
+        return jsonResponse(
+          { message: alrahuzResult.error || "Could not load ALRAHUZDATA balance." },
+          502,
+        );
+      }
+
+      const rawBal = alrahuzResult.data.wallet_balance ?? alrahuzResult.data.balance;
+      const balance = Number(rawBal);
+      if (!Number.isFinite(balance)) {
+        throw new Error("ALRAHUZDATA returned an invalid balance.");
+      }
+
+      return jsonResponse({
+        provider: "ALRAHUZDATA",
+        providerName: "ALRAHUZDATA",
+        balance,
+        currency: "NGN",
+        status: balance <= 0 ? "CRITICAL" : balance <= lowBalanceThreshold ? "LOW_BALANCE" : "HEALTHY",
+        lastCheckedAt: new Date().toISOString(),
+        lowBalanceThreshold,
+        source: "ALRAHUZDATA user",
+        fundingOptions: [],
+      });
     }
 
     const baseUrl = (Deno.env.get("VTUGATE_BASE_URL") ||

@@ -114,7 +114,7 @@ export async function createMonnifyReservedAccount(
 
   const body = {
     accountReference,
-    accountName: `ABBA KANO INVESTMENTS LMITED-${(user.fullName || "Customer").trim().split(/\s+/)[0].toUpperCase()},
+    accountName: `ABBA KANO INVESTMENTS LMITED-${(user.fullName || "Customer").trim().split(/\s+/)[0].toUpperCase()}`,
     currencyCode: "NGN",
     contractCode: config.contractCode,
     customerEmail: user.email,
@@ -158,7 +158,7 @@ export async function createMonnifyReservedAccount(
     const bankCode = String(acc.bankCode || "").trim();
     const accountNumber = String(acc.accountNumber || "").trim();
     const accountName = String(
-      payload.responseBody?.accountName || `ABBA KANO INVESTMENTS LMITED-${(user.fullName || "Customer").trim().split(/\s+/)[0].toUpperCase()},
+      payload.responseBody?.accountName || `ABBA KANO INVESTMENTS LMITED-${(user.fullName || "Customer").trim().split(/\s+/)[0].toUpperCase()}`,
     ).trim();
 
     if (!bankName || !accountNumber) continue;

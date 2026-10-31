@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordAdminAuditEvent } from "../_shared/admin-audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -122,8 +123,12 @@ Deno.serve(async (req) => {
 
     if (body.action === "update_margin") {
       const carrier = typeof body.carrier === "string" ? body.carrier.trim().toUpperCase() : "";
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
       if (!carriers.includes(carrier as (typeof carriers)[number]) || !isRecord(body.update)) {
         return jsonResponse({ message: "Choose a valid carrier and margin update." }, 400);
+      }
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this margin change." }, 400);
       }
       const values: Record<string, unknown> = {};
       for (const [field, column] of Object.entries(marginFields)) {
@@ -147,6 +152,14 @@ Deno.serve(async (req) => {
         return jsonResponse({ message: "No margin values were provided." }, 400);
       }
 
+      const { data: previous, error: previousError } = await admin
+        .from("admin_margin_settings")
+        .select("carrier, wholesale_base, sme_margin, gifting_margin, airtime_percent, is_sales_active, updated_by, updated_at")
+        .eq("carrier", carrier)
+        .maybeSingle();
+      if (previousError) throw previousError;
+      if (!previous) return jsonResponse({ message: "Margin settings not found." }, 404);
+
       values.updated_by = user.email || "Super Admin";
       values.updated_at = new Date().toISOString();
       const { data, error } = await admin
@@ -156,6 +169,12 @@ Deno.serve(async (req) => {
         .select("carrier, wholesale_base, sme_margin, gifting_margin, airtime_percent, is_sales_active, updated_by, updated_at")
         .single();
       if (error) throw error;
+      await recordAdminAuditEvent(admin, user.id, "admin.margin_updated", {
+        carrier,
+        before: toMargin(previous),
+        after: toMargin(data),
+        reason,
+      }, req);
       return jsonResponse({ success: true, data: toMargin(data), timestamp: data.updated_at });
     }
 
@@ -172,6 +191,10 @@ Deno.serve(async (req) => {
     if (body.action === "update_settings") {
       if (!isRecord(body.settings)) {
         return jsonResponse({ message: "Invalid system settings." }, 400);
+      }
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this settings change." }, 400);
       }
       const updates: Record<string, unknown> = {};
       for (const key of settingKeys) {
@@ -227,6 +250,23 @@ Deno.serve(async (req) => {
         .select("settings")
         .single();
       if (error) throw error;
+      const before: Record<string, unknown> = {};
+      const after: Record<string, unknown> = {};
+      for (const key of Object.keys(updates)) {
+        if (key === "alertPhoneNumbers") {
+          before[key] = "[redacted]";
+          after[key] = "[redacted]";
+        } else {
+          before[key] = current.settings[key];
+          after[key] = data.settings[key];
+        }
+      }
+      await recordAdminAuditEvent(admin, user.id, "admin.system_settings_updated", {
+        changedKeys: Object.keys(updates),
+        before,
+        after,
+        reason,
+      }, req);
       return jsonResponse({
         success: true,
         data: data.settings,

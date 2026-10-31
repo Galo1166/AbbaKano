@@ -1,5 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyTransactionAuthorization } from "../_shared/transaction-authorization.ts";
+import {
+  ALRAHUZ_NETWORK_IDS,
+  callAlrahuzApi,
+  isAlrahuzSuccess,
+  isAlrahuzPending,
+} from "../_shared/alrahuzdata.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +20,7 @@ const supabaseSecretKeys = JSON.parse(
 );
 const supabaseSecretKey = supabaseSecretKeys.default;
 
-const vtugateApiKey = Deno.env.get("VTUGATE_API_KEY")!;
+const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN") || "";
 
 const supabaseAdmin = createClient(
   supabaseUrl,
@@ -86,6 +92,10 @@ Deno.serve(async (req) => {
         { message: "Unauthorized" },
         401,
       );
+    }
+
+    if (!alrahuzToken) {
+      return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 500);
     }
 
     /*
@@ -333,81 +343,98 @@ if (!transactionId) {
     500,
   );
 }
-    const serviceIds: Record<string, string> = {
-  MTN: "58",
-  AIRTEL: "312",
-  GLO: "243",
-  "9MOBILE": "244",
-};
+    /*
+     * ----------------------------------------------------
+    * 12. Send through ALRAHUZDATA
+     * ----------------------------------------------------
+     */
 
-    const serviceId = serviceIds[network];
+    const chosenProvider = "ALRAHUZDATA";
+    let providerData: Record<string, unknown> | null = null;
+    let providerReference = `ABBA-${transactionId}`;
+    let isSuccess = false;
+    let isPending = false;
+    let providerNeedsReconciliation = false;
+    let failureMessage = "Provider rejected the airtime request.";
 
-    if (!serviceId) {
-      const { error: releaseError } = await supabaseAdmin.rpc(
-        "release_airtime_reservation",
-        {
-          p_transaction_id: transactionId,
-          p_provider_response: {
-            message: "VTUGATE service ID is not configured for this network.",
-          },
+    const alrahuzNetworkId = ALRAHUZ_NETWORK_IDS[network];
+    if (!alrahuzNetworkId) {
+      await supabaseAdmin.rpc("release_airtime_reservation", {
+        p_transaction_id: transactionId,
+        p_provider_response: {
+          message: `ALRAHUZDATA network ID for ${network} is not configured.`,
         },
-      );
-      if (releaseError) {
-        console.error("Airtime reservation release failed:", releaseError);
-        return jsonResponse({ message: "Could not release the reserved balance. Please contact support." }, 500);
-      }
-
+      });
       return jsonResponse(
-        {
-          message:
-            `VTUGATE service ID for ${network} is not configured yet.`,
-        },
+        { message: `ALRAHUZDATA does not support network: ${network}` },
         400,
       );
     }
 
-    /*
-     * ----------------------------------------------------
-     * 12. Call VTUGATE
-     * ----------------------------------------------------
-     */
-
-    const vtugateResponse = await fetch(
-      "https://api.vtugate.com/api/v1/buyairtime",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/x-www-form-urlencoded",
-          Authorization: `Bearer ${vtugateApiKey}`,
-        },
-        body: new URLSearchParams({
-          service_id: serviceId,
-          phone_number: phone,
-          amount: String(amount),
-        }),
+    console.log(`Dispatching airtime to ALRAHUZDATA: network=${alrahuzNetworkId}, amount=${amount}, phone=${phone}`);
+    const alrahuzResult = await callAlrahuzApi<Record<string, unknown>>("/topup/", {
+      method: "POST",
+      token: alrahuzToken,
+      body: {
+        network: alrahuzNetworkId,
+        amount,
+        mobile_number: phone,
+        Ported_number: true,
+        airtime_type: "VTU",
       },
-    );
+      timeoutMs: 45000,
+    });
 
-    const vtugateData = await vtugateResponse.json();
+    providerData = alrahuzResult.data || { error: alrahuzResult.error };
+    isSuccess = alrahuzResult.ok && isAlrahuzSuccess(alrahuzResult.data);
+    isPending = isAlrahuzPending(alrahuzResult.data);
+    providerNeedsReconciliation =
+      (!alrahuzResult.ok && alrahuzResult.status >= 500) ||
+      (!isSuccess && isPending);
+    failureMessage =
+      alrahuzResult.error ||
+      String(alrahuzResult.data?.message || alrahuzResult.data?.msg || alrahuzResult.data?.detail || "ALRAHUZDATA rejected the airtime request.");
 
-    console.log(
-      "VTUGATE response:",
-      JSON.stringify(vtugateData),
-    );
+    if (alrahuzResult.data?.id) {
+      providerReference = String(alrahuzResult.data.id);
+    }
+
+    console.log(`${chosenProvider} response:`, JSON.stringify(providerData));
+
+    if (providerNeedsReconciliation) {
+      const { error: pendingUpdateError } = await supabaseAdmin
+        .from("vtu_transactions")
+        .update({
+          provider_reference: providerReference,
+          provider_response: providerData,
+          service_provider: "alrahuzdata",
+          provider: "alrahuzdata",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transactionId)
+        .eq("status", "processing");
+      if (pendingUpdateError) {
+        console.error("Could not save pending ALRAHUZDATA airtime response:", pendingUpdateError);
+      }
+      return jsonResponse({
+        status: "pending",
+        message: "Your airtime purchase is being checked. Do not submit it again yet.",
+        reference: providerReference,
+      }, 202);
+    }
 
     /*
      * ----------------------------------------------------
-     * 13. Handle VTUGATE failure
+     * 13. Handle Provider Failure
      * ----------------------------------------------------
      */
 
-   if (!vtugateResponse.ok || vtugateData?.status !== true) {
+    if (!isSuccess && !isPending) {
       const { error: releaseError } = await supabaseAdmin.rpc(
         "release_airtime_reservation",
         {
           p_transaction_id: transactionId,
-          p_provider_response: vtugateData,
+          p_provider_response: providerData,
         },
       );
       if (releaseError) {
@@ -417,9 +444,7 @@ if (!transactionId) {
 
       return jsonResponse(
         {
-          message:
-            vtugateData?.message ||
-            "VTUGATE rejected the airtime request.",
+          message: failureMessage,
         },
         400,
       );
@@ -427,19 +452,7 @@ if (!transactionId) {
 
     /*
      * ----------------------------------------------------
-     * 14. Determine provider reference
-     * ----------------------------------------------------
-     */
-const providerReference =
-  vtugateData?.data?.external_reference ||
-  vtugateData?.data?.transaction_id ||
-  vtugateData?.reference ||
-  vtugateData?.transaction_id ||
-  `ABBA-${transactionId}`;
-
-    /*
-     * ----------------------------------------------------
-     * 15. Save provider acceptance
+     * 14. Save provider acceptance
      * ----------------------------------------------------
      */
 
@@ -448,7 +461,9 @@ const providerReference =
         .from("vtu_transactions")
         .update({
           provider_reference: providerReference,
-          provider_response: vtugateData,
+          provider_response: providerData,
+          service_provider: chosenProvider.toLowerCase(),
+          provider: chosenProvider.toLowerCase(),
           updated_at: new Date().toISOString(),
         })
         .eq("id", transactionId)
@@ -487,7 +502,7 @@ const providerReference =
       await supabaseAdmin.rpc("settle_airtime_purchase", {
         p_transaction_id: transactionId,
         p_provider_reference: providerReference,
-        p_provider_response: vtugateData,
+        p_provider_response: providerData,
       });
 
     if (settlementError) {

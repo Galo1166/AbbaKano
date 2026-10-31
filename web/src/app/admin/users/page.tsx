@@ -23,6 +23,7 @@ export default function UsersPage() {
   const [adjustmentDirection, setAdjustmentDirection] = useState<"credit" | "debit">("credit");
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [statusChangeReason, setStatusChangeReason] = useState("");
   const PAGE_SIZE = 15;
   const requestKey = JSON.stringify([page, search, statusFilter]);
   const loading = loadedRequestKey !== requestKey;
@@ -64,12 +65,18 @@ export default function UsersPage() {
 
   async function handleStatusChange() {
     if (!selectedUser) return;
+    const reason = statusChangeReason.trim();
+    if (reason.length < 5) {
+      setActionError("Enter a reason of at least 5 characters for this status change.");
+      return;
+    }
     const nextStatus = selectedUser.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
     setActionLoading(true);
     setActionError(null);
     try {
-      await updateCustomerStatus(selectedUser.id, nextStatus);
+      await updateCustomerStatus(selectedUser.id, nextStatus, reason);
       setSelectedUser({ ...selectedUser, status: nextStatus });
+      setStatusChangeReason("");
       showToast(`Account ${nextStatus === "BLOCKED" ? "blocked" : "unblocked"} successfully.`);
       setRefreshCount((count) => count + 1);
     } catch (error) {
@@ -82,6 +89,10 @@ export default function UsersPage() {
   async function handleWalletAdjustment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedUser) return;
+    if (adjustmentReason.trim().length < 5) {
+      setActionError("Enter a reason of at least 5 characters for this wallet adjustment.");
+      return;
+    }
     setActionLoading(true);
     setActionError(null);
     try {
@@ -456,6 +467,17 @@ export default function UsersPage() {
               >
                 {actionLoading ? "Please wait..." : selectedUser.status === "ACTIVE" ? "Block account" : "Unblock account"}
               </button>
+              <label className="block space-y-1.5 text-xs font-semibold text-slate-700">
+                Reason for status change <span className="text-rose-600">*</span>
+                <textarea
+                  value={statusChangeReason}
+                  onChange={(event) => setStatusChangeReason(event.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  placeholder="Explain why this account is being blocked or unblocked"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal outline-none focus:border-primary"
+                />
+              </label>
 
               <form onSubmit={handleWalletAdjustment} className="space-y-2 border-t border-slate-100 pt-4">
                 <h4 className="text-xs font-bold text-slate-800">Adjust wallet balance</h4>
@@ -486,7 +508,7 @@ export default function UsersPage() {
                   </label>
                 </div>
                 <label className="block text-[11px] text-slate-600">
-                  Reason
+                  Reason <span className="text-rose-600">*</span>
                   <input
                     required
                     maxLength={500}

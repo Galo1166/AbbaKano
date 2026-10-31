@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordAdminAuditEvent } from "../_shared/admin-audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,6 +82,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "update") {
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this referral settings change." }, 400);
+      }
       if (typeof body.enabled !== "boolean") {
         return jsonResponse({ message: "Referral enabled must be a boolean." }, 400);
       }
@@ -90,6 +95,13 @@ Deno.serve(async (req) => {
       ) {
         return jsonResponse({ message: "Enter a valid referral reward amount." }, 400);
       }
+
+      const { data: previous, error: previousError } = await supabaseAdmin
+        .from("referral_program_settings")
+        .select("enabled, signup_reward_kobo")
+        .eq("id", true)
+        .single();
+      if (previousError) throw previousError;
 
       const { data, error } = await supabaseAdmin
         .from("referral_program_settings")
@@ -102,6 +114,17 @@ Deno.serve(async (req) => {
         .select("enabled, signup_reward_kobo")
         .single();
       if (error) throw error;
+      await recordAdminAuditEvent(supabaseAdmin, user.id, "admin.referral_settings_updated", {
+        before: {
+          enabled: previous.enabled,
+          signupRewardKobo: Number(previous.signup_reward_kobo),
+        },
+        after: {
+          enabled: data.enabled,
+          signupRewardKobo: Number(data.signup_reward_kobo),
+        },
+        reason,
+      }, req);
       return jsonResponse({
         enabled: data.enabled,
         signupRewardKobo: Number(data.signup_reward_kobo),

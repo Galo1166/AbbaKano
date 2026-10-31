@@ -31,8 +31,8 @@ export default function Sidebar() {
   const handleLogout = async () => {
     try {
       await logoutAdmin();
-    } catch {
-      window.alert("Could not safely sign out. Please try again.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not safely sign out. Please try again.");
       return;
     }
 
