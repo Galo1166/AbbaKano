@@ -51,12 +51,15 @@ The app uses the Supabase client in `src/lib/supabase.ts`. Customer and admin ba
 BilalSadaSub API tokens are server-side secrets. Generate an access token by sending
 `POST https://bilalsadasub.com/api/user` with HTTP Basic Auth using the BilalSadaSub
 account username and password. For example, curl can prompt for the password when
-only the account username is supplied:
+only the account username is supplied. The documented Basic Auth header can also
+be generated from environment variables:
 
 ```bash
-curl --user "<account-username>" --request POST \
+AUTH=$(printf '%s' "$BILAL_USERNAME:$BILAL_PASSWORD" | base64)
+curl --request POST \
   https://bilalsadasub.com/api/user \
-  --header "Accept: application/json"
+  --header "Authorization: Basic $AUTH" \
+  --header "Content-Type: application/json"
 ```
 
 Store the returned `AccessToken` as the
