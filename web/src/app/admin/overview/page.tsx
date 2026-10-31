@@ -245,13 +245,13 @@ export default function OverviewPage() {
           label="Provider Balance"
           value={providerBalanceLoading
             ? "Loading"
-            : providerBalance
+            : providerBalance?.balance !== null && providerBalance
               ? formatNaira(providerBalance.balance)
               : "Unavailable"}
-          subtitle={providerBalance
+          subtitle={providerBalance?.status !== "OFFLINE" && providerBalance
             ? `Threshold: ${formatNaira(providerBalance.lowBalanceThreshold)} · Checked ${formatTimeAgo(providerBalance.lastRefillAt)}`
-            : providerBalanceError || "VTUGATE balance is unavailable"}
-          badge={providerBalance
+            : providerBalance?.error || providerBalanceError || "VTUGATE balance is unavailable"}
+          badge={providerBalance && providerBalance.status !== "OFFLINE"
             ? providerBalance.status === "HEALTHY"
               ? "Healthy"
               : providerBalance.status === "LOW_BALANCE"

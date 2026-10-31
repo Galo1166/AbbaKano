@@ -36,13 +36,13 @@ export default function ProviderBalancesPage() {
       <PageHeader
         breadcrumbs={["Operations", "Provider Balances"]}
         title="Provider Liquidity & Balances"
-        description="Live VTUGATE account balance and configured funding details."
+        description="Live VTUGATE and ALRAHUZDATA balances with configured funding details."
         actions={null}
       />
 
       {errorMessage && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-800">
-          <p className="font-bold">Unable to load VTUGATE balance</p>
+          <p className="font-bold">Unable to load provider balances</p>
           <p className="text-xs mt-1">{errorMessage}</p>
         </div>
       )}
@@ -54,15 +54,16 @@ export default function ProviderBalancesPage() {
             warning
           </span>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-red-950 text-sm">
-              {providers.some((p) => p.status === "CRITICAL")
-                ? "VTUGATE Balance Critical"
-                : "VTUGATE Balance Low"}
-            </p>
+            <p className="font-bold text-red-950 text-sm">Provider balance requires attention</p>
             <p className="text-xs text-red-800 mt-1 leading-relaxed">
-              {providers.some((p) => p.status === "CRITICAL")
-                ? "VTUGATE is at or below zero balance. Replenish the provider account before dispatches fail."
-                : "VTUGATE is at or below the configured low-balance threshold. Replenish the provider account soon."}
+              {providers
+                .filter((provider) => provider.status === "CRITICAL" || provider.status === "LOW_BALANCE")
+                .map((provider) => `${provider.providerName}: ${
+                  provider.status === "CRITICAL"
+                    ? "balance is at or below zero"
+                    : "balance is at or below its configured threshold"
+                }`)
+                .join(". ")}.
             </p>
           </div>
         </div>
@@ -73,11 +74,11 @@ export default function ProviderBalancesPage() {
         {providers.map((provider) => {
           const isCritical = provider.status === "CRITICAL";
           const isLow = provider.status === "LOW_BALANCE";
-          const percentage = provider.lowBalanceThreshold > 0
+          const percentage = provider.balance !== null && provider.lowBalanceThreshold > 0
             ? Math.min(100, Math.max(0, Math.round(
                 provider.balance / provider.lowBalanceThreshold * 100,
               )))
-            : provider.balance > 0 ? 100 : 0;
+            : provider.balance !== null && provider.balance > 0 ? 100 : 0;
 
           return (
             <div
@@ -115,36 +116,38 @@ export default function ProviderBalancesPage() {
               {/* Current Reserve */}
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1">
-                  Active Vault Balance
+                  Provider Wallet Balance
                 </p>
                 <p className="text-3xl sm:text-4xl font-extrabold text-on-surface font-mono tracking-tight">
-                  {formatNaira(provider.balance)}
+                  {provider.balance === null ? "Unavailable" : formatNaira(provider.balance)}
                 </p>
               </div>
 
               {/* Progress & Threshold */}
-              <div>
-                <div className="flex items-center justify-between text-xs text-on-surface-variant mb-1.5 font-medium">
-                  <span>Balance vs. Low-balance Threshold</span>
-                  <span className="font-mono font-bold">{percentage}%</span>
+              {provider.balance !== null && (
+                <div>
+                  <div className="flex items-center justify-between text-xs text-on-surface-variant mb-1.5 font-medium">
+                    <span>Balance vs. Low-balance Threshold</span>
+                    <span className="font-mono font-bold">{percentage}%</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-surface-container overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isCritical
+                          ? "bg-red-600"
+                          : isLow
+                          ? "bg-amber-500"
+                          : "bg-emerald-600"
+                      }`}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-outline mt-1.5 font-mono">
+                    <span>Threshold: {provider.lowBalanceThreshold > 0 ? formatNaira(provider.lowBalanceThreshold) : "Not set"}</span>
+                    <span>{provider.balance > provider.lowBalanceThreshold ? "Above threshold" : "At/below threshold"}</span>
+                  </div>
                 </div>
-                <div className="h-2.5 rounded-full bg-surface-container overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isCritical
-                        ? "bg-red-600"
-                        : isLow
-                        ? "bg-amber-500"
-                        : "bg-emerald-600"
-                    }`}
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-outline mt-1.5 font-mono">
-                  <span>Threshold: {formatNaira(provider.lowBalanceThreshold)}</span>
-                  <span>{provider.balance > provider.lowBalanceThreshold ? "Above threshold" : "At/below threshold"}</span>
-                </div>
-              </div>
+              )}
 
               {/* Provider Check */}
               <div className="flex items-center justify-between bg-surface-container-low rounded-xl px-4 py-3 border border-outline-variant/20">
@@ -152,11 +155,21 @@ export default function ProviderBalancesPage() {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-outline">
                     Provider API Check
                   </p>
-                  <p className={`text-sm font-bold font-mono mt-0.5 ${isCritical ? "text-red-700" : isLow ? "text-amber-700" : "text-emerald-700"}`}>
-                    Connected
+                  <p className={`text-sm font-bold font-mono mt-0.5 ${
+                    provider.status === "OFFLINE"
+                      ? "text-red-700"
+                      : isCritical
+                        ? "text-red-700"
+                        : isLow
+                          ? "text-amber-700"
+                          : "text-emerald-700"
+                  }`}>
+                    {provider.status === "OFFLINE" ? "Unavailable" : "Connected"}
                   </p>
                 </div>
-                <span className="text-[11px] text-on-surface-variant">Live account details</span>
+                <span className="max-w-[65%] break-words text-[11px] text-on-surface-variant text-right">
+                  {provider.error || "Live account details"}
+                </span>
               </div>
 
             </div>
@@ -164,60 +177,68 @@ export default function ProviderBalancesPage() {
         })}
       </div>
 
-      {providers[0]?.fundingOptions && providers[0].fundingOptions.length > 0 && (
-        <section className="space-y-3">
+      {providers.map((provider) => (
+        <section key={`${provider.id}-funding`} className="space-y-3">
           <div>
-            <h2 className="text-sm font-bold text-on-surface">Fund VTUGATE Balance</h2>
+            <h2 className="text-sm font-bold text-on-surface">Fund {provider.providerName} Balance</h2>
             <p className="text-xs text-on-surface-variant mt-0.5">
-              Transfer to one of these live payment accounts, then confirm settlement in Deposit History.
+              {provider.id === "alrahuzdata"
+                ? "Use the configured Alrahuzdata dedicated virtual account to fund this provider wallet."
+                : "Transfer to one of these live payment accounts, then confirm settlement in Deposit History."}
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {providers[0].fundingOptions.map((option) => (
-              <div key={option.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-sm text-on-surface">{option.name}</p>
-                    <p className="text-xs text-on-surface-variant mt-1">{option.fee}</p>
-                  </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
-                    {option.status}
-                  </span>
-                </div>
-                <div className="mt-4 space-y-2 text-xs">
-                  {option.bankName && (
-                    <div className="flex justify-between gap-3">
-                      <span className="text-on-surface-variant">Bank</span>
-                      <span className="font-semibold text-on-surface">{option.bankName}</span>
+          {provider.fundingOptions && provider.fundingOptions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {provider.fundingOptions.map((option) => (
+                <div key={option.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-card p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-sm text-on-surface">{option.name}</p>
+                      <p className="text-xs text-on-surface-variant mt-1">{option.fee}</p>
                     </div>
-                  )}
-                  <div className="flex justify-between gap-3">
-                    <span className="text-on-surface-variant">Account name</span>
-                    <span className="font-semibold text-on-surface text-right">{option.accountName}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                      {option.status}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/20">
-                    <span className="text-on-surface-variant">Account number</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(option.accountNumber);
-                        setCopiedAccount(option.id);
-                        setTimeout(() => setCopiedAccount(null), 2000);
-                      }}
-                      className="inline-flex items-center gap-1.5 font-mono font-bold text-primary hover:opacity-80 cursor-pointer"
-                    >
-                      <span>{option.accountNumber}</span>
-                      <span className="material-symbols-outlined text-[15px]">
-                        {copiedAccount === option.id ? "check" : "content_copy"}
-                      </span>
-                    </button>
+                  <div className="mt-4 space-y-2 text-xs">
+                    {option.bankName && (
+                      <div className="flex justify-between gap-3">
+                        <span className="text-on-surface-variant">Bank</span>
+                        <span className="font-semibold text-on-surface">{option.bankName}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-3">
+                      <span className="text-on-surface-variant">Account name</span>
+                      <span className="font-semibold text-on-surface text-right">{option.accountName}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/20">
+                      <span className="text-on-surface-variant">Account number</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(option.accountNumber);
+                          setCopiedAccount(option.id);
+                          setTimeout(() => setCopiedAccount(null), 2000);
+                        }}
+                        className="inline-flex items-center gap-1.5 font-mono font-bold text-primary hover:opacity-80 cursor-pointer"
+                      >
+                        <span>{option.accountNumber}</span>
+                        <span className="material-symbols-outlined text-[15px]">
+                          {copiedAccount === option.id ? "check" : "content_copy"}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : provider.id === "alrahuzdata" ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+              Alrahuzdata DVA details are not configured. Add the account number and account name as Supabase function secrets to display the top-up account here.
+            </p>
+          ) : null}
         </section>
-      )}
+      ))}
 
     </div>
   );

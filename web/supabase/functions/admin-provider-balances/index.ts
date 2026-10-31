@@ -47,6 +47,24 @@ function fundingOptions() {
   ];
 }
 
+function alrahuzFundingOptions() {
+  const accountNumber = Deno.env.get("ALRAHUZDATA_DVA_ACCOUNT_NUMBER");
+  const accountName = Deno.env.get("ALRAHUZDATA_DVA_ACCOUNT_NAME");
+  const bankName = Deno.env.get("ALRAHUZDATA_DVA_BANK_NAME");
+
+  return accountNumber && accountName
+    ? [{
+        id: "alrahuzdata-dva",
+        name: "ALRAHUZDATA DVA",
+        fee: "Use this account to fund ALRAHUZDATA",
+        status: "Configured",
+        accountNumber,
+        accountName,
+        bankName: bankName || undefined,
+      }]
+    : [];
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -77,14 +95,31 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Super-admin access is required." }, 403);
     }
 
+    const requestBody: unknown = await req.json().catch(() => ({}));
+    if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) {
+      return jsonResponse({ message: "Invalid request body." }, 400);
+    }
+    if ("provider" in requestBody && typeof requestBody.provider !== "string") {
+      return jsonResponse({ message: "Invalid provider." }, 400);
+    }
+    const requestedProvider = "provider" in requestBody
+      ? requestBody.provider.toUpperCase()
+      : "";
+    if (requestedProvider && !["VTUGATE", "ALRAHUZDATA"].includes(requestedProvider)) {
+      return jsonResponse({ message: "Unsupported provider." }, 400);
+    }
+
     const lowBalanceThreshold = Number(
       Deno.env.get("VTUGATE_LOW_BALANCE_THRESHOLD_NAIRA") ||
         Deno.env.get("VTU_GATE_LOW_BALANCE_THRESHOLD_NAIRA") ||
         500000,
     );
 
-    // If ALRAHUZDATA is the primary gateway or only token available:
-    if (alrahuzToken && !apiKey) {
+    if (requestedProvider === "ALRAHUZDATA" || (!requestedProvider && alrahuzToken && !apiKey)) {
+      if (!alrahuzToken) {
+        return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 503);
+      }
+
       const alrahuzResult = await callAlrahuzApi<Record<string, unknown>>("/user/", {
         method: "GET",
         token: alrahuzToken,
@@ -102,18 +137,32 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(balance)) {
         throw new Error("ALRAHUZDATA returned an invalid balance.");
       }
+      const alrahuzThreshold = Number(
+        Deno.env.get("ALRAHUZDATA_LOW_BALANCE_THRESHOLD_NAIRA") || lowBalanceThreshold,
+      );
+      if (!Number.isFinite(alrahuzThreshold) || alrahuzThreshold < 0) {
+        throw new Error("The ALRAHUZDATA low-balance threshold is invalid.");
+      }
 
       return jsonResponse({
         provider: "ALRAHUZDATA",
         providerName: "ALRAHUZDATA",
         balance,
         currency: "NGN",
-        status: balance <= 0 ? "CRITICAL" : balance <= lowBalanceThreshold ? "LOW_BALANCE" : "HEALTHY",
+        status: balance <= 0 ? "CRITICAL" : balance <= alrahuzThreshold ? "LOW_BALANCE" : "HEALTHY",
         lastCheckedAt: new Date().toISOString(),
-        lowBalanceThreshold,
+        lowBalanceThreshold: alrahuzThreshold,
         source: "ALRAHUZDATA user",
-        fundingOptions: [],
+        fundingOptions: alrahuzFundingOptions(),
       });
+    }
+
+    if (!apiKey) {
+      return jsonResponse({ message: "VTUGATE API key is not configured." }, 503);
+    }
+
+    if (requestedProvider && requestedProvider !== "VTUGATE") {
+      return jsonResponse({ message: "Unsupported provider." }, 400);
     }
 
     const baseUrl = (Deno.env.get("VTUGATE_BASE_URL") ||
