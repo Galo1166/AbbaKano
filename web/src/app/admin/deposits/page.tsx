@@ -18,6 +18,8 @@ export default function DepositsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [updatingDepositId, setUpdatingDepositId] = useState<string | null>(null);
+  const [depositToFail, setDepositToFail] = useState<InflowRecord | null>(null);
+  const [failureReason, setFailureReason] = useState("");
   const [refreshCount, setRefreshCount] = useState(0);
   const PAGE_SIZE = 20;
   const requestKey = JSON.stringify([filter, search, page, refreshCount]);
@@ -45,19 +47,28 @@ export default function DepositsPage() {
     return () => { cancelled = true; };
   }, [filter, search, page, refreshCount, requestKey]);
 
-  const handleMarkFailed = async (inflow: InflowRecord) => {
+  const handleMarkFailed = (inflow: InflowRecord) => {
     if (inflow.status !== "PENDING_SETTLEMENT" || updatingDepositId) return;
-    const confirmed = window.confirm(
-      `Mark the ${formatNaira(inflow.amount)} deposit from ${inflow.customerName} as failed? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+    setDepositToFail(inflow);
+    setFailureReason("");
+    setErrorMessage(null);
+  };
 
+  const confirmMarkFailed = async () => {
+    if (!depositToFail) return;
+    const reason = failureReason.trim();
+    if (reason.length < 5) {
+      setErrorMessage("Enter a reason of at least 5 characters for failing this deposit.");
+      return;
+    }
+    const inflow = depositToFail;
     setUpdatingDepositId(inflow.id);
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      await markDepositFailed(inflow.id);
+      await markDepositFailed(inflow.id, reason);
       setSuccessMessage("Pending deposit marked as failed.");
+      setDepositToFail(null);
       setRefreshCount((count) => count + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to update deposit status.");
@@ -265,7 +276,7 @@ export default function DepositsPage() {
                       {inflow.status === "PENDING_SETTLEMENT" ? (
                         <button
                           type="button"
-                          onClick={() => void handleMarkFailed(inflow)}
+                          onClick={() => handleMarkFailed(inflow)}
                           disabled={updatingDepositId !== null}
                           className="rounded-lg border border-red-200 px-3 py-1.5 text-[11px] font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -306,6 +317,51 @@ export default function DepositsPage() {
           </div>
         </div>
       </div>
+
+      {depositToFail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-xl">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Mark deposit as failed?</h2>
+              <p className="mt-1 text-xs text-slate-600">
+                {formatNaira(depositToFail.amount)} from {depositToFail.customerName}. This cannot be undone.
+              </p>
+            </div>
+            <label className="block space-y-1.5 text-xs font-semibold text-slate-700">
+              Reason for this action <span className="text-rose-600">*</span>
+              <textarea
+                value={failureReason}
+                onChange={(event) => setFailureReason(event.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="Explain why this deposit is being marked failed"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal outline-none focus:border-primary"
+              />
+            </label>
+            {errorMessage && (
+              <p className="text-xs text-rose-700" role="alert">{errorMessage}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDepositToFail(null)}
+                disabled={updatingDepositId !== null}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmMarkFailed()}
+                disabled={updatingDepositId !== null}
+                className="rounded-lg bg-rose-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {updatingDepositId ? "Updating…" : "Mark failed"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

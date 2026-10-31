@@ -248,6 +248,10 @@ Deno.serve(async (req) => {
     if (!planCode) {
       return jsonResponse({ message: "A plan code is required." }, 400);
     }
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (["delete", "upsert"].includes(action) && (reason.length < 5 || reason.length > 500)) {
+      return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this price change." }, 400);
+    }
 
     // ── 3. DELETE OVERRIDE ────────────────────────────────────
     if (action === "delete") {
@@ -265,6 +269,7 @@ Deno.serve(async (req) => {
         provider: existing.provider,
         planCode: existing.plan_code,
         price: existing.price,
+        reason,
       }, req);
       return jsonResponse({ deleted: true });
     }
@@ -283,6 +288,13 @@ Deno.serve(async (req) => {
         label: typeof body.label === "string" && body.label.trim() ? body.label.trim() : null,
         updated_at: new Date().toISOString(),
       };
+      const { data: previous, error: previousError } = await admin
+        .from("price_overrides")
+        .select("provider, plan_code, price, enabled, label")
+        .eq("provider", provider)
+        .eq("plan_code", planCode)
+        .maybeSingle();
+      if (previousError) throw previousError;
       const { data, error } = await admin
         .from("price_overrides")
         .upsert(values, { onConflict: "provider,plan_code" })
@@ -292,8 +304,11 @@ Deno.serve(async (req) => {
       await recordAuditEvent(admin, user.id, "admin.price_override_upserted", {
         provider: data.provider,
         planCode: data.plan_code,
+        before: previous,
+        after: data,
         price: data.price,
         enabled: data.enabled,
+        reason,
       }, req);
       return jsonResponse({ override: data });
     }

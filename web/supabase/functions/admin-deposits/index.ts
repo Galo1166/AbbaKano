@@ -64,8 +64,12 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "mark_failed") {
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
       if (typeof body.depositId !== "string" || !/^[1-9]\d*$/.test(body.depositId)) {
         return jsonResponse({ message: "A valid deposit ID is required." }, 400);
+      }
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for failing this deposit." }, 400);
       }
       const depositId = Number(body.depositId);
       if (!Number.isSafeInteger(depositId)) {
@@ -75,6 +79,7 @@ Deno.serve(async (req) => {
       const { data, error } = await supabaseAdmin.rpc("admin_fail_pending_deposit", {
         p_deposit_id: depositId,
         p_actor_user_id: user.id,
+        p_reason: reason,
       });
       if (error) throw error;
       if (!data || typeof data !== "object" || typeof data.success !== "boolean") {

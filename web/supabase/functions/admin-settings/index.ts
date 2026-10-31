@@ -123,8 +123,12 @@ Deno.serve(async (req) => {
 
     if (body.action === "update_margin") {
       const carrier = typeof body.carrier === "string" ? body.carrier.trim().toUpperCase() : "";
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
       if (!carriers.includes(carrier as (typeof carriers)[number]) || !isRecord(body.update)) {
         return jsonResponse({ message: "Choose a valid carrier and margin update." }, 400);
+      }
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this margin change." }, 400);
       }
       const values: Record<string, unknown> = {};
       for (const [field, column] of Object.entries(marginFields)) {
@@ -169,6 +173,7 @@ Deno.serve(async (req) => {
         carrier,
         before: toMargin(previous),
         after: toMargin(data),
+        reason,
       }, req);
       return jsonResponse({ success: true, data: toMargin(data), timestamp: data.updated_at });
     }
@@ -186,6 +191,10 @@ Deno.serve(async (req) => {
     if (body.action === "update_settings") {
       if (!isRecord(body.settings)) {
         return jsonResponse({ message: "Invalid system settings." }, 400);
+      }
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this settings change." }, 400);
       }
       const updates: Record<string, unknown> = {};
       for (const key of settingKeys) {
@@ -256,6 +265,7 @@ Deno.serve(async (req) => {
         changedKeys: Object.keys(updates),
         before,
         after,
+        reason,
       }, req);
       return jsonResponse({
         success: true,

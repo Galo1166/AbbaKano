@@ -85,8 +85,12 @@ Deno.serve(async (req) => {
     if (action === "update_status") {
       const userId = typeof body.userId === "string" ? body.userId : "";
       const nextStatus = typeof body.status === "string" ? body.status.toLowerCase() : "";
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
       if (!/^[0-9a-f-]{36}$/i.test(userId) || !["active", "blocked"].includes(nextStatus)) {
         return jsonResponse({ message: "Invalid account status update." }, 400);
+      }
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this status change." }, 400);
       }
 
       const { data: profile, error: profileError } = await supabaseAdmin
@@ -126,6 +130,7 @@ Deno.serve(async (req) => {
         userId,
         before: profile.status,
         after: nextStatus,
+        reason,
       }, req);
       return jsonResponse({ status: nextStatus });
     }
@@ -141,11 +146,11 @@ Deno.serve(async (req) => {
         !Number.isSafeInteger(amountKobo) ||
         Number(amountKobo) <= 0 ||
         !["credit", "debit"].includes(direction) ||
-        !reason ||
+        reason.length < 5 ||
         reason.length > 500 ||
         !/^[0-9a-f-]{36}$/i.test(adjustmentId)
       ) {
-        return jsonResponse({ message: "Invalid wallet adjustment." }, 400);
+        return jsonResponse({ message: "Enter a valid wallet adjustment and a reason of 5 to 500 characters." }, 400);
       }
 
       const { data, error } = await supabaseAdmin.rpc("admin_adjust_user_wallet", {

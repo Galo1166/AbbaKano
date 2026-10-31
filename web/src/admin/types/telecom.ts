@@ -53,7 +53,8 @@ export type AuditAction =
   | "admin.price_override_upserted"
   | "admin.price_override_deleted"
   | "admin.login"
-  | "admin.logout";
+  | "admin.logout"
+  | "admin.page_view";
 
 // ─── Transaction ──────────────────────────────────────────────
 export interface Transaction {

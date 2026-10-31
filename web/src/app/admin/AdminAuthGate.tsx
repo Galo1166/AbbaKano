@@ -1,17 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@admin/components/layout/Sidebar";
 import TopNav from "@admin/components/layout/TopNav";
 import { SidebarProvider } from "@admin/context/SidebarContext";
-import { fetchAdminSession } from "@admin/services/api";
+import { fetchAdminSession, recordAdminPageView } from "@admin/services/api";
 import { supabase } from "@/lib/supabase";
 
 export default function AdminAuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sessionStatus, setSessionStatus] = useState<"checking" | "authorized" | "unauthorized">("checking");
+  const lastAuditedPath = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (
+      sessionStatus !== "authorized" ||
+      pathname === "/admin/login" ||
+      lastAuditedPath.current === pathname
+    ) {
+      return;
+    }
+
+    lastAuditedPath.current = pathname;
+    void recordAdminPageView(pathname).catch((error: unknown) => {
+      console.error(`Could not record admin page visit "${pathname}":`, error);
+      if (lastAuditedPath.current === pathname) lastAuditedPath.current = null;
+    });
+  }, [pathname, sessionStatus]);
 
   useEffect(() => {
     if (pathname === "/admin/login") return;

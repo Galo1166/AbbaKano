@@ -65,15 +65,25 @@ Deno.serve(async (req) => {
     }
 
     if (body.recordEvent !== undefined) {
-      if (body.recordEvent !== "login" && body.recordEvent !== "logout") {
+      if (!["login", "logout", "page_view"].includes(String(body.recordEvent))) {
         return jsonResponse({ message: "Invalid admin session event." }, 400);
+      }
+      const path = typeof body.path === "string" ? body.path : "";
+      if (
+        body.recordEvent === "page_view" &&
+        (!/^\/admin(?:\/[a-zA-Z0-9._~-]+)*$/.test(path) || path === "/admin/login")
+      ) {
+        return jsonResponse({ message: "Invalid admin page path." }, 400);
       }
       const supabaseAdmin = createClient(supabaseUrl, serviceKey);
       await recordAdminAuditEvent(
         supabaseAdmin,
         user.id,
-        `admin.${body.recordEvent}`,
-        { userAgent: req.headers.get("user-agent")?.slice(0, 500) || "unknown" },
+        body.recordEvent === "page_view" ? "admin.page_view" : `admin.${body.recordEvent}`,
+        {
+          ...(body.recordEvent === "page_view" ? { path } : {}),
+          userAgent: req.headers.get("user-agent")?.slice(0, 500) || "unknown",
+        },
         req,
       );
       return jsonResponse({ success: true });

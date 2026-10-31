@@ -477,10 +477,11 @@ export async function fetchInflows(
   };
 }
 
-export async function markDepositFailed(id: string): Promise<void> {
+export async function markDepositFailed(id: string, reason: string): Promise<void> {
   await invokeSupabaseFunction<{ success: boolean }>("admin-deposits", {
     action: "mark_failed",
     depositId: id,
+    reason,
   });
 }
 
@@ -524,6 +525,13 @@ export async function initiateProviderRefill(
 export async function recordAdminSessionEvent(event: "login" | "logout"): Promise<void> {
   await invokeSupabaseFunction<{ success: boolean }>("admin-audit-logs", {
     recordEvent: event,
+  });
+}
+
+export async function recordAdminPageView(path: string): Promise<void> {
+  await invokeSupabaseFunction<{ success: boolean }>("admin-audit-logs", {
+    recordEvent: "page_view",
+    path,
   });
 }
 
@@ -583,7 +591,7 @@ export async function fetchAuditLogs(
   roles: string[];
 }> {
   const response = await invokeSupabaseFunction<{
-    auditLogs: Array<{
+    auditLogs?: Array<{
       id: string;
       actor_user_id?: string | null;
       action: string;
@@ -593,12 +601,12 @@ export async function fetchAuditLogs(
       actor?: string | null;
       role?: string | null;
     }>;
-    total: number;
-    page: number;
-    pageSize: number;
-    actions: string[];
-    roles: string[];
-    metrics: { totalEvents: number; depositEvents: number; vtuEvents: number; adminEvents: number };
+    total?: number;
+    page?: number;
+    pageSize?: number;
+    actions?: unknown;
+    roles?: unknown;
+    metrics?: Partial<Record<"totalEvents" | "depositEvents" | "vtuEvents" | "adminEvents", number>>;
   }>("admin-audit-logs", {
     page,
     pageSize,
@@ -609,6 +617,10 @@ export async function fetchAuditLogs(
     to: filters?.to || null,
     actorRole: filters?.actorRole || null,
   });
+
+  if (!Array.isArray(response.auditLogs)) {
+    throw new Error("Audit log response did not contain a valid event list.");
+  }
 
   const results = response.auditLogs.map((entry) => ({
     id: String(entry.id),
@@ -623,16 +635,35 @@ export async function fetchAuditLogs(
     ipAddress: entry.ip_address || undefined,
     timestamp: entry.created_at,
   }));
+  const total = typeof response.total === "number" && Number.isFinite(response.total)
+    ? response.total
+    : results.length;
+  const responseMetrics = response.metrics || {};
+  const metricValue = (key: "totalEvents" | "depositEvents" | "vtuEvents" | "adminEvents") =>
+    typeof responseMetrics[key] === "number" && Number.isFinite(responseMetrics[key])
+      ? responseMetrics[key]
+      : 0;
+  const actions = Array.isArray(response.actions)
+    ? response.actions.filter((action): action is string => typeof action === "string")
+    : [...new Set(results.map((entry) => entry.action))];
+  const roles = Array.isArray(response.roles)
+    ? response.roles.filter((role): role is string => typeof role === "string")
+    : [...new Set(results.map((entry) => entry.role))];
 
   return {
     data: results,
-    total: response.total,
-    page: response.page,
-    pageSize: response.pageSize,
-    hasNextPage: response.page * response.pageSize < response.total,
-    metrics: response.metrics,
-    actions: response.actions,
-    roles: response.roles,
+    total,
+    page: response.page ?? page,
+    pageSize: response.pageSize ?? pageSize,
+    hasNextPage: (response.page ?? page) * (response.pageSize ?? pageSize) < total,
+    metrics: {
+      totalEvents: metricValue("totalEvents"),
+      depositEvents: metricValue("depositEvents"),
+      vtuEvents: metricValue("vtuEvents"),
+      adminEvents: metricValue("adminEvents"),
+    },
+    actions,
+    roles,
   };
 }
 
@@ -663,12 +694,14 @@ export async function fetchMarginSettings(): Promise<MarginSetting[]> {
 
 export async function updateMargins(
   carrier: string,
-  update: Partial<MarginSetting>
+  update: Partial<MarginSetting>,
+  reason: string,
 ): Promise<ApiResponse<MarginSetting>> {
   return invokeSupabaseFunction<ApiResponse<MarginSetting>>("admin-settings", {
     action: "update_margin",
     carrier,
     update,
+    reason,
   });
 }
 
@@ -724,12 +757,14 @@ export async function fetchCustomers(
 
 export async function updateCustomerStatus(
   customerId: string,
-  status: "ACTIVE" | "BLOCKED"
+  status: "ACTIVE" | "BLOCKED",
+  reason: string,
 ): Promise<void> {
   await invokeSupabaseFunction("admin-users", {
     action: "update_status",
     userId: customerId,
     status: status.toLowerCase(),
+    reason,
   });
 }
 
@@ -789,11 +824,13 @@ export async function fetchSystemSettings(): Promise<SystemSettings> {
 }
 
 export async function updateSystemSettings(
-  updates: Partial<SystemSettings>
+  updates: Partial<SystemSettings>,
+  reason: string,
 ): Promise<ApiResponse<SystemSettings>> {
   return invokeSupabaseFunction<ApiResponse<SystemSettings>>("admin-settings", {
     action: "update_settings",
     settings: updates,
+    reason,
   });
 }
 

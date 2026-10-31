@@ -36,6 +36,7 @@ const actionLabel: Record<string, string> = {
   "admin.price_override_upserted": "Price Override Saved",
   "admin.price_override_deleted": "Price Override Deleted",
   "admin.login": "Admin Login",
+  "admin.page_view": "Admin Page Visited",
 };
 
 const actionIcon: Record<string, string> = {
@@ -68,6 +69,7 @@ const actionIcon: Record<string, string> = {
   "admin.price_override_upserted": "sell",
   "admin.price_override_deleted": "delete",
   "admin.login": "login",
+  "admin.page_view": "visibility",
 };
 
 const actionColor: Record<string, string> = {
@@ -100,6 +102,7 @@ const actionColor: Record<string, string> = {
   "admin.price_override_upserted": "bg-blue-100 text-blue-800",
   "admin.price_override_deleted": "bg-rose-100 text-rose-800",
   "admin.login": "bg-emerald-100 text-emerald-800",
+  "admin.page_view": "bg-slate-100 text-slate-800",
 };
 
 const fallbackAuditAction = (action: string) => {
@@ -295,7 +298,7 @@ export default function AuditLogsPage() {
             </span>
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-violet-700 font-mono">
-            {metrics.adminEvents.toLocaleString()}
+            {(metrics.adminEvents ?? 0).toLocaleString()}
           </div>
           <p className="text-xs text-on-surface-variant mt-2 pt-2 border-t border-outline-variant/10">
             Recorded admin and agent actions

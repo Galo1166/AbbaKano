@@ -82,6 +82,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === "update") {
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (reason.length < 5 || reason.length > 500) {
+        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this referral settings change." }, 400);
+      }
       if (typeof body.enabled !== "boolean") {
         return jsonResponse({ message: "Referral enabled must be a boolean." }, 400);
       }
@@ -119,6 +123,7 @@ Deno.serve(async (req) => {
           enabled: data.enabled,
           signupRewardKobo: Number(data.signup_reward_kobo),
         },
+        reason,
       }, req);
       return jsonResponse({
         enabled: data.enabled,

@@ -70,6 +70,10 @@ Deno.serve(async (req) => {
     const action = body.action === "list" || body.action === "create" ||
       body.action === "update" || body.action === "delete" ? body.action : null;
     if (!action) return jsonResponse({ message: "Choose a valid plan action." }, 400);
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (action !== "list" && (reason.length < 5 || reason.length > 500)) {
+      return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this plan change." }, 400);
+    }
 
     const admin = createClient(supabaseUrl, serviceKey);
     if (action === "list") {
@@ -122,6 +126,7 @@ Deno.serve(async (req) => {
         duration: data.duration,
         price: Number(data.price_kobo) / 100,
         enabled: data.enabled,
+        reason,
       }, req);
       return jsonResponse({ plan: data }, 201);
     }
@@ -146,21 +151,32 @@ Deno.serve(async (req) => {
         duration: existingPlan.duration,
         price: Number(existingPlan.price_kobo) / 100,
         enabled: existingPlan.enabled,
+        reason,
       }, req);
       return jsonResponse({ deleted: true });
     }
+    const { data: previousPlan, error: previousPlanError } = await admin
+      .from("admin_vtu_plans")
+      .select("id, network, category, capacity, duration, price_kobo, enabled")
+      .eq("id", id)
+      .maybeSingle();
+    if (previousPlanError) throw previousPlanError;
+    if (!previousPlan) return jsonResponse({ message: "Plan not found." }, 404);
     const { data, error } = await admin.from("admin_vtu_plans").update(values).eq("id", id)
       .select("id, network, category, capacity, capacity_mb, duration, price_kobo, enabled, created_at, updated_at")
       .single();
     if (error) throw error;
     await recordAuditEvent(admin, user.id, "admin.vtu_plan_updated", {
       planId: data.id,
+      before: previousPlan,
+      after: data,
       network: data.network,
       category: data.category,
       capacity: data.capacity,
       duration: data.duration,
       price: Number(data.price_kobo) / 100,
       enabled: data.enabled,
+      reason,
     }, req);
     return jsonResponse({ plan: data });
   } catch (error) {
