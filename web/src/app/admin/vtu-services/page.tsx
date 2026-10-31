@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Image from "next/image";
 import { fetchAdminTransactions, fetchAdminVtuServices, manageAdminVtuPlans, managePriceOverrides, manageCablePriceOverrides } from "@admin/services/api";
@@ -76,9 +76,10 @@ export default function VtuServicesPage() {
   const [dataCategoryFilter, setDataCategoryFilter] = useState<string>("ALL");
   const [dataSearchQuery, setDataSearchQuery] = useState<string>("");
   const [livePlans, setLivePlans] = useState<ProviderLivePlan[]>([]);
-  const [loadingLivePlans, setLoadingLivePlans] = useState(false);
+  const [loadingLivePlans, setLoadingLivePlans] = useState(true);
   const [livePlansError, setLivePlansError] = useState<string | null>(null);
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  const livePlansRequestId = useRef(0);
   const [savingPlanCode, setSavingPlanCode] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [auditReason, setAuditReason] = useState("");
@@ -94,6 +95,34 @@ export default function VtuServicesPage() {
   });
   const [savingCable, setSavingCable] = useState(false);
   const [actionCableId, setActionCableId] = useState<string | null>(null);
+
+  const refreshLivePlans = useCallback(async (
+    network: "MTN" | "AIRTEL" | "GLO" | "9MOBILE",
+  ) => {
+    const requestId = ++livePlansRequestId.current;
+    setLoadingLivePlans(true);
+    setLivePlansError(null);
+    setLivePlans([]);
+    setPriceDrafts({});
+    try {
+      const response = await managePriceOverrides({
+        action: "fetch_provider_plans",
+        provider: network,
+      });
+      if (requestId !== livePlansRequestId.current) return;
+      const plans = response.plans || [];
+      setLivePlans(plans);
+      const drafts: Record<string, string> = {};
+      plans.forEach((plan) => { drafts[plan.plan_code] = String(plan.selling_price); });
+      setPriceDrafts(drafts);
+    } catch (error) {
+      if (requestId === livePlansRequestId.current) {
+        setLivePlansError(error instanceof Error ? error.message : "Failed to reload.");
+      }
+    } finally {
+      if (requestId === livePlansRequestId.current) setLoadingLivePlans(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -346,11 +375,10 @@ export default function VtuServicesPage() {
   // Load live data plans from provider for the selected network
   useEffect(() => {
     let cancelled = false;
-    setLoadingLivePlans(true);
-    setLivePlansError(null);
+    const requestId = ++livePlansRequestId.current;
     managePriceOverrides({ action: "fetch_provider_plans", provider: dataNetwork })
       .then((res) => {
-        if (cancelled) return;
+        if (cancelled || requestId !== livePlansRequestId.current) return;
         const plans = res.plans || [];
         setLivePlans(plans);
         const drafts: Record<string, string> = {};
@@ -360,13 +388,17 @@ export default function VtuServicesPage() {
         setPriceDrafts(drafts);
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || requestId !== livePlansRequestId.current) return;
+        setLivePlans([]);
         setLivePlansError(err instanceof Error ? err.message : "Failed to load live data plans from provider.");
       })
       .finally(() => {
-        if (!cancelled) setLoadingLivePlans(false);
+        if (!cancelled && requestId === livePlansRequestId.current) setLoadingLivePlans(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (requestId === livePlansRequestId.current) livePlansRequestId.current += 1;
+    };
   }, [dataNetwork]);
 
   async function savePlanPrice(plan: ProviderLivePlan) {
@@ -620,19 +652,7 @@ export default function VtuServicesPage() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setLoadingLivePlans(true);
-              managePriceOverrides({ action: "fetch_provider_plans", provider: dataNetwork })
-                .then((res) => {
-                  const plans = res.plans || [];
-                  setLivePlans(plans);
-                  const drafts: Record<string, string> = {};
-                  plans.forEach((p) => { drafts[p.plan_code] = String(p.selling_price); });
-                  setPriceDrafts(drafts);
-                })
-                .catch((err) => setLivePlansError(err instanceof Error ? err.message : "Failed to reload."))
-                .finally(() => setLoadingLivePlans(false));
-            }}
+            onClick={() => void refreshLivePlans(dataNetwork)}
             disabled={loadingLivePlans}
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 self-start sm:self-auto cursor-pointer"
           >
@@ -652,7 +672,13 @@ export default function VtuServicesPage() {
               <button
                 key={net}
                 type="button"
-                onClick={() => setDataNetwork(net)}
+                onClick={() => {
+                  setLoadingLivePlans(true);
+                  setLivePlansError(null);
+                  setLivePlans([]);
+                  setPriceDrafts({});
+                  setDataNetwork(net);
+                }}
                 className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
                   isSelected
                     ? "bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/10"

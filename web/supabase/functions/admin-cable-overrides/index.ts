@@ -56,9 +56,11 @@ Deno.serve(async (req) => {
     if (!authorization) return jsonResponse({ message: "Missing authorization." }, 401);
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const apiKey = Deno.env.get("VTUGATE_API_KEY");
+    const apiKey = Deno.env.get("VTUGATE_API_KEY") || Deno.env.get("VTU_GATE_API_KEY");
     const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN");
-    const baseUrl = (Deno.env.get("VTU_GATE_BASE_URL") || "https://api.vtugate.com/api/v1").replace(/\/$/, "");
+    const baseUrl = (Deno.env.get("VTUGATE_BASE_URL") ||
+      Deno.env.get("VTU_GATE_BASE_URL") ||
+      "https://api.vtugate.com/api/v1").replace(/\/$/, "");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
 
     if (!supabaseUrl || !anonKey || !rawSecretKeys) {
@@ -127,8 +129,8 @@ Deno.serve(async (req) => {
 
       const isMobile = ["MTN", "AIRTEL", "GLO", "9MOBILE"].includes(provider);
 
-      // If ALRAHUZDATA is active:
-      if (alrahuzToken && (!apiKey || isMobile)) {
+      // Use VTU Gate as the source for live plans when configured; keep Alrahuzdata as fallback.
+      if (alrahuzToken && !apiKey && isMobile) {
         try {
           const alrahuzUserRes = await callAlrahuzApi<Record<string, unknown>>("/user/", {
             method: "GET",
@@ -166,7 +168,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // If VTU Gate is configured and no mobile plans loaded from Alrahuz:
+      // Fetch current VTU Gate plans when its API key is configured.
       if (rawPlans.length === 0 && apiKey) {
         const servicesResponse = await fetchVtuGate(baseUrl, apiKey, "/fetchallservices");
         if (isMobile) {
