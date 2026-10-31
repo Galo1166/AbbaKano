@@ -210,7 +210,7 @@ export default function OverviewPage() {
       />
 
       {/* KPI Cards Grid */}
-      <section className="grid w-full min-w-0 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid w-full min-w-0 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <KPICard
           label="Today's Sales"
           value={formatNaira(overview!.totalVolumeToday)}
@@ -224,6 +224,15 @@ export default function OverviewPage() {
           subtitle="Net wholesale spread today"
           icon="savings"
           href="/admin/transactions"
+        />
+        <KPICard
+          label="Total User Balance"
+          value={typeof overview!.totalUserBalance === "number"
+            ? formatNaira(overview!.totalUserBalance)
+            : "Unavailable"}
+          subtitle="Combined wallet balances of all users"
+          icon="account_balance_wallet"
+          href="/admin/users"
         />
         <KPICard
           label="Active Resellers"

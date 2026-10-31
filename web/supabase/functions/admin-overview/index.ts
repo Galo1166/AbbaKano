@@ -53,15 +53,28 @@ Deno.serve(async (req) => {
     const requestedDays = Number(body?.days);
     const days = requestedDays === 7 || requestedDays === 30 ? requestedDays : 1;
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
-    const { data, error } = await supabaseAdmin.rpc(
-      "get_admin_overview_snapshot",
-      { p_days: days },
-    );
-    if (error) throw error;
-    if (!data || typeof data !== "object") {
+    const [snapshotResult, balanceResult] = await Promise.all([
+      supabaseAdmin.rpc("get_admin_overview_snapshot", { p_days: days }),
+      supabaseAdmin.rpc("get_admin_total_user_wallet_balance"),
+    ]);
+    if (snapshotResult.error) throw snapshotResult.error;
+    if (balanceResult.error) throw balanceResult.error;
+    const data = snapshotResult.data;
+    if (
+      !data || typeof data !== "object" || !data.overview ||
+      typeof data.overview !== "object" ||
+      typeof balanceResult.data !== "number" ||
+      !Number.isFinite(balanceResult.data)
+    ) {
       throw new Error("Admin overview query returned an invalid result.");
     }
-    return jsonResponse(data);
+    return jsonResponse({
+      ...data,
+      overview: {
+        ...data.overview,
+        totalUserBalance: balanceResult.data,
+      },
+    });
   } catch (error) {
     console.error("admin-overview error:", error);
     return jsonResponse(
