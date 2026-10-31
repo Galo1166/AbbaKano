@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Unsupported provider." }, 400);
     }
 
-    const lowBalanceThreshold = Number(
+    const defaultLowBalanceThreshold = Number(
       Deno.env.get("VTUGATE_LOW_BALANCE_THRESHOLD_NAIRA") ||
         Deno.env.get("VTU_GATE_LOW_BALANCE_THRESHOLD_NAIRA") ||
         500000,
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
         throw new Error("ALRAHUZDATA returned an invalid balance.");
       }
       const alrahuzThreshold = Number(
-        Deno.env.get("ALRAHUZDATA_LOW_BALANCE_THRESHOLD_NAIRA") || lowBalanceThreshold,
+        Deno.env.get("ALRAHUZDATA_LOW_BALANCE_THRESHOLD_NAIRA") || defaultLowBalanceThreshold,
       );
       if (!Number.isFinite(alrahuzThreshold) || alrahuzThreshold < 0) {
         throw new Error("The ALRAHUZDATA low-balance threshold is invalid.");
