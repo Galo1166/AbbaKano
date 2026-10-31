@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callAlrahuzApi } from "../_shared/alrahuzdata.ts";
+import {
+  callAlrahuzApi,
+  type AlrahuzUserResponse,
+} from "../_shared/alrahuzdata.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,20 +50,98 @@ function fundingOptions() {
   ];
 }
 
-function alrahuzFundingOptions() {
-  const accountNumber = Deno.env.get("ALRAHUZDATA_DVA_ACCOUNT_NUMBER");
-  const accountName = Deno.env.get("ALRAHUZDATA_DVA_ACCOUNT_NAME");
-  const bankName = Deno.env.get("ALRAHUZDATA_DVA_BANK_NAME");
+type JsonRecord = Record<string, unknown>;
 
-  return accountNumber && accountName
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function alrahuzResponseRecords(response: JsonRecord): JsonRecord[] {
+  const records: JsonRecord[] = [];
+  const pending: Array<{ value: unknown; depth: number }> = [{ value: response, depth: 0 }];
+
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (current.depth > 6) continue;
+
+    if (Array.isArray(current.value)) {
+      for (const value of current.value) {
+        pending.push({ value, depth: current.depth + 1 });
+      }
+      continue;
+    }
+
+    if (!isRecord(current.value)) continue;
+    records.push(current.value);
+    for (const value of Object.values(current.value)) {
+      if (value && typeof value === "object") {
+        pending.push({ value, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  return records;
+}
+
+function normalizeAlrahuzKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function firstValue(records: JsonRecord[], keys: string[]): unknown {
+  for (const key of keys) {
+    const normalizedKey = normalizeAlrahuzKey(key);
+    for (const record of records) {
+      const value = Object.entries(record).find(([recordKey]) =>
+        normalizeAlrahuzKey(recordKey) === normalizedKey
+      )?.[1];
+      if (value !== undefined && value !== null && value !== "") return value;
+    }
+  }
+  return undefined;
+}
+
+function alrahuzFundingOptions(response: JsonRecord) {
+  const records = alrahuzResponseRecords(response);
+  const accountNumber = firstValue(records, [
+    "virtual_account_number",
+    "virtualAccountNumber",
+    "account_number",
+    "accountNumber",
+    "account_no",
+    "accountNo",
+  ]);
+  const accountName = firstValue(records, [
+    "virtual_account_name",
+    "virtualAccountName",
+    "account_name",
+    "accountName",
+  ]);
+  const bankName = firstValue(records, [
+    "virtual_account_bank",
+    "virtualAccountBank",
+    "bank_name",
+    "bankName",
+  ]);
+  const resolvedAccountNumber = typeof accountNumber === "string" ||
+      typeof accountNumber === "number"
+    ? String(accountNumber)
+    : Deno.env.get("ALRAHUZDATA_DVA_ACCOUNT_NUMBER");
+  const resolvedAccountName = typeof accountName === "string"
+    ? accountName
+    : Deno.env.get("ALRAHUZDATA_DVA_ACCOUNT_NAME");
+  const resolvedBankName = typeof bankName === "string"
+    ? bankName
+    : Deno.env.get("ALRAHUZDATA_DVA_BANK_NAME");
+
+  return resolvedAccountNumber && resolvedAccountName
     ? [{
         id: "alrahuzdata-dva",
         name: "ALRAHUZDATA DVA",
         fee: "Use this account to fund ALRAHUZDATA",
         status: "Configured",
-        accountNumber,
-        accountName,
-        bankName: bankName || undefined,
+        accountNumber: resolvedAccountNumber,
+        accountName: resolvedAccountName,
+        bankName: resolvedBankName || undefined,
       }]
     : [];
 }
@@ -120,7 +201,7 @@ Deno.serve(async (req) => {
         return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 503);
       }
 
-      const alrahuzResult = await callAlrahuzApi<Record<string, unknown>>("/user/", {
+      const alrahuzResult = await callAlrahuzApi<AlrahuzUserResponse>("/user/", {
         method: "GET",
         token: alrahuzToken,
       });
@@ -132,8 +213,20 @@ Deno.serve(async (req) => {
         );
       }
 
-      const rawBal = alrahuzResult.data.wallet_balance ?? alrahuzResult.data.balance;
-      const balance = Number(rawBal);
+      const records = alrahuzResponseRecords(alrahuzResult.data);
+      const rawBal = firstValue(records, [
+        "wallet_balance",
+        "walletBalance",
+        "balance",
+        "available_balance",
+        "availableBalance",
+      ]);
+      const balanceValue = typeof rawBal === "string"
+        ? rawBal.trim().replace(/,/g, "").replace(/^₦\s*/, "")
+        : rawBal;
+      const balance = typeof balanceValue === "number" || typeof balanceValue === "string"
+        ? Number(balanceValue)
+        : NaN;
       if (!Number.isFinite(balance)) {
         throw new Error("ALRAHUZDATA returned an invalid balance.");
       }
@@ -153,7 +246,7 @@ Deno.serve(async (req) => {
         lastCheckedAt: new Date().toISOString(),
         lowBalanceThreshold: alrahuzThreshold,
         source: "ALRAHUZDATA user",
-        fundingOptions: alrahuzFundingOptions(),
+        fundingOptions: alrahuzFundingOptions(alrahuzResult.data),
       });
     }
 

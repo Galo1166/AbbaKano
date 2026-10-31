@@ -82,7 +82,7 @@ Apply migrations before using the related functions:
 npx supabase db push
 ```
 
-Required server-side secrets vary by function. Provider and payment credentials must be configured as Supabase Edge Function secrets, not committed to Git. VTUGATE funding-account details are returned by `admin-provider-balances` only when both the account number and account name secrets are configured. To show Alrahuzdata top-up details, configure `ALRAHUZDATA_DVA_ACCOUNT_NUMBER` and `ALRAHUZDATA_DVA_ACCOUNT_NAME`; `ALRAHUZDATA_DVA_BANK_NAME` and `ALRAHUZDATA_LOW_BALANCE_THRESHOLD_NAIRA` are optional.
+Required server-side secrets vary by function. Provider and payment credentials must be configured as Supabase Edge Function secrets, not committed to Git. VTUGATE funding-account details are returned by `admin-provider-balances` only when both the account number and account name secrets are configured. Alrahuzdata balance and DVA details are read from its authenticated `/user/` response; `ALRAHUZDATA_DVA_ACCOUNT_NUMBER`, `ALRAHUZDATA_DVA_ACCOUNT_NAME`, and `ALRAHUZDATA_DVA_BANK_NAME` are optional fallbacks when the response omits those fields. `ALRAHUZDATA_LOW_BALANCE_THRESHOLD_NAIRA` is also optional.
 
 ## Admin access
 
