@@ -79,6 +79,7 @@ export default function VtuServicesPage() {
   const [loadingLivePlans, setLoadingLivePlans] = useState(true);
   const [livePlansError, setLivePlansError] = useState<string | null>(null);
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({});
   const livePlansRequestId = useRef(0);
   const [savingPlanCode, setSavingPlanCode] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -104,6 +105,7 @@ export default function VtuServicesPage() {
     setLivePlansError(null);
     setLivePlans([]);
     setPriceDrafts({});
+    setCapacityDrafts({});
     try {
       const response = await managePriceOverrides({
         action: "fetch_provider_plans",
@@ -113,8 +115,13 @@ export default function VtuServicesPage() {
       const plans = response.plans || [];
       setLivePlans(plans);
       const drafts: Record<string, string> = {};
-      plans.forEach((plan) => { drafts[plan.plan_code] = String(plan.selling_price); });
+      const capacities: Record<string, string> = {};
+      plans.forEach((plan) => {
+        drafts[plan.plan_code] = String(plan.selling_price);
+        capacities[plan.plan_code] = plan.display_capacity || plan.default_display_capacity || "";
+      });
       setPriceDrafts(drafts);
+      setCapacityDrafts(capacities);
     } catch (error) {
       if (requestId === livePlansRequestId.current) {
         setLivePlansError(error instanceof Error ? error.message : "Failed to reload.");
@@ -382,10 +389,13 @@ export default function VtuServicesPage() {
         const plans = res.plans || [];
         setLivePlans(plans);
         const drafts: Record<string, string> = {};
+        const capacities: Record<string, string> = {};
         plans.forEach((p) => {
           drafts[p.plan_code] = String(p.selling_price);
+          capacities[p.plan_code] = p.display_capacity || p.default_display_capacity || "";
         });
         setPriceDrafts(drafts);
+        setCapacityDrafts(capacities);
       })
       .catch((err) => {
         if (cancelled || requestId !== livePlansRequestId.current) return;
@@ -413,6 +423,10 @@ export default function VtuServicesPage() {
       setLivePlansError("Enter a reason of at least 5 characters for this price change.");
       return;
     }
+    const capacityDraft = (capacityDrafts[plan.plan_code] ?? "").trim();
+    const displayCapacity = capacityDraft === (plan.default_display_capacity || "")
+      ? null
+      : capacityDraft || null;
     setSavingPlanCode(plan.plan_code);
     setLivePlansError(null);
     setSuccessMsg(null);
@@ -424,6 +438,7 @@ export default function VtuServicesPage() {
         price: priceVal,
         enabled: true,
         label: plan.name,
+        display_capacity: displayCapacity,
         reason,
       });
       setLivePlans((current) =>
@@ -434,6 +449,8 @@ export default function VtuServicesPage() {
                 selling_price: priceVal,
                 enabled: true,
                 has_override: true,
+                display_capacity: displayCapacity,
+                has_custom_display_capacity: Boolean(displayCapacity),
                 margin: priceVal - p.cost_price,
               }
             : p,
@@ -460,6 +477,10 @@ export default function VtuServicesPage() {
     setLivePlansError(null);
     try {
       const currentPrice = Number(priceDrafts[plan.plan_code] ?? plan.selling_price);
+      const capacityDraft = (capacityDrafts[plan.plan_code] ?? "").trim();
+      const displayCapacity = capacityDraft === (plan.default_display_capacity || "")
+        ? null
+        : capacityDraft || null;
       await managePriceOverrides({
         action: "upsert",
         provider: dataNetwork,
@@ -467,6 +488,7 @@ export default function VtuServicesPage() {
         price: currentPrice,
         enabled: newEnabled,
         label: plan.name,
+        display_capacity: displayCapacity,
         reason,
       });
       setLivePlans((current) =>
@@ -476,6 +498,8 @@ export default function VtuServicesPage() {
                 ...p,
                 enabled: newEnabled,
                 has_override: true,
+                display_capacity: displayCapacity,
+                has_custom_display_capacity: Boolean(displayCapacity),
               }
             : p,
         ),
@@ -505,6 +529,10 @@ export default function VtuServicesPage() {
         reason,
       });
       setPriceDrafts((prev) => ({ ...prev, [plan.plan_code]: String(plan.cost_price) }));
+      setCapacityDrafts((prev) => ({
+        ...prev,
+        [plan.plan_code]: plan.default_display_capacity || "",
+      }));
       setLivePlans((current) =>
         current.map((p) =>
           p.plan_code === plan.plan_code
@@ -512,6 +540,8 @@ export default function VtuServicesPage() {
                 ...p,
                 selling_price: p.cost_price,
                 has_override: false,
+                display_capacity: null,
+                has_custom_display_capacity: false,
                 enabled: true,
                 margin: 0,
               }
@@ -677,6 +707,7 @@ export default function VtuServicesPage() {
                   setLivePlansError(null);
                   setLivePlans([]);
                   setPriceDrafts({});
+                  setCapacityDrafts({});
                   setDataNetwork(net);
                 }}
                 className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
@@ -782,10 +813,17 @@ export default function VtuServicesPage() {
                   {filtered.map((plan, idx) => {
                     const draftVal = priceDrafts[plan.plan_code] ?? String(plan.selling_price);
                     const draftNum = Number(draftVal);
+                    const capacityDraft = capacityDrafts[plan.plan_code] ??
+                      plan.display_capacity ??
+                      plan.default_display_capacity ??
+                      "";
+                    const normalizedCapacity = capacityDraft.trim();
+                    const capacityChanged = normalizedCapacity !==
+                      (plan.display_capacity || plan.default_display_capacity || "");
                     const currentMargin = Number.isFinite(draftNum) ? draftNum - plan.cost_price : plan.margin;
                     const marginPercent = plan.cost_price > 0 ? ((currentMargin / plan.cost_price) * 100).toFixed(1) : "0";
                     const isSaving = savingPlanCode === plan.plan_code;
-                    const isModified = Number.isFinite(draftNum) && draftNum !== plan.selling_price;
+                    const isModified = (Number.isFinite(draftNum) && draftNum !== plan.selling_price) || capacityChanged;
                     const uniqueKey = `${plan.service_id}:${plan.plan_code}:${idx}`;
 
                     return (
@@ -810,6 +848,21 @@ export default function VtuServicesPage() {
                           <p className="text-[11px] text-slate-400 font-mono mt-0.5">
                             Code: <span className="font-semibold text-slate-600">{plan.plan_code}</span>
                           </p>
+                          <label className="mt-2 grid max-w-48 gap-1 text-[10px] font-semibold text-slate-500">
+                            Customer display size ({plan.has_custom_display_capacity ? "custom" : "auto"})
+                            <input
+                              type="text"
+                              maxLength={40}
+                              value={capacityDraft}
+                              placeholder="e.g. 2.0 GB"
+                              disabled={isSaving}
+                              onChange={(event) => setCapacityDrafts((current) => ({
+                                ...current,
+                                [plan.plan_code]: event.target.value,
+                              }))}
+                              className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-800 focus:border-primary focus:outline-none"
+                            />
+                          </label>
                         </div>
 
                         {/* Cost & Margins */}

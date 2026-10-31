@@ -358,6 +358,9 @@ export type ProviderLivePlan = {
   plan_code: string;
   service_id: string;
   name: string;
+  display_capacity: string | null;
+  default_display_capacity: string | null;
+  has_custom_display_capacity: boolean;
   category: string;
   cost_price: number;
   selling_price: number;
