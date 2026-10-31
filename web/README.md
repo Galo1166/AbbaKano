@@ -86,6 +86,8 @@ Required server-side secrets vary by function. Provider and payment credentials 
 
 Mobile data plan sizes are normalized for customers (for example, `2000 MB` displays as `2.0 GB`, and `0.5 GB` as `500 MB`). Super admins can override each plan's customer display size in **Admin → VTU Services**; leaving the automatic size unchanged keeps the normalized provider value.
 
+Mobile plan overrides are scoped by both network and source provider. **Admin → VTU Services** lets super admins switch between VTUGATE and ALRAHUZDATA and manage each catalog independently. Customer data purchases currently use ALRAHUZDATA; VTUGATE overrides are isolated until a VTUGATE data-purchase integration is enabled.
+
 ## Admin access
 
 Create an administrator in Supabase Authentication, then set trusted app metadata:

@@ -22,6 +22,7 @@ function normalizeNetwork(value: unknown): string {
 }
 
 const supportedProviders = ["DSTV", "GOTV", "STARTIMES", "MTN", "AIRTEL", "GLO", "9MOBILE"];
+const dataPlanSources = ["VTUGATE", "ALRAHUZDATA"];
 
 async function fetchVtuGate(
   baseUrl: string,
@@ -98,7 +99,7 @@ Deno.serve(async (req) => {
     if (action === "list") {
       let query = admin
         .from("price_overrides")
-        .select("id, provider, plan_code, price, enabled, label, created_at, updated_at")
+        .select("id, provider, source_provider, plan_code, price, enabled, label, display_capacity, created_at, updated_at")
         .order("provider")
         .order("plan_code");
 
@@ -116,8 +117,11 @@ Deno.serve(async (req) => {
       if (!supportedProviders.includes(provider)) {
         return jsonResponse({ message: "Choose a valid provider." }, 400);
       }
-      if (!apiKey && !alrahuzToken) {
-        return jsonResponse({ message: "VTU Provider API key is not configured." }, 500);
+      const sourceProvider = typeof body.source_provider === "string"
+        ? body.source_provider.trim().toUpperCase()
+        : "";
+      if (!dataPlanSources.includes(sourceProvider)) {
+        return jsonResponse({ message: "Choose a valid data-plan provider." }, 400);
       }
 
       let rawPlans: Array<{
@@ -126,95 +130,104 @@ Deno.serve(async (req) => {
         name: string;
         category: string;
         cost_price: number;
+        source_provider: string;
       }> = [];
 
       const isMobile = ["MTN", "AIRTEL", "GLO", "9MOBILE"].includes(provider);
-
-      // Use VTU Gate as the source for live plans when configured; keep Alrahuzdata as fallback.
-      if (alrahuzToken && !apiKey && isMobile) {
-        try {
-          const alrahuzUserRes = await callAlrahuzApi<Record<string, unknown>>("/user/", {
-            method: "GET",
-            token: alrahuzToken,
-            timeoutMs: 15000,
-          });
-
-          if (alrahuzUserRes.ok && alrahuzUserRes.data) {
-            const dataplans = alrahuzUserRes.data.Dataplans as Record<string, unknown> | undefined;
-            const networkKey = `${provider}_PLAN`;
-            const networkPlansGroup = dataplans?.[networkKey] as Record<string, unknown> | undefined;
-            const plansList = (Array.isArray(networkPlansGroup?.ALL)
-              ? networkPlansGroup.ALL
-              : []) as Record<string, unknown>[];
-
-            rawPlans = plansList
-              .map((p) => {
-                const planId = String(p.id || p.dataplan_id || "");
-                const planType = String(p.plan_type || "GENERAL");
-                const sizeLabel = String(p.plan || "");
-                const validity = String(p.month_validate || "");
-                const displayName = `${sizeLabel} ${planType}${validity ? ` (${validity})` : ""}`;
-                return {
-                  plan_code: planId,
-                  service_id: String(p.network || ALRAHUZ_NETWORK_IDS[provider] || "1"),
-                  name: displayName,
-                  category: planType.toUpperCase(),
-                  cost_price: Number(p.plan_amount || 0),
-                };
-              })
-              .filter((p) => p.plan_code && p.cost_price > 0);
-          }
-        } catch (alrahuzErr) {
-          console.warn("ALRAHUZDATA admin plan fetch error:", alrahuzErr);
-        }
+      if (!isMobile) {
+        return jsonResponse({ message: "Live data plans require a supported mobile network." }, 400);
       }
 
-      // Fetch current VTU Gate plans when its API key is configured.
-      if (rawPlans.length === 0 && apiKey) {
+      if (sourceProvider === "ALRAHUZDATA") {
+        if (!alrahuzToken) {
+          return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 503);
+        }
+        const alrahuzUserRes = await callAlrahuzApi<Record<string, unknown>>("/user/", {
+          method: "GET",
+          token: alrahuzToken,
+          timeoutMs: 15000,
+        });
+        if (!alrahuzUserRes.ok || !alrahuzUserRes.data) {
+          return jsonResponse({
+            message: alrahuzUserRes.error || "Could not load ALRAHUZDATA plans.",
+          }, 502);
+        }
+        const dataplans = alrahuzUserRes.data.Dataplans as Record<string, unknown> | undefined;
+        const networkKey = `${provider}_PLAN`;
+        const networkPlansGroup = dataplans?.[networkKey] as Record<string, unknown> | undefined;
+        const plansList = (Array.isArray(networkPlansGroup?.ALL)
+          ? networkPlansGroup.ALL
+          : []) as Record<string, unknown>[];
+
+        rawPlans = plansList
+          .map((p) => {
+            const planId = String(p.id || p.dataplan_id || "");
+            const planType = String(p.plan_type || "GENERAL");
+            const sizeLabel = String(p.plan || "");
+            const validity = String(p.month_validate || "");
+            const displayName = `${sizeLabel} ${planType}${validity ? ` (${validity})` : ""}`;
+            return {
+              plan_code: planId,
+              service_id: String(p.network || ALRAHUZ_NETWORK_IDS[provider] || "1"),
+              name: displayName,
+              category: planType.toUpperCase(),
+              cost_price: Number(p.plan_amount || 0),
+              source_provider: sourceProvider,
+            };
+          })
+          .filter((p) => p.plan_code && p.cost_price > 0);
+      } else {
+        if (!apiKey) {
+          return jsonResponse({ message: "VTUGATE API key is not configured." }, 503);
+        }
         const servicesResponse = await fetchVtuGate(baseUrl, apiKey, "/fetchallservices");
-        if (isMobile) {
-          const services = (servicesResponse.data || []).filter(
-            (service: Record<string, unknown>) =>
-              service.service_type === "data" &&
-              normalizeNetwork(service.network_name) === provider,
-          );
+        const services = (servicesResponse.data || []).filter(
+          (service: Record<string, unknown>) =>
+            service.service_type === "data" &&
+            normalizeNetwork(service.network_name) === provider,
+        );
 
-          const batches = await Promise.allSettled(
-            services.map(async (service: Record<string, unknown>) => {
-              const serviceId = String(service.service_id || "");
-              if (!/^\d+$/.test(serviceId)) return [];
+        const batches = await Promise.allSettled(
+          services.map(async (service: Record<string, unknown>) => {
+            const serviceId = String(service.service_id || "");
+            if (!/^\d+$/.test(serviceId)) return [];
 
-              const plansResponse = await fetchVtuGate(
-                baseUrl,
-                apiKey,
-                "/fetchdataplans",
-                { service_id: serviceId },
-              );
+            const plansResponse = await fetchVtuGate(
+              baseUrl,
+              apiKey,
+              "/fetchdataplans",
+              { service_id: serviceId },
+            );
 
-              return (plansResponse.data?.data_plans || []).map((p: Record<string, unknown>) => ({
+            return (plansResponse.data?.data_plans || []).map((p: Record<string, unknown>) => ({
                 plan_code: String(p.code || "").trim(),
                 service_id: serviceId,
                 name: String(p.name || "").trim(),
                 category: String(service.data_type || "GENERAL").toUpperCase(),
                 cost_price: Number(p.price || 0),
-              })).filter((p: { plan_code: string; cost_price: number }) => p.plan_code && p.cost_price > 0);
-            }),
-          );
-
-          rawPlans = batches.flatMap((b) => (b.status === "fulfilled" ? b.value : []));
+                source_provider: sourceProvider,
+            })).filter((p: { plan_code: string; cost_price: number }) => p.plan_code && p.cost_price > 0);
+          }),
+        );
+        const rejectedBatches = batches.filter((batch) => batch.status === "rejected");
+        rawPlans = batches.flatMap((batch) => batch.status === "fulfilled" ? batch.value : []);
+        if (rawPlans.length === 0 && rejectedBatches.length > 0) {
+          throw new Error("Could not load VTUGATE plans for this network.");
         }
       }
 
       // Fetch DB overrides for this provider
       const { data: dbOverrides, error: dbError } = await admin
         .from("price_overrides")
-        .select("id, provider, plan_code, price, enabled, label, display_capacity, updated_at")
-        .eq("provider", provider);
+        .select("id, provider, source_provider, plan_code, price, enabled, label, display_capacity, updated_at")
+        .eq("provider", provider)
+        .eq("source_provider", sourceProvider);
       if (dbError) throw dbError;
 
       const overrideMap = new Map(
         (dbOverrides || []).map((row: {
           plan_code: string;
+          source_provider: string;
           price: number;
           enabled?: boolean;
           id: string;
@@ -235,6 +248,7 @@ Deno.serve(async (req) => {
         return {
           plan_code: p.plan_code,
           service_id: p.service_id,
+          source_provider: p.source_provider,
           name: override?.label || p.name,
           display_capacity: override?.display_capacity || formatDataCapacity(p.name),
           default_display_capacity: formatDataCapacity(p.name),
@@ -258,6 +272,15 @@ Deno.serve(async (req) => {
     if (!supportedProviders.includes(provider)) {
       return jsonResponse({ message: `Choose a supported provider (${supportedProviders.join(", ")}).` }, 400);
     }
+    const isMobile = ["MTN", "AIRTEL", "GLO", "9MOBILE"].includes(provider);
+    const sourceProvider = typeof body.source_provider === "string"
+      ? body.source_provider.trim().toUpperCase()
+      : isMobile
+      ? ""
+      : "VTUGATE";
+    if (isMobile && !dataPlanSources.includes(sourceProvider)) {
+      return jsonResponse({ message: "Choose a valid data-plan provider." }, 400);
+    }
     if (!planCode) {
       return jsonResponse({ message: "A plan code is required." }, 400);
     }
@@ -279,8 +302,9 @@ Deno.serve(async (req) => {
     if (action === "delete") {
       const { data: existing, error: lookupError } = await admin
         .from("price_overrides")
-        .select("id, provider, plan_code, price, display_capacity")
+        .select("id, provider, source_provider, plan_code, price, display_capacity")
         .eq("provider", provider)
+        .eq("source_provider", sourceProvider)
         .eq("plan_code", planCode)
         .maybeSingle();
       if (lookupError) throw lookupError;
@@ -289,6 +313,7 @@ Deno.serve(async (req) => {
       if (error) throw error;
       await recordAuditEvent(admin, user.id, "admin.price_override_deleted", {
         provider: existing.provider,
+        sourceProvider: existing.source_provider,
         planCode: existing.plan_code,
         price: existing.price,
         displayCapacity: existing.display_capacity,
@@ -305,8 +330,9 @@ Deno.serve(async (req) => {
       }
       const { data: previous, error: previousError } = await admin
         .from("price_overrides")
-        .select("provider, plan_code, price, enabled, label, display_capacity")
+        .select("provider, source_provider, plan_code, price, enabled, label, display_capacity")
         .eq("provider", provider)
+        .eq("source_provider", sourceProvider)
         .eq("plan_code", planCode)
         .maybeSingle();
       if (previousError) throw previousError;
@@ -317,6 +343,7 @@ Deno.serve(async (req) => {
         : null;
       const values = {
         provider,
+        source_provider: sourceProvider,
         plan_code: planCode,
         price,
         enabled: typeof body.enabled === "boolean" ? body.enabled : true,
@@ -326,12 +353,13 @@ Deno.serve(async (req) => {
       };
       const { data, error } = await admin
         .from("price_overrides")
-        .upsert(values, { onConflict: "provider,plan_code" })
-        .select("id, provider, plan_code, price, enabled, label, display_capacity, created_at, updated_at")
+        .upsert(values, { onConflict: "provider,source_provider,plan_code" })
+        .select("id, provider, source_provider, plan_code, price, enabled, label, display_capacity, created_at, updated_at")
         .single();
       if (error) throw error;
       await recordAuditEvent(admin, user.id, "admin.price_override_upserted", {
         provider: data.provider,
+        sourceProvider: data.source_provider,
         planCode: data.plan_code,
         before: previous,
         after: data,
