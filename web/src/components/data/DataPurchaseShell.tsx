@@ -42,6 +42,8 @@ type Receipt = {
   label: string;
   network: Network;
   phone: string;
+  idempotencyKey: string;
+  selectionToken: string;
 };
 
 function normalizePurchaseStatus(status?: string): PurchaseStatus {
@@ -105,7 +107,7 @@ const categories: Array<{ id: Category; label: string }> = [
   { id: "DIRECT", label: "Direct" },
 ];
 
-const PLAN_CACHE_TTL_MS = 15 * 60 * 1000;
+const PLAN_CACHE_TTL_MS = 30 * 1000;
 const planCache = new Map<Network, { plans: Plan[]; expiresAt: number }>();
 const planRequests = new Map<Network, Promise<Plan[]>>();
 
@@ -193,6 +195,7 @@ export function DataPurchaseShell() {
   const isExecutingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [checkingReceiptStatus, setCheckingReceiptStatus] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -338,6 +341,8 @@ export function DataPurchaseShell() {
         label: selectedPlan.label,
         network,
         phone,
+        idempotencyKey,
+        selectionToken: selectedPlan.selectionToken || "",
       });
       setShowCheckout(false);
       setPin("");
@@ -383,6 +388,8 @@ export function DataPurchaseShell() {
         label: selectedPlan.label,
         network,
         phone,
+        idempotencyKey,
+        selectionToken: selectedPlan.selectionToken || "",
       });
       setShowCheckout(false);
       setPin("");
@@ -396,6 +403,35 @@ export function DataPurchaseShell() {
 
   const parsedActivePlan = selectedPlan ? parsePlanInfo(selectedPlan.label, selectedPlan.validityPeriod) : null;
   const isInsufficient = balance !== null && selectedPlan !== null && balance < selectedPlan.price;
+
+  async function checkPendingPurchaseStatus() {
+    if (!receipt || receipt.status !== "pending" || checkingReceiptStatus) return;
+    setCheckingReceiptStatus(true);
+    try {
+      const response = await submitDataPurchase({
+        network: receipt.network,
+        phone: receipt.phone,
+        selectionToken: receipt.selectionToken,
+        idempotencyKey: receipt.idempotencyKey,
+      });
+      const status = normalizePurchaseStatus(response.status);
+      setReceipt((current) => current ? {
+        ...current,
+        status,
+        message: sanitizeServiceMessage(response.message || "Purchase status checked.") ||
+          "Purchase status checked.",
+        reference: response.reference || current.reference,
+      } : current);
+      if (status !== "pending") setReloadKey((key) => key + 1);
+    } catch (error) {
+      setReceipt((current) => current ? {
+        ...current,
+        message: safeErrorMessage(error, "Could not check the purchase status. Try again shortly."),
+      } : current);
+    } finally {
+      setCheckingReceiptStatus(false);
+    }
+  }
 
   return (
     <main className={`min-h-screen transition-colors duration-200 antialiased pb-32 ${
@@ -966,13 +1002,23 @@ export function DataPurchaseShell() {
               )}
             </div>
 
+            {receipt.status === "pending" && (
+              <button
+                type="button"
+                onClick={() => void checkPendingPurchaseStatus()}
+                disabled={checkingReceiptStatus}
+                className="mt-5 w-full h-11 rounded-xl border border-blue-600 text-blue-600 font-bold text-xs transition hover:bg-blue-50 disabled:opacity-50 cursor-pointer"
+              >
+                {checkingReceiptStatus ? "Checking status..." : "Check status"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
                 setReceipt(null);
                 goHome();
               }}
-              className="mt-5 w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
+              className="mt-3 w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
             >
               Done
             </button>

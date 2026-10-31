@@ -198,6 +198,8 @@ export interface SystemSettings {
   maxSingleManualCredit: number;
   vtuGatewayPrimary: string;
   vtuGatewayFallback: string;
+  airtimeProviderPrimary: "ALRAHUZDATA" | "BILALSADASUB";
+  dataProviderPrimary: "ALRAHUZDATA" | "BILALSADASUB";
 }
 
 // ─── API Response Wrappers ────────────────────────────────────

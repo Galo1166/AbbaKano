@@ -1,5 +1,5 @@
 export type DataPlanSelection = {
-  provider: "vtugate" | "alrahuzdata";
+  provider: "vtugate" | "alrahuzdata" | "bilalsadasub";
   network: string;
   label: string;
   serviceId: string;
@@ -74,7 +74,7 @@ export async function verifyDataPlanToken(
       new TextDecoder().decode(decodeBase64Url(payload)),
     ) as DataPlanSelection;
     if (
-      !["vtugate", "alrahuzdata"].includes(selection.provider) ||
+      !["vtugate", "alrahuzdata", "bilalsadasub"].includes(selection.provider) ||
       selection.network !== requestedNetwork ||
       typeof selection.label !== "string" ||
       !selection.label.trim() ||

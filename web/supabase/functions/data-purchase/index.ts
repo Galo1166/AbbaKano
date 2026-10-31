@@ -7,6 +7,13 @@ import {
   isAlrahuzSuccess,
   isAlrahuzPending,
 } from "../_shared/alrahuzdata.ts";
+import {
+  BILALSADASUB_NETWORK_IDS,
+  bilalSadaSubStatus,
+  bilalSadaSubTransactionStatus,
+  callBilalSadaSub,
+  type BilalSadaSubResponse,
+} from "../_shared/bilalsadasub.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,7 +116,8 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
     const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") || Deno.env.get("ALRAHUZ_API_TOKEN") || "";
-    if (!supabaseUrl || !anonKey || !rawSecretKeys || !alrahuzToken) {
+    const bilalToken = Deno.env.get("BILALSADASUB_API_TOKEN") || "";
+    if (!supabaseUrl || !anonKey || !rawSecretKeys) {
       console.error("Data purchase function configuration is incomplete.");
       return jsonResponse({ message: "Data purchase is temporarily unavailable." }, 500);
     }
@@ -154,13 +162,25 @@ Deno.serve(async (req) => {
       serviceKey,
       network,
     );
-    if (!selection || selection.provider !== "alrahuzdata") {
+    if (!selection || !["alrahuzdata", "bilalsadasub"].includes(selection.provider)) {
       return jsonResponse({
         message: "This data plan is no longer available. Reload plans and choose again.",
       }, 400);
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+    const { data: settingsRow, error: settingsError } = await supabaseAdmin
+      .from("admin_system_settings")
+      .select("settings")
+      .eq("id", true)
+      .single();
+    if (settingsError) {
+      console.error("Could not load active data provider:", settingsError);
+      return jsonResponse({ message: "Could not verify the active data provider." }, 500);
+    }
+    const activeProvider = String(settingsRow.settings?.dataProviderPrimary || "ALRAHUZDATA")
+      .toLowerCase();
+
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("vtu_transactions")
       .select("id, transaction_type, status, provider, provider_reference, provider_response")
@@ -187,7 +207,7 @@ Deno.serve(async (req) => {
           status: "failed",
           message: "This data purchase request has already failed.",
           reference: existing.provider_reference || `ABBA-${existing.id}`,
-        }, 409);
+        });
       }
       const previousProviderResponse = existing.provider_response;
       if (
@@ -271,11 +291,91 @@ Deno.serve(async (req) => {
           balance_kobo: wallet?.balance_kobo,
         });
       }
+      if (
+        existing.status === "processing" &&
+        existing.provider === "bilalsadasub" &&
+        existing.provider_reference &&
+        bilalToken.trim()
+      ) {
+        let requeryResponse: BilalSadaSubResponse | null = null;
+        let requeryHttpStatus: number | null = null;
+        try {
+          const result = await callBilalSadaSub<BilalSadaSubResponse>(
+            `/api/requery/${encodeURIComponent(existing.provider_reference)}`,
+            { token: bilalToken, timeoutMs: 15000 },
+          );
+          requeryResponse = result.data;
+          requeryHttpStatus = result.status;
+        } catch (requeryError) {
+          console.error("BilalSadaSub data requery outcome is unknown:", requeryError);
+        }
+        const status = bilalSadaSubTransactionStatus(requeryResponse);
+        if (status === "success") {
+          const { error: settlementError } = await supabaseAdmin.rpc(
+            "settle_data_purchase",
+            {
+              p_transaction_id: existing.id,
+              p_provider_reference: existing.provider_reference,
+              p_provider_response: requeryResponse,
+            },
+          );
+          if (settlementError) {
+            console.error("BilalSadaSub data requery settlement failed:", settlementError);
+            return jsonResponse({
+              status: "pending",
+              message: "Your data purchase is being checked. Do not submit it again yet.",
+              reference: existing.provider_reference,
+            }, 202);
+          }
+          return jsonResponse({
+            status: "success",
+            message: "Data purchase completed successfully.",
+            reference: existing.provider_reference,
+          });
+        }
+        if (
+          status === "failed" ||
+          (requeryHttpStatus === 404 && bilalSadaSubStatus(requeryResponse) === "fail")
+        ) {
+          const { error: releaseError } = await supabaseAdmin.rpc(
+            "release_data_reservation",
+            {
+              p_transaction_id: existing.id,
+              p_provider_response: requeryResponse,
+            },
+          );
+          if (releaseError) {
+            console.error("BilalSadaSub failed data requery release failed:", releaseError);
+            return jsonResponse({
+              status: "pending",
+              message: "The provider rejected the purchase, but wallet release needs support review.",
+              reference: existing.provider_reference,
+            }, 202);
+          }
+          return jsonResponse({
+            status: "failed",
+            message: "BilalSadaSub rejected the data purchase and the reserved balance was released.",
+            reference: existing.provider_reference,
+          });
+        }
+      }
       return jsonResponse({
         status: "pending",
         message: "This data purchase is already being processed.",
         reference: existing.provider_reference || `ABBA-${existing.id}`,
       }, 202);
+    }
+
+    if (selection.provider !== activeProvider) {
+      return jsonResponse({
+        message: "This data plan is no longer available. Reload plans and choose again.",
+      }, 400);
+    }
+    if (selection.provider === "alrahuzdata" && !alrahuzToken) {
+      return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 503);
+    }
+    if (selection.provider === "bilalsadasub" && !bilalToken.trim()) {
+      return jsonResponse({ message: "BILALSADASUB_API_TOKEN is not configured." }, 503);
     }
 
     if (transactionAuthorization) {
@@ -364,6 +464,7 @@ Deno.serve(async (req) => {
     let providerReference = `ABBA-${transactionId}`;
     let providerPending = false;
 
+    const bilalRequestId = `ABBA-DATA-${transactionId}`;
     if (selection.provider === "alrahuzdata") {
       if (!alrahuzToken) {
         return jsonResponse({ message: "ALRAHUZDATA API token is not configured." }, 500);
@@ -447,6 +548,82 @@ Deno.serve(async (req) => {
 
       if (alrahuzRes.data?.id) {
         providerReference = String(alrahuzRes.data.id);
+      }
+    } else {
+      const networkId = BILALSADASUB_NETWORK_IDS[network];
+      const planId = Number(selection.planCode);
+      if (!networkId || !Number.isSafeInteger(planId) || planId <= 0) {
+        return jsonResponse({ message: "This BilalSadaSub data plan is invalid. Reload plans and choose again." }, 400);
+      }
+      providerReference = bilalRequestId;
+      const { error: requestIdSaveError } = await supabaseAdmin
+        .from("vtu_transactions")
+        .update({
+          provider_reference: providerReference,
+          provider: "bilalsadasub",
+          service_provider: "bilalsadasub",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transactionId)
+        .eq("status", "processing");
+      if (requestIdSaveError) {
+        console.error("Could not save BilalSadaSub data request ID:", requestIdSaveError);
+        return jsonResponse({
+          status: "pending",
+          message: "Your data purchase is being checked. Do not submit it again yet.",
+          reference: providerReference,
+        }, 202);
+      }
+
+      let bilalResult;
+      try {
+        bilalResult = await callBilalSadaSub<BilalSadaSubResponse>("/api/data", {
+          method: "POST",
+          token: bilalToken,
+          body: {
+            network: networkId,
+            phone: `234${phone.slice(1)}`,
+            data_plan: planId,
+            "request-id": bilalRequestId,
+          },
+          timeoutMs: 45000,
+        });
+      } catch (providerError) {
+        console.error("BilalSadaSub data purchase outcome is unknown:", providerError);
+        return jsonResponse({
+          status: "pending",
+          message: "Your data purchase is being checked. Do not submit it again yet.",
+          reference: providerReference,
+        }, 202);
+      }
+      providerPayload = bilalResult.data;
+      const bilalStatus = bilalSadaSubStatus(bilalResult.data);
+      providerPending = bilalStatus !== "success" &&
+        bilalStatus !== "fail" &&
+        bilalStatus !== "failed";
+      if (bilalStatus === "fail" || bilalStatus === "failed") {
+        const { error: releaseError } = await supabaseAdmin.rpc(
+          "release_data_reservation",
+          {
+            p_transaction_id: transactionId,
+            p_provider_response: providerPayload || { status: bilalStatus },
+          },
+        );
+        if (releaseError) {
+          console.error("Could not release failed BilalSadaSub data reservation:", releaseError);
+          return jsonResponse({
+            message: "Provider rejected the purchase, but wallet release needs support review.",
+            reference: providerReference,
+          }, 500);
+        }
+        return jsonResponse({
+          status: "failed",
+          message: bilalResult.error ||
+            String(bilalResult.data?.message || "BilalSadaSub rejected the data purchase."),
+        });
+      }
+      if (typeof bilalResult.data?.reference === "string" && bilalResult.data.reference) {
+        providerReference = bilalResult.data.reference;
       }
     }
 
