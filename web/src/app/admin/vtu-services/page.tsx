@@ -72,6 +72,7 @@ export default function VtuServicesPage() {
   const [savingPlanId, setSavingPlanId] = useState<number | null>(null);
 
   // Live Provider Data Plans State
+  const [dataProvider, setDataProvider] = useState<"VTUGATE" | "ALRAHUZDATA">("VTUGATE");
   const [dataNetwork, setDataNetwork] = useState<"MTN" | "AIRTEL" | "GLO" | "9MOBILE">("MTN");
   const [dataCategoryFilter, setDataCategoryFilter] = useState<string>("ALL");
   const [dataSearchQuery, setDataSearchQuery] = useState<string>("");
@@ -110,6 +111,7 @@ export default function VtuServicesPage() {
       const response = await managePriceOverrides({
         action: "fetch_provider_plans",
         provider: network,
+        source_provider: dataProvider,
       });
       if (requestId !== livePlansRequestId.current) return;
       const plans = response.plans || [];
@@ -129,7 +131,7 @@ export default function VtuServicesPage() {
     } finally {
       if (requestId === livePlansRequestId.current) setLoadingLivePlans(false);
     }
-  }, []);
+  }, [dataProvider]);
 
   useEffect(() => {
     let cancelled = false;
@@ -383,7 +385,11 @@ export default function VtuServicesPage() {
   useEffect(() => {
     let cancelled = false;
     const requestId = ++livePlansRequestId.current;
-    managePriceOverrides({ action: "fetch_provider_plans", provider: dataNetwork })
+    managePriceOverrides({
+      action: "fetch_provider_plans",
+      provider: dataNetwork,
+      source_provider: dataProvider,
+    })
       .then((res) => {
         if (cancelled || requestId !== livePlansRequestId.current) return;
         const plans = res.plans || [];
@@ -409,7 +415,7 @@ export default function VtuServicesPage() {
       cancelled = true;
       if (requestId === livePlansRequestId.current) livePlansRequestId.current += 1;
     };
-  }, [dataNetwork]);
+  }, [dataNetwork, dataProvider]);
 
   async function savePlanPrice(plan: ProviderLivePlan) {
     const rawVal = priceDrafts[plan.plan_code] ?? String(plan.selling_price);
@@ -434,6 +440,7 @@ export default function VtuServicesPage() {
       await managePriceOverrides({
         action: "upsert",
         provider: dataNetwork,
+        source_provider: dataProvider,
         plan_code: plan.plan_code,
         price: priceVal,
         enabled: true,
@@ -484,6 +491,7 @@ export default function VtuServicesPage() {
       await managePriceOverrides({
         action: "upsert",
         provider: dataNetwork,
+        source_provider: dataProvider,
         plan_code: plan.plan_code,
         price: currentPrice,
         enabled: newEnabled,
@@ -525,6 +533,7 @@ export default function VtuServicesPage() {
       await managePriceOverrides({
         action: "delete",
         provider: dataNetwork,
+        source_provider: dataProvider,
         plan_code: plan.plan_code,
         reason,
       });
@@ -677,7 +686,7 @@ export default function VtuServicesPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Edit selling prices for data plans returned by VTU Gate. Your custom selling price is deducted from user wallets, and you can turn individual plans on or off anytime.
+              Select a source provider and network to manage that provider’s plans independently. Customer purchases continue to use ALRAHUZDATA.
             </p>
           </div>
           <button
@@ -691,6 +700,36 @@ export default function VtuServicesPage() {
             </span>
             Refresh Plans
           </button>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-600">Provider:</span>
+          {(["VTUGATE", "ALRAHUZDATA"] as const).map((provider) => (
+            <button
+              key={provider}
+              type="button"
+              onClick={() => {
+                if (provider === dataProvider) return;
+                setLoadingLivePlans(true);
+                setLivePlansError(null);
+                setLivePlans([]);
+                setPriceDrafts({});
+                setCapacityDrafts({});
+                setDataProvider(provider);
+              }}
+              aria-pressed={dataProvider === provider}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                dataProvider === provider
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {provider}
+            </button>
+          ))}
+          <span className="text-[11px] text-slate-500">
+            Overrides are saved separately for each provider and network.
+          </span>
         </div>
 
         {/* Network Selector Tabs */}
@@ -780,11 +819,11 @@ export default function VtuServicesPage() {
         {loadingLivePlans ? (
           <div className="mt-6 flex flex-col items-center justify-center py-12 text-slate-500">
             <div className="h-7 w-7 rounded-full border-2 border-primary border-t-transparent animate-spin mb-3" />
-            <p className="text-xs">Fetching live plans from provider for {dataNetwork}...</p>
+            <p className="text-xs">Fetching {dataProvider} plans for {dataNetwork}...</p>
           </div>
         ) : livePlans.length === 0 ? (
           <div className="mt-6 rounded-lg border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
-            No data plans returned from VTU Gate for {dataNetwork}.
+            No data plans returned from {dataProvider} for {dataNetwork}.
           </div>
         ) : (
           <div className="mt-4 divide-y divide-slate-100 overflow-x-auto">
@@ -841,6 +880,9 @@ export default function VtuServicesPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-sm text-slate-900 truncate">{plan.name}</span>
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                              {plan.source_provider}
+                            </span>
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
                               {plan.category}
                             </span>

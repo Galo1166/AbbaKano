@@ -141,7 +141,8 @@ Deno.serve(async (req) => {
     const { data: overrides } = await supabaseAdmin
       .from("price_overrides")
       .select("plan_code, price, enabled, label, display_capacity")
-      .eq("provider", network);
+      .eq("provider", network)
+      .eq("source_provider", "ALRAHUZDATA");
     const overrideMap = new Map(
       (overrides || []).map((row: {
         plan_code: string;

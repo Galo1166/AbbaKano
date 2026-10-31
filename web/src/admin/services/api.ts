@@ -346,6 +346,7 @@ export async function manageAdminVtuPlans(
 export type PriceOverride = {
   id: string;
   provider: "DSTV" | "GOTV" | "STARTIMES" | "MTN" | "AIRTEL" | "GLO" | "9MOBILE";
+  source_provider: "VTUGATE" | "ALRAHUZDATA";
   plan_code: string;
   price: number;
   enabled: boolean;
@@ -357,6 +358,7 @@ export type PriceOverride = {
 export type ProviderLivePlan = {
   plan_code: string;
   service_id: string;
+  source_provider: "VTUGATE" | "ALRAHUZDATA";
   name: string;
   display_capacity: string | null;
   default_display_capacity: string | null;
