@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { fetchAdminSession } from "@admin/services/api";
+import { fetchAdminSession, recordAdminSessionEvent } from "@admin/services/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -54,6 +54,7 @@ export default function LoginPage() {
 
       try {
         await fetchAdminSession();
+        await recordAdminSessionEvent("login");
       } catch (authorizationError) {
         const { error: signOutError } = await supabase.auth.signOut();
         if (signOutError) {

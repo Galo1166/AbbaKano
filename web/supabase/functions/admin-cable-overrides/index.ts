@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordAdminAuditEvent as recordAuditEvent } from "../_shared/admin-audit.ts";
 import { ALRAHUZ_NETWORK_IDS, callAlrahuzApi } from "../_shared/alrahuzdata.ts";
 
 const corsHeaders = {
@@ -17,25 +18,6 @@ function jsonResponse(body: unknown, status = 200) {
 
 function normalizeNetwork(value: unknown): string {
   return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-async function recordAuditEvent(
-  admin: ReturnType<typeof createClient>,
-  userId: string,
-  action: string,
-  details: Record<string, unknown>,
-  request: Request,
-) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const ipAddress = forwardedFor?.split(",")[0]?.trim() || null;
-  const { error } = await admin.from("admin_audit_logs").insert({
-    actor_user_id: userId,
-    actor_role: "SUPER_ADMIN",
-    action,
-    details,
-    ip_address: ipAddress,
-  });
-  if (error) console.error("Could not record audit log:", error);
 }
 
 const supportedProviders = ["DSTV", "GOTV", "STARTIMES", "MTN", "AIRTEL", "GLO", "9MOBILE"];

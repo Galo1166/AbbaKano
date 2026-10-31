@@ -135,8 +135,18 @@ export async function fetchAdminSession(): Promise<AdminSession> {
 }
 
 export async function logoutAdmin(): Promise<void> {
+  let auditError: unknown;
+  try {
+    await recordAdminSessionEvent("logout");
+  } catch (error) {
+    auditError = error;
+  }
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+  if (auditError) {
+    console.error("Admin signed out but the logout audit event could not be saved:", auditError);
+    throw new Error("Signed out, but the logout event could not be saved to the audit log.");
+  }
 }
 
 type BackendTransaction = {
@@ -511,6 +521,12 @@ export async function initiateProviderRefill(
 }
 
 // ─── Audit Logs ───────────────────────────────────────────────
+export async function recordAdminSessionEvent(event: "login" | "logout"): Promise<void> {
+  await invokeSupabaseFunction<{ success: boolean }>("admin-audit-logs", {
+    recordEvent: event,
+  });
+}
+
 function parseAuditDetails(details: unknown): string {
   if (!details) return "Administrative action recorded";
   if (typeof details === "string") {
@@ -552,13 +568,24 @@ function parseAuditDetails(details: unknown): string {
 export async function fetchAuditLogs(
   page = 1,
   pageSize = 20,
-  filters?: { staffName?: string; action?: string; search?: string; stream?: "user" | "admin" }
+  filters?: {
+    staffName?: string;
+    action?: string;
+    search?: string;
+    stream?: "all" | "user" | "admin";
+    from?: string;
+    to?: string;
+    actorRole?: string;
+  }
 ): Promise<PaginatedResponse<AuditLog> & {
-  metrics: { totalEvents: number; depositEvents: number; vtuEvents: number };
+  metrics: { totalEvents: number; depositEvents: number; vtuEvents: number; adminEvents: number };
+  actions: string[];
+  roles: string[];
 }> {
   const response = await invokeSupabaseFunction<{
     auditLogs: Array<{
       id: string;
+      actor_user_id?: string | null;
       action: string;
       details: unknown;
       ip_address?: string | null;
@@ -569,22 +596,29 @@ export async function fetchAuditLogs(
     total: number;
     page: number;
     pageSize: number;
-    metrics: { totalEvents: number; depositEvents: number; vtuEvents: number };
+    actions: string[];
+    roles: string[];
+    metrics: { totalEvents: number; depositEvents: number; vtuEvents: number; adminEvents: number };
   }>("admin-audit-logs", {
     page,
     pageSize,
     action: filters?.action || null,
     search: filters?.search || filters?.staffName || null,
-    stream: filters?.stream || "user",
+    stream: filters?.stream || "all",
+    from: filters?.from || null,
+    to: filters?.to || null,
+    actorRole: filters?.actorRole || null,
   });
 
   const results = response.auditLogs.map((entry) => ({
     id: String(entry.id),
+    actorUserId: entry.actor_user_id || undefined,
     staffName: entry.actor || "System",
     role: (entry.role?.toUpperCase() || "SYSTEM") as AuditLog["role"],
     action: entry.action as AuditLog["action"],
     target: typeof entry.details === "object" && entry.details && "target" in entry.details ? String((entry.details as Record<string, unknown>).target ?? "Admin action") : "Admin action",
     details: parseAuditDetails(entry.details),
+    rawDetails: entry.details,
     device: entry.role?.toUpperCase() === "SYSTEM" ? "Supabase event trigger" : "Admin Console",
     ipAddress: entry.ip_address || undefined,
     timestamp: entry.created_at,
@@ -597,6 +631,8 @@ export async function fetchAuditLogs(
     pageSize: response.pageSize,
     hasNextPage: response.page * response.pageSize < response.total,
     metrics: response.metrics,
+    actions: response.actions,
+    roles: response.roles,
   };
 }
 

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordAdminAuditEvent as recordAuditEvent } from "../_shared/admin-audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,25 +13,6 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-async function recordAuditEvent(
-  admin: ReturnType<typeof createClient>,
-  userId: string,
-  action: string,
-  details: Record<string, unknown>,
-  request: Request,
-) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const ipAddress = forwardedFor?.split(",")[0]?.trim() || null;
-  const { error } = await admin.from("admin_audit_logs").insert({
-    actor_user_id: userId,
-    actor_role: "SUPER_ADMIN",
-    action,
-    details,
-    ip_address: ipAddress,
-  });
-  if (error) throw error;
 }
 
 const networks = ["MTN", "AIRTEL", "GLO", "9MOBILE"];

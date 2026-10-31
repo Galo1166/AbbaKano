@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordAdminAuditEvent } from "../_shared/admin-audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,6 +64,21 @@ Deno.serve(async (req) => {
       return jsonResponse({ message: "Invalid JSON request body." }, 400);
     }
 
+    if (body.recordEvent !== undefined) {
+      if (body.recordEvent !== "login" && body.recordEvent !== "logout") {
+        return jsonResponse({ message: "Invalid admin session event." }, 400);
+      }
+      const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+      await recordAdminAuditEvent(
+        supabaseAdmin,
+        user.id,
+        `admin.${body.recordEvent}`,
+        { userAgent: req.headers.get("user-agent")?.slice(0, 500) || "unknown" },
+        req,
+      );
+      return jsonResponse({ success: true });
+    }
+
     const page = Number.isInteger(body.page) ? Number(body.page) : 1;
     const pageSize = Number.isInteger(body.pageSize) ? Number(body.pageSize) : 30;
     if (page < 1 || pageSize < 1 || pageSize > 100) {
@@ -76,7 +92,26 @@ Deno.serve(async (req) => {
     if (search.length > 120) {
       return jsonResponse({ message: "Search term is too long." }, 400);
     }
-    const stream = body.stream === "admin" ? "admin" : "user";
+    const stream = typeof body.stream === "string" ? body.stream : "all";
+    if (!["all", "admin", "user"].includes(stream)) {
+      return jsonResponse({ message: "Invalid audit stream." }, 400);
+    }
+    const from = typeof body.from === "string" ? body.from : "";
+    const to = typeof body.to === "string" ? body.to : "";
+    const isValidDate = (value: string) =>
+      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+      new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+    if ((from && !isValidDate(from)) || (to && !isValidDate(to))) {
+      return jsonResponse({ message: "Invalid audit date filter." }, 400);
+    }
+    if (from && to && from > to) {
+      return jsonResponse({ message: "The start date must be on or before the end date." }, 400);
+    }
+    const actorRole = typeof body.actorRole === "string" ? body.actorRole.trim().toUpperCase() : "";
+    if (actorRole && !/^[A-Z_]{1,40}$/.test(actorRole)) {
+      return jsonResponse({ message: "Invalid actor role filter." }, 400);
+    }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
     const { data, error } = await supabaseAdmin.rpc("get_admin_audit_logs", {
@@ -85,6 +120,9 @@ Deno.serve(async (req) => {
       p_action: action || null,
       p_search: search || null,
       p_stream: stream,
+      p_from: from || null,
+      p_to: to || null,
+      p_actor_role: actorRole || null,
     });
     if (error) throw error;
     if (
@@ -94,7 +132,10 @@ Deno.serve(async (req) => {
       typeof data.metrics !== "object" ||
       typeof data.metrics.totalEvents !== "number" ||
       typeof data.metrics.depositEvents !== "number" ||
-      typeof data.metrics.vtuEvents !== "number"
+      typeof data.metrics.vtuEvents !== "number" ||
+      typeof data.metrics.adminEvents !== "number" ||
+      !Array.isArray(data.actions) ||
+      !Array.isArray(data.roles)
     ) {
       throw new Error("Audit log query returned an invalid result.");
     }

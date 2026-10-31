@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordAdminAuditEvent } from "../_shared/admin-audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -121,6 +122,11 @@ Deno.serve(async (req) => {
         throw statusUpdateError;
       }
 
+      await recordAdminAuditEvent(supabaseAdmin, user.id, "admin.user_status_changed", {
+        userId,
+        before: profile.status,
+        after: nextStatus,
+      }, req);
       return jsonResponse({ status: nextStatus });
     }
 
