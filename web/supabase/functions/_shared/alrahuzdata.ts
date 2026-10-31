@@ -25,8 +25,20 @@ export interface AlrahuzUserResponse {
     email?: string;
     phone?: string;
     account_type?: string;
+    wallet_balance?: number | string;
+    balance?: number | string;
+    account_number?: string;
+    account_name?: string;
+    bank_name?: string;
+    virtual_account?: Record<string, unknown>;
   };
   wallet_balance?: number | string;
+  balance?: number | string;
+  account_number?: string;
+  account_name?: string;
+  bank_name?: string;
+  virtual_account?: Record<string, unknown>;
+  virtual_accounts?: Array<Record<string, unknown>>;
   status?: string;
   [key: string]: unknown;
 }
