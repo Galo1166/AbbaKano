@@ -84,6 +84,8 @@ npx supabase db push
 
 Required server-side secrets vary by function. Provider and payment credentials must be configured as Supabase Edge Function secrets, not committed to Git. VTUGATE funding-account details are returned by `admin-provider-balances` only when both the account number and account name secrets are configured. Alrahuzdata balance and DVA details are read from its authenticated `/user/` response; `ALRAHUZDATA_DVA_ACCOUNT_NUMBER`, `ALRAHUZDATA_DVA_ACCOUNT_NAME`, and `ALRAHUZDATA_DVA_BANK_NAME` are optional fallbacks when the response omits those fields. `ALRAHUZDATA_LOW_BALANCE_THRESHOLD_NAIRA` is also optional.
 
+Mobile data plan sizes are normalized for customers (for example, `2000 MB` displays as `2.0 GB`, and `0.5 GB` as `500 MB`). Super admins can override each plan's customer display size in **Admin → VTU Services**; leaving the automatic size unchanged keeps the normalized provider value.
+
 ## Admin access
 
 Create an administrator in Supabase Authentication, then set trusted app metadata:

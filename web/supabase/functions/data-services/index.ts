@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createDataPlanToken } from "../_shared/data-plan-token.ts";
 import { ALRAHUZ_NETWORK_IDS, callAlrahuzApi } from "../_shared/alrahuzdata.ts";
+import { applyDisplayCapacity, formatDataCapacity } from "../_shared/data-capacity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -139,12 +140,23 @@ Deno.serve(async (req) => {
     // Batch-load all custom price overrides for this mobile network
     const { data: overrides } = await supabaseAdmin
       .from("price_overrides")
-      .select("plan_code, price, enabled, label")
+      .select("plan_code, price, enabled, label, display_capacity")
       .eq("provider", network);
     const overrideMap = new Map(
-      (overrides || []).map((row: { plan_code: string; price: number; enabled?: boolean; label?: string }) => [
+      (overrides || []).map((row: {
+        plan_code: string;
+        price: number;
+        enabled?: boolean;
+        label?: string;
+        display_capacity?: string | null;
+      }) => [
         row.plan_code,
-        { price: Number(row.price), enabled: row.enabled !== false, label: row.label },
+        {
+          price: Number(row.price),
+          enabled: row.enabled !== false,
+          label: row.label,
+          display_capacity: row.display_capacity || null,
+        },
       ]),
     );
 
@@ -208,9 +220,12 @@ Deno.serve(async (req) => {
               .replace(/\{.*?\}/g, "")
               .replace(/validity/i, "")
               .trim();
-            const displayLabel =
+            const baseLabel =
               override?.label ||
               `${sizeClean} ${planType}${validityClean ? ` - ${validityClean}` : ""}`;
+            const displayCapacity =
+              override?.display_capacity || formatDataCapacity(sizeClean);
+            const displayLabel = applyDisplayCapacity(baseLabel, displayCapacity);
 
             const selectionToken = await createDataPlanToken(
               {

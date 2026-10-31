@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { recordAdminAuditEvent as recordAuditEvent } from "../_shared/admin-audit.ts";
 import { ALRAHUZ_NETWORK_IDS, callAlrahuzApi } from "../_shared/alrahuzdata.ts";
+import { formatDataCapacity } from "../_shared/data-capacity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -207,12 +208,19 @@ Deno.serve(async (req) => {
       // Fetch DB overrides for this provider
       const { data: dbOverrides, error: dbError } = await admin
         .from("price_overrides")
-        .select("id, provider, plan_code, price, enabled, label, updated_at")
+        .select("id, provider, plan_code, price, enabled, label, display_capacity, updated_at")
         .eq("provider", provider);
       if (dbError) throw dbError;
 
       const overrideMap = new Map(
-        (dbOverrides || []).map((row: { plan_code: string; price: number; enabled?: boolean; id: string; label?: string }) => [
+        (dbOverrides || []).map((row: {
+          plan_code: string;
+          price: number;
+          enabled?: boolean;
+          id: string;
+          label?: string;
+          display_capacity?: string | null;
+        }) => [
           row.plan_code,
           row,
         ]),
@@ -228,6 +236,9 @@ Deno.serve(async (req) => {
           plan_code: p.plan_code,
           service_id: p.service_id,
           name: override?.label || p.name,
+          display_capacity: override?.display_capacity || formatDataCapacity(p.name),
+          default_display_capacity: formatDataCapacity(p.name),
+          has_custom_display_capacity: Boolean(override?.display_capacity),
           category: p.category,
           cost_price: p.cost_price,
           selling_price: sellingPrice,
@@ -254,12 +265,21 @@ Deno.serve(async (req) => {
     if (["delete", "upsert"].includes(action) && (reason.length < 5 || reason.length > 500)) {
       return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this price change." }, 400);
     }
+    if (
+      body.display_capacity !== undefined &&
+      body.display_capacity !== null &&
+      (typeof body.display_capacity !== "string" ||
+        body.display_capacity.trim().length > 40 ||
+        !/^\d+(?:\.\d+)?\s*(?:KB|MB|GB|TB)$/i.test(body.display_capacity.trim()))
+    ) {
+      return jsonResponse({ message: "Enter a data size such as 500 MB or 2.0 GB." }, 400);
+    }
 
     // ── 3. DELETE OVERRIDE ────────────────────────────────────
     if (action === "delete") {
       const { data: existing, error: lookupError } = await admin
         .from("price_overrides")
-        .select("id, provider, plan_code, price")
+        .select("id, provider, plan_code, price, display_capacity")
         .eq("provider", provider)
         .eq("plan_code", planCode)
         .maybeSingle();
@@ -271,6 +291,7 @@ Deno.serve(async (req) => {
         provider: existing.provider,
         planCode: existing.plan_code,
         price: existing.price,
+        displayCapacity: existing.display_capacity,
         reason,
       }, req);
       return jsonResponse({ deleted: true });
@@ -282,25 +303,31 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(price) || price <= 0 || price > 1000000) {
         return jsonResponse({ message: "Price must be greater than zero and no more than ₦1,000,000." }, 400);
       }
+      const { data: previous, error: previousError } = await admin
+        .from("price_overrides")
+        .select("provider, plan_code, price, enabled, label, display_capacity")
+        .eq("provider", provider)
+        .eq("plan_code", planCode)
+        .maybeSingle();
+      if (previousError) throw previousError;
+      const displayCapacity = body.display_capacity === undefined
+        ? previous?.display_capacity ?? null
+        : typeof body.display_capacity === "string" && body.display_capacity.trim()
+        ? body.display_capacity.trim()
+        : null;
       const values = {
         provider,
         plan_code: planCode,
         price,
         enabled: typeof body.enabled === "boolean" ? body.enabled : true,
         label: typeof body.label === "string" && body.label.trim() ? body.label.trim() : null,
+        display_capacity: displayCapacity,
         updated_at: new Date().toISOString(),
       };
-      const { data: previous, error: previousError } = await admin
-        .from("price_overrides")
-        .select("provider, plan_code, price, enabled, label")
-        .eq("provider", provider)
-        .eq("plan_code", planCode)
-        .maybeSingle();
-      if (previousError) throw previousError;
       const { data, error } = await admin
         .from("price_overrides")
         .upsert(values, { onConflict: "provider,plan_code" })
-        .select("id, provider, plan_code, price, enabled, label, created_at, updated_at")
+        .select("id, provider, plan_code, price, enabled, label, display_capacity, created_at, updated_at")
         .single();
       if (error) throw error;
       await recordAuditEvent(admin, user.id, "admin.price_override_upserted", {
@@ -310,6 +337,7 @@ Deno.serve(async (req) => {
         after: data,
         price: data.price,
         enabled: data.enabled,
+        displayCapacity: data.display_capacity,
         reason,
       }, req);
       return jsonResponse({ override: data });
