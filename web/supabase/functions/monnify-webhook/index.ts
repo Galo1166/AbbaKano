@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
 
     const destinationAcc = eventData.destinationAccountInformation;
     const accountNumber = String(destinationAcc?.accountNumber || "").trim();
-    const bankName = String(destinationAcc?.bankName || "Monnify Bank").trim();
+    const bankName = String(destinationAcc?.bankName || "").trim();
     const productRef = String(eventData.product?.reference || "").trim();
 
     // Find the user by account number or account reference
@@ -115,6 +115,8 @@ Deno.serve(async (req) => {
       );
     }
 
+    const destinationBankName = bankName || userAccount.bank_name || "Monnify Bank";
+
     // Atomically credit user wallet
     const { data: result, error: processError } = await supabaseAdmin.rpc(
       "process_monnify_dva_deposit",
@@ -123,9 +125,13 @@ Deno.serve(async (req) => {
         p_amount_kobo: amountKobo,
         p_provider_reference: transactionReference,
         p_payment_reference: paymentReference,
-        p_bank_name: bankName || userAccount.bank_name,
+        p_bank_name: destinationBankName,
         p_account_number: accountNumber || userAccount.account_number,
-        p_metadata: eventData,
+        p_metadata: {
+          ...eventData,
+          dedicated_account_number: accountNumber || userAccount.account_number,
+          virtual_account_bank_name: destinationBankName,
+        },
       },
     );
 

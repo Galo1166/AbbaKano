@@ -126,6 +126,9 @@ Create an administrator in Supabase Authentication, then set trusted app metadat
 
 Open `/admin/login`. The admin portal rejects accounts without the `super_admin` app-metadata role. Do not store this role in editable user metadata.
 
+See the repository's [Admin Guide](../admin.md) for a description of admin
+sections, workflows, and operating guidance.
+
 ## Authentication and passkeys
 
 - Browser sessions are managed by Supabase Auth.
