@@ -4,7 +4,7 @@ import Link from "next/link";
 
 const SUPPORT_WHATSAPP = "2348133339850";
 const SUPPORT_PHONE = "+2348133339850";
-const SUPPORT_PHONE_DISPLAY = "0813 333 9850";
+const SUPPORT_PHONE_DISPLAY = "+234 8133339850";
 const SUPPORT_EMAIL = "abbakanocommunicationcenter@gmail.com";
 const COMMUNITY_URL = "https://chat.whatsapp.com/DEpJ8XD2yWy1lKyLEHj4Di";
 
