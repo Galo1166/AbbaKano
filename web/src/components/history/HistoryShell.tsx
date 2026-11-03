@@ -59,6 +59,12 @@ function transactionCategory(transaction: Transaction) {
   return "Other";
 }
 
+function isCreditTransaction(transaction: Transaction) {
+  const type = transaction.type?.toLowerCase();
+  return transactionCategory(transaction) === "Wallet Deposits" ||
+    (type === "adjustment" && transaction.metadata?.direction === "credit");
+}
+
 function displayTitle(transaction: Transaction) {
   return transaction.label || (transaction.type || "Wallet Transaction").replaceAll("_", " ");
 }
@@ -336,12 +342,12 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
     return matchesFilter && matchesStatus && haystack.includes(search.toLowerCase());
   });
 
-  const successfulDeposits = transactions.filter(
-    (transaction) => transactionCategory(transaction) === "Wallet Deposits" && normalizedStatus(transaction.status) === "success",
+  const successfulCredits = transactions.filter(
+    (transaction) => isCreditTransaction(transaction) && normalizedStatus(transaction.status) === "success",
   );
-  const inflow = successfulDeposits.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const inflow = successfulCredits.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
   const successfulDebits = transactions.filter(
-    (transaction) => transactionCategory(transaction) !== "Wallet Deposits" && normalizedStatus(transaction.status) === "success",
+    (transaction) => !isCreditTransaction(transaction) && normalizedStatus(transaction.status) === "success",
   );
   const outflow = successfulDebits.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
 
@@ -410,7 +416,7 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
               <p className={`mt-0.5 font-mono text-lg font-black ${isDark ? "text-white" : "text-slate-900"}`}>
                 {formatNaira(inflow)}
               </p>
-              <p className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{successfulDeposits.length} deposits</p>
+              <p className={`text-[10px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>{successfulCredits.length} credits</p>
             </div>
           </div>
         </section>
@@ -487,7 +493,7 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
           {!loading && filtered.map((tx) => {
             const category = transactionCategory(tx);
             const txStatus = normalizedStatus(tx.status);
-            const isCredit = category === "Wallet Deposits";
+            const isCredit = isCreditTransaction(tx);
             const iconTheme = getIconTheme(category, tx.network);
 
             return (
@@ -570,8 +576,10 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
               isDark ? "bg-[#181B25] border-[#222634]" : "bg-slate-50 border-slate-200"
             }`}>
               <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Total Amount</span>
-              <p className={`mt-0.5 font-mono text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>
-                {formatNaira(Number(selected.amount || 0))}
+              <p className={`mt-0.5 font-mono text-2xl font-black ${
+                isCreditTransaction(selected) ? "text-emerald-500" : isDark ? "text-white" : "text-slate-900"
+              }`}>
+                {isCreditTransaction(selected) ? "+" : "-"}{formatNaira(Number(selected.amount || 0))}
               </p>
             </div>
           )}

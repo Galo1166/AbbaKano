@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adjustCustomerWallet, fetchCustomers, updateCustomerStatus } from "@admin/services/api";
 import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge from "@admin/components/ui/Badge";
@@ -23,7 +23,14 @@ export default function UsersPage() {
   const [adjustmentDirection, setAdjustmentDirection] = useState<"credit" | "debit">("credit");
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
+  const [walletAdjustmentSuccess, setWalletAdjustmentSuccess] = useState<{
+    direction: "credit" | "debit";
+    amount: number;
+    balance: number;
+  } | null>(null);
+  const walletAdjustmentInFlight = useRef(false);
   const [statusChangeReason, setStatusChangeReason] = useState("");
+  const [showBlockReason, setShowBlockReason] = useState(false);
   const PAGE_SIZE = 15;
   const requestKey = JSON.stringify([page, search, statusFilter]);
   const loading = loadedRequestKey !== requestKey;
@@ -66,17 +73,18 @@ export default function UsersPage() {
   async function handleStatusChange() {
     if (!selectedUser) return;
     const reason = statusChangeReason.trim();
-    if (reason.length < 5) {
-      setActionError("Enter a reason of at least 5 characters for this status change.");
+    const nextStatus = selectedUser.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
+    if (nextStatus === "BLOCKED" && reason.length < 5) {
+      setActionError("Enter a reason of at least 5 characters before blocking this account.");
       return;
     }
-    const nextStatus = selectedUser.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
     setActionLoading(true);
     setActionError(null);
     try {
-      await updateCustomerStatus(selectedUser.id, nextStatus, reason);
+      await updateCustomerStatus(selectedUser.id, nextStatus, reason || undefined);
       setSelectedUser({ ...selectedUser, status: nextStatus });
       setStatusChangeReason("");
+      setShowBlockReason(false);
       showToast(`Account ${nextStatus === "BLOCKED" ? "blocked" : "unblocked"} successfully.`);
       setRefreshCount((count) => count + 1);
     } catch (error) {
@@ -88,30 +96,41 @@ export default function UsersPage() {
 
   async function handleWalletAdjustment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedUser) return;
+    if (!selectedUser || walletAdjustmentInFlight.current || walletAdjustmentSuccess) return;
     if (adjustmentReason.trim().length < 5) {
       setActionError("Enter a reason of at least 5 characters for this wallet adjustment.");
       return;
     }
+    walletAdjustmentInFlight.current = true;
     setActionLoading(true);
     setActionError(null);
+    const direction = adjustmentDirection;
+    const amount = Number(adjustmentAmount);
     try {
       const result = await adjustCustomerWallet(
         selectedUser.id,
-        Number(adjustmentAmount),
-        adjustmentDirection,
+        amount,
+        direction,
         adjustmentReason.trim(),
       );
       setSelectedUser({ ...selectedUser, walletBalance: result.balance });
       setAdjustmentAmount("");
       setAdjustmentReason("");
-      showToast(`Wallet ${adjustmentDirection} completed. New balance: ${formatNaira(result.balance)}.`);
+      setWalletAdjustmentSuccess({ direction, amount, balance: result.balance });
       setRefreshCount((count) => count + 1);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not adjust wallet balance.");
     } finally {
+      walletAdjustmentInFlight.current = false;
       setActionLoading(false);
     }
+  }
+
+  function openUserInspect(user: CustomerUser) {
+    setWalletAdjustmentSuccess(null);
+    setShowBlockReason(false);
+    setStatusChangeReason("");
+    setSelectedUser(user);
   }
 
   return (
@@ -292,7 +311,16 @@ export default function UsersPage() {
                 {users.map((user) => (
                   <tr
                     key={user.id}
-                    className="hover:bg-slate-50/60 transition-colors"
+                    onClick={() => openUserInspect(user)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openUserInspect(user);
+                      }
+                    }}
+                    tabIndex={0}
+                    aria-label={`Inspect ${user.name}`}
+                    className="cursor-pointer hover:bg-slate-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary transition-colors"
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -339,7 +367,10 @@ export default function UsersPage() {
                     </td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       <button
-                        onClick={() => setSelectedUser(user)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openUserInspect(user);
+                        }}
                         className="px-2.5 py-1 rounded-md text-xs font-semibold text-primary hover:bg-slate-100 transition-colors cursor-pointer"
                         id={`btn-view-user-${user.id}`}
                       >
@@ -382,27 +413,37 @@ export default function UsersPage() {
 
       {/* User Details Modal */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-slide-up">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-2 backdrop-blur-xs animate-fade-in sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="selected-user-title"
+            className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-slide-up"
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 p-5">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-sm">
                   {selectedUser.name.charAt(0)}
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900">{selectedUser.name}</h3>
+                  <h3 id="selected-user-title" className="font-bold text-sm text-slate-900">{selectedUser.name}</h3>
                   <p className="text-xs text-slate-400 font-mono">{selectedUser.email}</p>
                 </div>
               </div>
               <button
-                onClick={() => setSelectedUser(null)}
+                onClick={() => {
+                  setWalletAdjustmentSuccess(null);
+                  setShowBlockReason(false);
+                  setStatusChangeReason("");
+                  setSelectedUser(null);
+                }}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain p-5">
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">
@@ -457,7 +498,21 @@ export default function UsersPage() {
 
               <button
                 type="button"
-                onClick={() => void handleStatusChange()}
+                onClick={() => {
+                  if (selectedUser.status === "ACTIVE") {
+                    if (showBlockReason) {
+                      setShowBlockReason(false);
+                      setStatusChangeReason("");
+                      setActionError(null);
+                    } else {
+                      setShowBlockReason(true);
+                      setStatusChangeReason("");
+                      setActionError(null);
+                    }
+                  } else {
+                    void handleStatusChange();
+                  }
+                }}
                 disabled={actionLoading}
                 className={`w-full px-3 py-2 rounded-lg text-xs font-semibold border disabled:opacity-50 ${
                   selectedUser.status === "ACTIVE"
@@ -465,78 +520,134 @@ export default function UsersPage() {
                     : "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
                 }`}
               >
-                {actionLoading ? "Please wait..." : selectedUser.status === "ACTIVE" ? "Block account" : "Unblock account"}
+                {actionLoading
+                  ? "Please wait..."
+                  : selectedUser.status === "ACTIVE"
+                    ? showBlockReason ? "Cancel block" : "Block account"
+                    : "Unblock account"}
               </button>
-              <label className="block space-y-1.5 text-xs font-semibold text-slate-700">
-                Reason for status change <span className="text-rose-600">*</span>
-                <textarea
-                  value={statusChangeReason}
-                  onChange={(event) => setStatusChangeReason(event.target.value)}
-                  maxLength={500}
-                  rows={2}
-                  placeholder="Explain why this account is being blocked or unblocked"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-normal outline-none focus:border-primary"
-                />
-              </label>
-
-              <form onSubmit={handleWalletAdjustment} className="space-y-2 border-t border-slate-100 pt-4">
-                <h4 className="text-xs font-bold text-slate-800">Adjust wallet balance</h4>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="text-[11px] text-slate-600">
-                    Action
-                    <select
-                      value={adjustmentDirection}
-                      onChange={(event) => setAdjustmentDirection(event.target.value as "credit" | "debit")}
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs"
-                    >
-                      <option value="credit">Credit</option>
-                      <option value="debit">Debit</option>
-                    </select>
-                  </label>
-                  <label className="text-[11px] text-slate-600">
-                    Amount (₦)
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      required
-                      value={adjustmentAmount}
-                      onChange={(event) => setAdjustmentAmount(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"
-                      placeholder="0.00"
+              {showBlockReason && selectedUser.status === "ACTIVE" && (
+                <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
+                  <label className="block space-y-1.5 text-xs font-semibold text-slate-700">
+                    Reason for blocking this account <span className="text-rose-600">*</span>
+                    <textarea
+                      value={statusChangeReason}
+                      onChange={(event) => setStatusChangeReason(event.target.value)}
+                      maxLength={500}
+                      rows={2}
+                      placeholder="Explain why this account is being blocked"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-normal outline-none focus:border-primary"
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleStatusChange()}
+                    disabled={actionLoading}
+                    className="w-full rounded-lg bg-rose-700 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-800 disabled:opacity-50"
+                  >
+                    {actionLoading ? "Please wait..." : "Confirm block account"}
+                  </button>
                 </div>
-                <label className="block text-[11px] text-slate-600">
-                  Reason <span className="text-rose-600">*</span>
-                  <input
-                    required
-                    maxLength={500}
-                    value={adjustmentReason}
-                    onChange={(event) => setAdjustmentReason(event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"
-                    placeholder="Reason for adjustment"
-                  />
-                </label>
-                <button
-                  type="submit"
+              )}
+
+              <form onSubmit={handleWalletAdjustment} className="space-y-2 border-t border-slate-100 pt-4">
+                <fieldset
                   disabled={actionLoading}
-                  className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                  className="space-y-2 border-0 p-0 disabled:opacity-60"
                 >
-                  {actionLoading ? "Processing..." : `${adjustmentDirection === "credit" ? "Credit" : "Debit"} wallet`}
-                </button>
+                  <h4 className="text-xs font-bold text-slate-800">Adjust wallet balance</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-[11px] text-slate-600">
+                      Action
+                      <select
+                        value={adjustmentDirection}
+                        onChange={(event) => setAdjustmentDirection(event.target.value as "credit" | "debit")}
+                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs"
+                      >
+                        <option value="credit">Credit</option>
+                        <option value="debit">Debit</option>
+                      </select>
+                    </label>
+                    <label className="text-[11px] text-slate-600">
+                      Amount (₦)
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        required
+                        value={adjustmentAmount}
+                        onChange={(event) => setAdjustmentAmount(event.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"
+                        placeholder="0.00"
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-[11px] text-slate-600">
+                    Reason <span className="text-rose-600">*</span>
+                    <input
+                      required
+                      maxLength={500}
+                      value={adjustmentReason}
+                      onChange={(event) => setAdjustmentReason(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs"
+                      placeholder="Reason for adjustment"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {actionLoading ? "Processing..." : `${adjustmentDirection === "credit" ? "Credit" : "Debit"} wallet`}
+                  </button>
+                </fieldset>
               </form>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <div className="flex shrink-0 justify-end border-t border-slate-100 bg-slate-50 p-4">
               <button
                 type="button"
-                onClick={() => setSelectedUser(null)}
+                onClick={() => {
+                  setWalletAdjustmentSuccess(null);
+                  setShowBlockReason(false);
+                  setStatusChangeReason("");
+                  setSelectedUser(null);
+                }}
                 className="px-3.5 py-2 rounded-lg text-xs font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {walletAdjustmentSuccess && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wallet-adjustment-success-title"
+            className="w-full max-w-sm space-y-4 rounded-2xl border border-emerald-200 bg-white p-6 text-center shadow-xl"
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <span className="material-symbols-outlined text-3xl">check_circle</span>
+            </div>
+            <div className="space-y-1">
+              <h3 id="wallet-adjustment-success-title" className="text-base font-bold text-slate-900">
+                Wallet {walletAdjustmentSuccess.direction === "credit" ? "credited" : "debited"} successfully.
+              </h3>
+              <p className="text-sm text-slate-600">
+                {formatNaira(walletAdjustmentSuccess.amount)} processed. New balance:{" "}
+                {formatNaira(walletAdjustmentSuccess.balance)}.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWalletAdjustmentSuccess(null)}
+              className="w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

@@ -346,7 +346,7 @@ export async function manageAdminVtuPlans(
 export type PriceOverride = {
   id: string;
   provider: "DSTV" | "GOTV" | "STARTIMES" | "MTN" | "AIRTEL" | "GLO" | "9MOBILE";
-  source_provider: "VTUGATE" | "ALRAHUZDATA";
+  source_provider: "VTUGATE" | "ALRAHUZDATA" | "BILALSADASUB";
   plan_code: string;
   price: number;
   enabled: boolean;
@@ -358,7 +358,7 @@ export type PriceOverride = {
 export type ProviderLivePlan = {
   plan_code: string;
   service_id: string;
-  source_provider: "VTUGATE" | "ALRAHUZDATA";
+  source_provider: "VTUGATE" | "ALRAHUZDATA" | "BILALSADASUB";
   name: string;
   display_capacity: string | null;
   default_display_capacity: string | null;
@@ -783,13 +783,13 @@ export async function fetchCustomers(
 export async function updateCustomerStatus(
   customerId: string,
   status: "ACTIVE" | "BLOCKED",
-  reason: string,
+  reason?: string,
 ): Promise<void> {
   await invokeSupabaseFunction("admin-users", {
     action: "update_status",
     userId: customerId,
     status: status.toLowerCase(),
-    reason,
+    ...(reason ? { reason } : {}),
   });
 }
 

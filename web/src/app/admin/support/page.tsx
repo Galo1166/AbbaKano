@@ -6,6 +6,7 @@ import { formatNaira, formatTimeAgo } from "@admin/lib/utils";
 import Badge from "@admin/components/ui/Badge";
 import PageHeader from "@admin/components/layout/PageHeader";
 import type { SupportCase } from "@admin/types/telecom";
+import { ApiError } from "@/lib/api";
 
 const priorityVariant = (p: string) =>
   p === "URGENT" ? "critical" : p === "HIGH" ? "failed" : p === "MEDIUM" ? "pending" : "neutral";
@@ -23,14 +24,38 @@ export default function SupportPage() {
   const [creditLoading, setCreditLoading] = useState(false);
   const [creditSuccess, setCreditSuccess] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRequest, setLoadRequest] = useState(0);
 
   useEffect(() => {
-    fetchSupportCases().then((data) => {
-      setCases(data);
-      if (data.length > 0) setSelected(data[0]);
-      setLoading(false);
-    });
-  }, []);
+    let cancelled = false;
+    fetchSupportCases()
+      .then((data) => {
+        if (cancelled) return;
+        setCases(data);
+        setSelected(data[0] || null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setCases([]);
+        setSelected(null);
+        setLoadError(
+          error instanceof ApiError
+            ? error.status === 502
+              ? "Could not load support cases (HTTP 502). The web service could not reach its admin backend; verify BACKEND_URL and check the web service logs."
+              : `Could not load support cases (HTTP ${error.status}). Check the admin backend logs and try again.`
+            : error instanceof Error
+            ? error.message
+            : "Could not load support cases. Check the admin backend connection and try again.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadRequest]);
 
   const [creditError, setCreditError] = useState<string | null>(null);
 
@@ -124,6 +149,22 @@ export default function SupportPage() {
           <span>{actionNotice}</span>
         </div>
       )}
+      {loadError && (
+        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between" role="alert">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              setLoadError(null);
+              setLoadRequest((request) => request + 1);
+            }}
+            className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-800 hover:bg-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Two-panel layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -177,6 +218,11 @@ export default function SupportPage() {
                   </div>
                 </button>
               ))}
+              {cases.length === 0 && !loadError && (
+                <p className="px-5 py-10 text-center text-sm text-on-surface-variant">
+                  No support cases are currently available.
+                </p>
+              )}
             </div>
           )}
         </div>

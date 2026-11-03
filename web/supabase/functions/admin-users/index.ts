@@ -89,8 +89,16 @@ Deno.serve(async (req) => {
       if (!/^[0-9a-f-]{36}$/i.test(userId) || !["active", "blocked"].includes(nextStatus)) {
         return jsonResponse({ message: "Invalid account status update." }, 400);
       }
-      if (reason.length < 5 || reason.length > 500) {
-        return jsonResponse({ message: "Enter a reason of 5 to 500 characters for this status change." }, 400);
+      if (
+        (nextStatus === "blocked" && reason.length < 5) ||
+        reason.length > 500 ||
+        (nextStatus === "active" && reason.length > 0 && reason.length < 5)
+      ) {
+        return jsonResponse({
+          message: nextStatus === "blocked"
+            ? "Enter a reason of 5 to 500 characters for blocking this account."
+            : "Enter a reason of at least 5 characters or leave it blank for unblocking.",
+        }, 400);
       }
 
       const { data: profile, error: profileError } = await supabaseAdmin
@@ -130,7 +138,7 @@ Deno.serve(async (req) => {
         userId,
         before: profile.status,
         after: nextStatus,
-        reason,
+        ...(reason ? { reason } : {}),
       }, req);
       return jsonResponse({ status: nextStatus });
     }

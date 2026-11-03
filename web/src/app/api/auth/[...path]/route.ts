@@ -25,7 +25,11 @@ async function proxy(request: NextRequest, context: RouteContext) {
   let response: Response;
   try {
     response = await fetch(target, { method: request.method, headers, body, redirect: "manual" });
-  } catch {
+  } catch (error) {
+    console.error(
+      `Backend proxy request failed for ${request.method} /${path.join("/")}:`,
+      error,
+    );
     return NextResponse.json({ message: "Could not reach the backend. Check BACKEND_URL on the web service." }, { status: 502 });
   }
   const responseHeaders = new Headers();
