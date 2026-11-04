@@ -19,8 +19,6 @@ function useLocationSearch() {
   );
 }
 
-
-
 export function RegisterForm() {
   const router = useRouter();
   const referralCodeFromUrl =
@@ -45,8 +43,6 @@ export function RegisterForm() {
   const [showConfirmPin, setShowConfirmPin] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(false);
-
-  
 
   function updateValue(name: keyof typeof values, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -85,7 +81,15 @@ export function RegisterForm() {
       router.push("/login");
     } catch (error) {
       console.error("Registration error:", error);
-      if (error instanceof Error && /referral.*(?:not found|invalid)/i.test(error.message)) {
+      const msg = error instanceof Error ? error.message : "";
+      const lower = msg.toLowerCase();
+      if (lower.includes("phone") && (lower.includes("already exists") || lower.includes("already registered") || lower.includes("taken"))) {
+        setErrorMessage(`An account with phone number ${values.phone} is already registered. Please sign in instead.`);
+      } else if (lower.includes("email") && (lower.includes("already") || lower.includes("registered") || lower.includes("taken"))) {
+        setErrorMessage(`An account with email ${values.email} is already registered. Please sign in instead.`);
+      } else if (lower.includes("already registered") || lower.includes("already exists")) {
+        setErrorMessage("This email or phone number is already registered. Please sign in instead.");
+      } else if (/referral.*(?:not found|invalid)/i.test(msg)) {
         setErrorMessage("");
         showErrorToast("Invalid referral code. Please check the phone number and try again.");
       } else {
@@ -96,17 +100,37 @@ export function RegisterForm() {
     }
   }
 
+  const isAlreadyRegistered = Boolean(
+    errorMessage &&
+    (errorMessage.toLowerCase().includes("already registered") ||
+      errorMessage.toLowerCase().includes("already exists") ||
+      errorMessage.toLowerCase().includes("sign in instead"))
+  );
+
   return (
     <form className="space-y-4 text-left" onSubmit={handleSubmit}>
       {errorMessage && (
         <div
-          className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold text-red-500 flex items-start gap-2"
+          className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold text-red-500 flex flex-col gap-2"
           role="alert"
         >
-          <svg className="h-4 w-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>{errorMessage}</span>
+          <div className="flex items-start gap-2">
+            <svg className="h-4 w-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="leading-relaxed">{errorMessage}</span>
+          </div>
+          {isAlreadyRegistered && (
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 self-start rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-500 transition-colors cursor-pointer"
+            >
+              <span>Sign In to Your Account</span>
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </Link>
+          )}
         </div>
       )}
 
@@ -151,22 +175,28 @@ export function RegisterForm() {
           Email Address
         </label>
         <input
+          type="email"
           value={values.email}
           onChange={(event) => updateValue("email", event.target.value)}
-          placeholder="name@domain.com"
+          placeholder="you@example.com"
           autoComplete="email"
-          type="email"
           className="w-full h-12 rounded-xl border border-[var(--border-high)] bg-[var(--surface-high)] px-3.5 text-base sm:text-sm font-medium text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all"
         />
       </div>
 
-      {/* Password & Live Strength Meter */}
+      {/* Password & Live Strength Indicator */}
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="text-xs font-bold text-[var(--text)]">
             Account Password
           </label>
-          
+          {values.password.length > 0 && (
+            <span className={`text-[11px] font-bold ${values.password.length >= 8 ? 'text-emerald-500' : 'text-amber-500'}`}>
+              {values.password.length >= 8
+                ? '✓ 8+ chars (Strong)'
+                : `${8 - values.password.length} more char${8 - values.password.length === 1 ? '' : 's'} needed`}
+            </span>
+          )}
         </div>
         <div className="relative flex items-center">
           <input
@@ -231,7 +261,7 @@ export function RegisterForm() {
         </div>
       </div>
 
-      {/* 4-Digit Transaction PIN: Responsive layout (stacked on mobile, side-by-side on tablet/desktop), SVG Eye Toggle */}
+      {/* 4-Digit Transaction PIN */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         <div>
           <label className="block text-xs font-bold text-[var(--text)] mb-1">

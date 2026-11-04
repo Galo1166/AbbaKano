@@ -198,7 +198,7 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
         </p>
 
         {/* Accounts List OR NIN Verification View */}
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[82vh] overflow-y-auto pr-1">
           {loading ? (
             <div className="flex items-center justify-center py-12 gap-2 text-xs text-slate-400">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />

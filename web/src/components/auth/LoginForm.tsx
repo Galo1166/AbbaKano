@@ -72,8 +72,8 @@ export function LoginForm() {
         return;
       }
       setErrorMessage(
-        error instanceof Error && error.message === "Invalid login credentials"
-          ? "Phone number/email or password is incorrect."
+        error instanceof Error && (error.message === "Invalid login credentials" || error.message.toLowerCase().includes("invalid_grant") || error.message.toLowerCase().includes("invalid login"))
+          ? "Incorrect email/phone number or password. Please verify your login details and try again."
           : error instanceof Error
             ? error.message
             : "Could not sign in."
