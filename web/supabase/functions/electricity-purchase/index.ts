@@ -388,7 +388,24 @@ Deno.serve(async (req) => {
     }
 
     const token = String(providerData?.token || providerPayload?.token || "").trim();
-    const units = String(providerData?.units || providerPayload?.units || "").trim();
+    const rawUnits = String(
+      providerData?.units ||
+      providerPayload?.units ||
+      providerData?.unit ||
+      providerPayload?.unit ||
+      providerData?.token_units ||
+      providerPayload?.token_units ||
+      providerData?.purchased_units ||
+      providerPayload?.purchased_units ||
+      providerData?.kwh ||
+      providerPayload?.kwh ||
+      ""
+    ).trim();
+    const formattedUnits = rawUnits
+      ? rawUnits.toLowerCase().includes("kwh")
+        ? rawUnits
+        : `${rawUnits} kWh`
+      : undefined;
 
     return jsonResponse({
       status: "success",
@@ -396,7 +413,7 @@ Deno.serve(async (req) => {
       reference: providerReference,
       balance_kobo: settlement?.balance_after_kobo,
       token: token || undefined,
-      units: units || undefined,
+      units: formattedUnits,
     });
   } catch (error) {
     console.error("electricity-purchase error:", error);
