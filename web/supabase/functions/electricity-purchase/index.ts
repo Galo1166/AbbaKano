@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
     if (
       !selection ||
       selection.accountNumber !== meterNumber ||
-      selection.planCode !== "prepaid" ||
+      (selection.planCode !== "prepaid" && !selection.planCode.endsWith(":prepaid")) ||
       selection.price !== 0
     ) {
       return jsonResponse(

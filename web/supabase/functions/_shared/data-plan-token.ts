@@ -87,7 +87,7 @@ export async function verifyDataPlanToken(
         !(
           ["AEDC", "IKEDC", "KEDCO", "PHED", "JED"].includes(selection.network) &&
           selection.price === 0 &&
-          selection.planCode.endsWith(":prepaid") &&
+          (selection.planCode === "prepaid" || selection.planCode.endsWith(":prepaid")) &&
           Boolean(selection.accountNumber)
         )) ||
       selection.price > 100000 ||
