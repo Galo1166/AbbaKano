@@ -6,6 +6,7 @@ const services = [
   { title: "Data bundles", description: "Browse data plans for MTN, Airtel, Glo, and 9mobile.", href: "/data", symbol: "wifi" },
   { title: "Electricity", description: "Pay prepaid and postpaid electricity bills.", href: "/electricity", symbol: "bolt" },
   { title: "Cable TV", description: "Renew DStv, GOtv, and Startimes subscriptions.", href: "/cable-tv", symbol: "live_tv" },
+  { title: "Education PINs", description: "Buy examination pins and vouchers.", href: "/education", symbol: "school" },
 ];
 
 export default function ServicesPage() {

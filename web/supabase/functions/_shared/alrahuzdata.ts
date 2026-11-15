@@ -79,10 +79,19 @@ export async function callAlrahuzApi<T = AlrahuzApiResponse>(
     token: string;
     body?: Record<string, unknown>;
     timeoutMs?: number;
+    baseUrl?: string;
   },
 ): Promise<{ ok: boolean; status: number; data: T | null; error?: string }> {
-  const { method = "GET", token, body, timeoutMs = 30000 } = options;
-  const url = `${ALRAHUZ_BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+  const {
+    method = "GET",
+    token,
+    body,
+    timeoutMs = 30000,
+    baseUrl = ALRAHUZ_BASE_URL,
+  } = options;
+  const url = `${baseUrl.replace(/\/+$/, "")}${
+    endpoint.startsWith("/") ? "" : "/"
+  }${endpoint}`;
 
   const headers: Record<string, string> = {
     Authorization: `Token ${token.trim()}`,
@@ -106,11 +115,12 @@ export async function callAlrahuzApi<T = AlrahuzApiResponse>(
 
     if (!response.ok) {
       const errObj = data as Record<string, unknown> | null;
-      const errorMsg =
-        (typeof errObj?.detail === "string" && errObj.detail) ||
+      const errorMsg = (typeof errObj?.detail === "string" && errObj.detail) ||
         (typeof errObj?.message === "string" && errObj.message) ||
         (typeof errObj?.msg === "string" && errObj.msg) ||
-        (errObj?.error ? JSON.stringify(errObj.error) : `HTTP ${response.status}`);
+        (errObj?.error
+          ? JSON.stringify(errObj.error)
+          : `HTTP ${response.status}`);
 
       return {
         ok: false,

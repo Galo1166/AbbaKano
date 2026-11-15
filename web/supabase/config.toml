@@ -195,3 +195,13 @@ entrypoint = "./functions/virtual-accounts/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/billstack-backfill/index.ts"
+
+[functions.education-services]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/education-services/index.ts"
+
+[functions.education-purchase]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/education-purchase/index.ts"
