@@ -16,7 +16,7 @@ const BILLSTACK_BANKS = ["9PSB", "SAFEHAVEN", "PROVIDUS", "PALMPAY"] as const;
 export type BillstackBank = (typeof BILLSTACK_BANKS)[number];
 
 export async function getBillstackConfig(
-  supabaseAdmin?: ReturnType<typeof createClient>,
+  supabaseAdmin?: ReturnType<typeof createClient<any>>,
 ): Promise<BillstackConfig | null> {
   let secretKey = Deno.env.get("BILLSTACK_SECRET_KEY")?.trim() || "";
 
@@ -45,7 +45,7 @@ export async function getBillstackConfig(
 }
 
 export async function createBillstackVirtualAccount(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: ReturnType<typeof createClient<any>>,
   config: BillstackConfig,
   user: { id: string; fullName: string; email: string; phone: string },
   bank: BillstackBank,

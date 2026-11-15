@@ -190,3 +190,8 @@ entrypoint = "./functions/billstack-webhook/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/virtual-accounts/index.ts"
+
+[functions.billstack-backfill]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billstack-backfill/index.ts"

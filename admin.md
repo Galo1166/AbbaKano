@@ -67,3 +67,11 @@ function, then apply the Billstack virtual-account migration and register
 Billstack dashboard under **Developer → Webhooks**. Accounts are created for
 9PSB, Safehaven, and Providus; PalmPay accounts are also requested when the
 customer supplies a valid BVN or NIN. Existing Monnify accounts are retained.
+
+To provision Billstack accounts for existing customers, apply the
+`20261115080000_billstack_backfill.sql` migration and deploy the
+`billstack-backfill` Edge Function. A super-admin can then open
+**Settings → Billstack Accounts** to start or resume the audited backfill.
+It processes customers in small batches, preserves existing accounts, and
+reports failed users. It provisions 9PSB, Safehaven, and Providus only; PalmPay
+requires each customer to provide a BVN or NIN.
