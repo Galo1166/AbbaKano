@@ -181,6 +181,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/monnify-webhook/index.ts"
 
+[functions.billstack-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billstack-webhook/index.ts"
+
 [functions.virtual-accounts]
 enabled = true
 verify_jwt = false

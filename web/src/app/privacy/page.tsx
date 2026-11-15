@@ -27,7 +27,7 @@ export default function PrivacyPage() {
       <section className="space-y-3 border-t border-[var(--border)] pt-6">
         <h2 className="text-xl font-bold text-[var(--text)]">When Information Is Shared</h2>
         <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
-          We share information with service providers solely as required to operate AbbaKano DataSub and complete transactions - specifically payment infrastructure (Monnify/Paystack), telecom operators (MTN, Airtel, Glo, 9mobile), and utility DISCO networks. We never sell your personal information to third parties.
+          We share information with service providers solely as required to operate AbbaKano DataSub and complete transactions - specifically payment infrastructure (Monnify/Billstack/Paystack), telecom operators (MTN, Airtel, Glo, 9mobile), and utility DISCO networks. We never sell your personal information to third parties.
         </p>
       </section>
 

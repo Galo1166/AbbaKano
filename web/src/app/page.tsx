@@ -23,7 +23,7 @@ export default function Home() {
         {/* 3. Complete VTU Services Suite */}
         <ServicesGrid />
 
-        {/* 4. Automated Virtual Account Funding (Monnify 3-Bank Engine) */}
+        {/* 4. Automated Virtual Account Funding */}
         <VirtualAccountsFunding />
 
         {/* 5. Step-by-Step How It Works Progression */}

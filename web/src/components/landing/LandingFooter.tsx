@@ -187,7 +187,7 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li className="pt-2 text-xs leading-relaxed text-[var(--text-muted)] font-medium">
-                Protected by end-to-end 256-bit encryption. Automated banking engine by Monnify and Paystack.
+                Protected by end-to-end 256-bit encryption. Automated banking engine by Monnify, Billstack, and Paystack.
               </li>
             </ul>
           </div>

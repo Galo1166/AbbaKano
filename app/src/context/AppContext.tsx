@@ -5,7 +5,6 @@ import {
   TransactionRecord,
   KycTierInfo,
   MOCK_KYC_TIERS,
-  MOCK_VIRTUAL_ACCOUNTS,
 } from '@/constants/mockData';
 import { getPalette, setActiveThemeMode, PaletteType } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +19,10 @@ interface AppContextType {
   isBalanceMasked: boolean;
   toggleBalanceMask: () => void;
   virtualAccounts: VirtualAccount[];
+  virtualAccountsLoading: boolean;
+  virtualAccountsError: string | null;
+  virtualAccountsRequireIdentity: boolean;
+  refreshVirtualAccounts: () => Promise<void>;
   transactions: TransactionRecord[];
   kycTiers: KycTierInfo[];
   refreshData: () => Promise<void>;
@@ -70,11 +73,26 @@ function mapServerTx(tx: any): TransactionRecord {
   };
 }
 
-function mapServerVirtualAccount(raw: any): VirtualAccount {
+function mapServerVirtualAccount(raw: unknown): VirtualAccount | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const account = raw as Record<string, unknown>;
+  const bankName = account.bankName ?? account.bank_name;
+  const accountNumber = account.accountNumber ?? account.account_number;
+  const accountName = account.accountName ?? account.account_name;
+  if (
+    typeof bankName !== 'string' ||
+    typeof accountNumber !== 'string' ||
+    typeof accountName !== 'string' ||
+    !bankName.trim() ||
+    !accountNumber.trim() ||
+    !accountName.trim()
+  ) {
+    return null;
+  }
   return {
-    bankName: raw.bankName || raw.bank_name || 'Bank',
-    accountNumber: raw.accountNumber || raw.account_number || '',
-    accountName: raw.accountName || raw.account_name || '',
+    bankName: bankName.trim(),
+    accountNumber: accountNumber.trim(),
+    accountName: accountName.trim(),
     recommended: true,
   };
 }
@@ -87,9 +105,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [referralCommissionBalance, setReferralCommissionBalance] = useState<number>(0);
   const [isBalanceMasked, setIsBalanceMasked] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>(MOCK_VIRTUAL_ACCOUNTS);
+  const [virtualAccounts, setVirtualAccounts] = useState<VirtualAccount[]>([]);
+  const [virtualAccountsLoading, setVirtualAccountsLoading] = useState(false);
+  const [virtualAccountsError, setVirtualAccountsError] = useState<string | null>(null);
+  const [virtualAccountsRequireIdentity, setVirtualAccountsRequireIdentity] = useState(false);
   const [kycTiers, setKycTiers] = useState<KycTierInfo[]>(MOCK_KYC_TIERS);
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
+
+  const refreshVirtualAccounts = useCallback(async () => {
+    if (!user?.id) {
+      setVirtualAccounts([]);
+      setVirtualAccountsError(null);
+      setVirtualAccountsRequireIdentity(false);
+      setVirtualAccountsLoading(false);
+      return;
+    }
+
+    setVirtualAccountsLoading(true);
+    setVirtualAccountsError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<{
+        accounts?: unknown;
+        accountWarnings?: unknown;
+        requiresIdentity?: boolean;
+      }>('virtual-accounts', { body: {} });
+      if (error) throw error;
+
+      setVirtualAccountsRequireIdentity(data?.requiresIdentity === true);
+      const accounts = Array.isArray(data?.accounts)
+        ? data.accounts
+            .map(mapServerVirtualAccount)
+            .filter((account): account is VirtualAccount => account !== null)
+        : [];
+      setVirtualAccounts(accounts);
+
+      if (Array.isArray(data?.accountWarnings) && data.accountWarnings.length > 0) {
+        console.warn('Some virtual accounts could not be provisioned:', data.accountWarnings);
+      }
+    } catch (error) {
+      console.error('Could not load mobile virtual accounts:', error);
+      setVirtualAccountsError(
+        error instanceof Error ? error.message : 'Could not load your bank accounts.',
+      );
+    } finally {
+      setVirtualAccountsLoading(false);
+    }
+  }, [user?.id]);
 
   // ── Theme State ──────────────────────────────────────────────────────────
   const [themePreference, setThemePreference] = useState<ThemePreference>('system');
@@ -191,12 +252,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (user) {
       refreshData();
+      void refreshVirtualAccounts();
     } else {
       setMainBalance(0);
       setTransactions([]);
       setVirtualAccounts([]);
+      setVirtualAccountsError(null);
+      setVirtualAccountsRequireIdentity(false);
     }
-  }, [user, refreshData]);
+  }, [user, refreshData, refreshVirtualAccounts]);
 
   const toggleBalanceMask = () => setIsBalanceMasked((prev) => !prev);
   const clearNotifications = () => setUnreadNotifications(0);
@@ -225,6 +289,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isBalanceMasked,
         toggleBalanceMask,
         virtualAccounts,
+        virtualAccountsLoading,
+        virtualAccountsError,
+        virtualAccountsRequireIdentity,
+        refreshVirtualAccounts,
         transactions,
         kycTiers,
         refreshData,

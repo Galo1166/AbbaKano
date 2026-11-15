@@ -53,3 +53,17 @@ actions are recorded for auditing.
 
 The available actions and data depend on the administrator's access, configured
 Supabase functions and secrets, and each provider's API response.
+
+## Billstack virtual accounts
+
+Billstack can be enabled alongside Monnify by adding the Billstack **secret**
+key as the server-side Supabase Edge Function secret `BILLSTACK_SECRET_KEY`.
+Never put this key in browser or mobile application configuration. The optional
+`BILLSTACK_BASE_URL` defaults to `https://api.billstack.co/v2`.
+
+Deploy the updated `virtual-accounts` function and the `billstack-webhook`
+function, then apply the Billstack virtual-account migration and register
+`https://<project-ref>.supabase.co/functions/v1/billstack-webhook` in the
+Billstack dashboard under **Developer → Webhooks**. Accounts are created for
+9PSB, Safehaven, and Providus; PalmPay accounts are also requested when the
+customer supplies a valid BVN or NIN. Existing Monnify accounts are retained.
