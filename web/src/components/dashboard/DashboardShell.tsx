@@ -79,13 +79,13 @@ const VTU_HUB_ITEMS = [
   {
     key: "education",
     title: "Education",
-    subtitle: "WAEC, JAMB & NECO",
+    subtitle: "WAEC & NECO",
     tab: "education",
   },
   {
     key: "all_services",
     title: "All Services",
-    subtitle: "Explore 8+ Services",
+    subtitle: "Explore All Services",
     tab: "all_services",
   },
 ];

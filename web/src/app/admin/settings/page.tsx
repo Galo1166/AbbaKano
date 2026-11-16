@@ -7,6 +7,8 @@ import {
   fetchSystemSettings,
   updateSystemSettings,
   updateMargins,
+  requestBillstackBackfill,
+  type BillstackBackfillJob,
 } from "@admin/services/api";
 import PageHeader from "@admin/components/layout/PageHeader";
 import Toggle from "@admin/components/ui/Toggle";
@@ -42,6 +44,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [auditReason, setAuditReason] = useState("");
+  const [backfillJob, setBackfillJob] = useState<BillstackBackfillJob | null>(null);
+  const [backfillReason, setBackfillReason] = useState("");
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillError, setBackfillError] = useState("");
 
   useEffect(() => {
     Promise.all([fetchMarginSettings(), fetchSystemSettings()]).then(([m, s]) => {
@@ -54,7 +60,55 @@ export default function SettingsPage() {
       setLoadError(error instanceof Error ? error.message : "Could not load admin settings.");
       setLoading(false);
     });
+    requestBillstackBackfill("latest").then(setBackfillJob).catch((error: unknown) => {
+      setBackfillError(error instanceof Error ? error.message : "Could not load Billstack backfill status.");
+    });
   }, []);
+
+  const runBillstackBackfill = async () => {
+    const reason = backfillReason.trim();
+    if (reason.length < 5) {
+      setBackfillError("Enter a reason of at least 5 characters to start this backfill.");
+      return;
+    }
+    if (!window.confirm(
+      "Start or resume provisioning Billstack 9PSB, SafeHaven, and Providus accounts for existing customers who do not already have them? PalmPay will not be generated without each customer's BVN or NIN.",
+    )) {
+      return;
+    }
+
+    setBackfillBusy(true);
+    setBackfillError("");
+    let job: BillstackBackfillJob | null = null;
+    let idleRounds = 0;
+    try {
+      job = await requestBillstackBackfill("start", { reason });
+      setBackfillJob(job);
+      setBackfillReason("");
+
+      while (job && (job.status === "preparing" || job.status === "running")) {
+        const previousProgress = job.processed_users;
+        if (job.status === "preparing") {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          job = await requestBillstackBackfill("latest");
+        } else {
+          job = await requestBillstackBackfill("process", { jobId: job.id });
+          if (job && job.processed_users === previousProgress && job.processing_users > 0) {
+            idleRounds += 1;
+            if (idleRounds >= 12) break;
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          } else {
+            idleRounds = 0;
+          }
+        }
+        setBackfillJob(job);
+      }
+    } catch (error) {
+      setBackfillError(error instanceof Error ? error.message : "Could not run Billstack backfill.");
+    } finally {
+      setBackfillBusy(false);
+    }
+  };
 
   const handleSave = async () => {
     const reason = auditReason.trim();
@@ -273,6 +327,7 @@ export default function SettingsPage() {
           { id: "providers", label: "Provider Routing", icon: "route" },
           { id: "maintenance", label: "App Maintenance", icon: "build" },
           { id: "alerts", label: "Alert Contacts", icon: "contact_phone" },
+          { id: "billstack", label: "Billstack Accounts", icon: "account_balance" },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -288,6 +343,100 @@ export default function SettingsPage() {
           </button>
         ))}
       </div>
+
+      {activeTab === "billstack" && (
+        <section className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-card sm:p-6">
+          <div className="max-w-3xl space-y-4">
+            <div>
+              <h2 className="text-base font-bold text-on-surface">Existing-user Billstack account backfill</h2>
+              <p className="mt-1 text-xs leading-relaxed text-on-surface-variant sm:text-sm">
+                Create missing 9PSB, SafeHaven, and Providus accounts for customer profiles. Existing Billstack accounts are preserved and skipped. PalmPay is not included because it requires each customer&apos;s BVN or NIN.
+              </p>
+            </div>
+
+            {backfillJob && (
+              <div className="space-y-2 rounded-xl border border-outline-variant/30 bg-surface-container-low p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-on-surface">
+                    Backfill status: {backfillJob.status}
+                  </span>
+                  <span className="text-on-surface-variant">
+                    {backfillJob.processed_users} / {backfillJob.total_users} processed
+                  </span>
+                </div>
+                <div
+                  className="h-2 overflow-hidden rounded-full bg-outline-variant/30"
+                  role="progressbar"
+                  aria-label="Billstack backfill progress"
+                  aria-valuemin={0}
+                  aria-valuemax={backfillJob.total_users}
+                  aria-valuenow={backfillJob.processed_users}
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{
+                      width: `${backfillJob.total_users
+                        ? Math.min(100, (backfillJob.processed_users / backfillJob.total_users) * 100)
+                        : 0}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-on-surface-variant">
+                  {backfillJob.completed_users} created · {backfillJob.skipped_users} already had accounts · {backfillJob.failed_users} failed
+                </p>
+                {backfillJob.error_message && (
+                  <p className="text-xs font-semibold text-rose-700" role="alert">{backfillJob.error_message}</p>
+                )}
+                {backfillJob.recent_failures.length > 0 && (
+                  <ul className="space-y-1 border-t border-outline-variant/30 pt-2 text-[11px] text-rose-700">
+                    {backfillJob.recent_failures.map((failure) => (
+                      <li key={failure.user_id} className="break-words">
+                        User {failure.user_id.slice(0, 8)}: {failure.error_message || "Account creation failed."}
+                      </li>
+                    ))}
+                    {backfillJob.failed_users > backfillJob.recent_failures.length && (
+                      <li>Showing the latest {backfillJob.recent_failures.length} of {backfillJob.failed_users} failures.</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {backfillError && (
+              <p className="rounded-xl border border-red-300 bg-red-50 p-3 text-xs font-semibold text-red-900" role="alert">
+                {backfillError}
+              </p>
+            )}
+
+            <label className="block space-y-1.5 text-xs font-semibold text-on-surface">
+              Audit reason <span className="text-rose-700">*</span>
+              <textarea
+                value={backfillReason}
+                onChange={(event) => setBackfillReason(event.target.value)}
+                maxLength={500}
+                rows={2}
+                placeholder="Why are you provisioning Billstack accounts for existing customers?"
+                className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 py-2 text-xs font-normal text-on-surface outline-none focus:border-primary"
+              />
+            </label>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void runBillstackBackfill()}
+                disabled={backfillBusy || backfillReason.trim().length < 5}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-on-primary shadow-sm transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {backfillBusy && <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+                {backfillBusy ? "Provisioning accounts…" : backfillJob?.status === "running" || backfillJob?.status === "preparing" ? "Resume backfill" : "Start backfill"}
+              </button>
+              <span className="text-[11px] leading-relaxed text-on-surface-variant">
+                Runs in small resumable batches. Users with missing contact details or provider errors are reported as failed and can be retried by starting another backfill.
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Tab: Margins */}
       {activeTab === "margins" && (

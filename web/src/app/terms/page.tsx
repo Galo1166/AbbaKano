@@ -34,7 +34,7 @@ export default function TermsPage() {
       <section className="space-y-3 border-t border-[var(--border)] pt-6">
         <h2 className="text-xl font-bold text-[var(--text)]">Automated Virtual Accounts & Wallet Liquidity</h2>
         <p className="text-sm sm:text-base text-[var(--text-muted)] leading-relaxed font-normal">
-          Wallet funding via assigned dedicated virtual accounts (Monnify multi-bank integration) is credited automatically upon interbank clearing. Retain bank transaction session IDs and contact support if a deposit does not reflect within standard clearing windows.
+          Wallet funding via assigned dedicated virtual accounts is credited automatically upon interbank clearing. Retain bank transaction session IDs and contact support if a deposit does not reflect within standard clearing windows.
         </p>
       </section>
 

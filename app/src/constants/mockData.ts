@@ -110,7 +110,7 @@ export const MOCK_VIRTUAL_ACCOUNTS: VirtualAccount[] = [
     bankName: "Sterling Bank",
     accountNumber: "9021 345 881",
     accountName: "AbbaKano - Usman Bello",
-    feeInfo: "Monnify Dedicated Desk • 100% Instant auto-credit",
+    feeInfo: "Dedicated bank transfer • Automatic wallet credit",
     logoColor: "#e60000",
   },
   {

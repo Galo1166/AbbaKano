@@ -25,9 +25,14 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
     return getCachedVirtualAccounts() === null;
   });
   const [error, setError] = useState("");
+  const [accountWarnings, setAccountWarnings] = useState<string[]>(() => {
+    return getCachedVirtualAccounts()?.accountWarnings ?? [];
+  });
   const [requiresIdentity, setRequiresIdentity] = useState<boolean>(() => {
     return getCachedVirtualAccounts()?.requiresIdentity ?? false;
   });
+  const [showIdentityForm, setShowIdentityForm] = useState(false);
+  const [showAdditionalAccountsPrompt, setShowAdditionalAccountsPrompt] = useState(true);
   const [identityType, setIdentityType] = useState<VirtualAccountIdentity["type"]>("nin");
   const [identityValue, setIdentityValue] = useState("");
   const [showIdValue, setShowIdValue] = useState(false);
@@ -83,6 +88,7 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
         if (!cancelled) {
           setVirtualAccounts(result.accounts);
           setRequiresIdentity(result.requiresIdentity);
+          setAccountWarnings(result.accountWarnings || []);
         }
       } catch (err) {
         if (!cancelled) {
@@ -114,6 +120,9 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
       const result = await fetchVirtualAccounts({ type: identityType, value: identityValue });
       setVirtualAccounts(result.accounts);
       setRequiresIdentity(result.requiresIdentity);
+      setAccountWarnings(result.accountWarnings || []);
+      setShowIdentityForm(result.requiresIdentity);
+      setShowAdditionalAccountsPrompt(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create your bank account.");
     } finally {
@@ -140,14 +149,14 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/75 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="fund-wallet-title"
     >
       <div
-        className={`relative w-full max-w-md rounded-3xl border shadow-2xl p-5 sm:p-6 transition-all animate-in zoom-in-95 duration-200 overflow-hidden ${
+        className={`relative flex max-h-[calc(100dvh-1rem)] min-h-0 w-full max-w-md flex-col overflow-hidden rounded-3xl border p-4 shadow-2xl transition-all animate-in zoom-in-95 duration-200 sm:p-6 ${
           isDark
             ? "bg-[#141721] border-[#222634] text-white"
             : "bg-white border-slate-200 text-slate-900"
@@ -165,7 +174,7 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
         )}
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-inherit">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-inherit pb-3">
           <div>
             <h2 id="fund-wallet-title" className="text-lg font-extrabold tracking-tight">
               Fund Wallet
@@ -191,20 +200,25 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
           </button>
         </div>
 
-        <p className={`text-xs mt-3 mb-4 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+        <p className={`mt-3 mb-4 shrink-0 text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
           {virtualAccounts.length > 0
             ? "Transfer to any account below. Your wallet is automatically credited in 15–30 seconds."
             : "Central Bank of Nigeria (CBN) regulations mandate identity verification before generating automated virtual accounts."}
         </p>
 
         {/* Accounts List OR NIN Verification View */}
-        <div className="space-y-3 max-h-[82vh] overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
+          {accountWarnings.length > 0 && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400" role="status">
+              {accountWarnings.join(" ")}
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center py-12 gap-2 text-xs text-slate-400">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
               Loading dedicated virtual accounts...
             </div>
-          ) : requiresIdentity ? (
+          ) : requiresIdentity || showIdentityForm ? (
             /* ---- Identity Verification ---- */
             <form onSubmit={(e) => void submitIdentity(e)} className="space-y-4 py-2">
               {/* Header */}
@@ -223,12 +237,12 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                   <h3 className={`text-sm font-extrabold leading-tight ${
                     isDark ? "text-white" : "text-slate-900"
                   }`}>
-                    Identity Verification Required
+                    Verify your identity
                   </h3>
                   <p className={`mt-0.5 text-[11px] leading-snug ${
                     isDark ? "text-slate-400" : "text-slate-500"
                   }`}>
-                    One-time check to generate your dedicated account
+                    Use your BVN or NIN to add Billstack PalmPay and Monnify accounts, including Moniepoint where available.
                   </p>
                 </div>
                 <span className={`shrink-0 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
@@ -418,6 +432,21 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                   </span>
                 )}
               </button>
+              {virtualAccounts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowIdentityForm(false);
+                    setError("");
+                    setIdentityValue("");
+                  }}
+                  className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${
+                    isDark ? "text-slate-400 hover:bg-[#222634]" : "text-slate-500 hover:bg-slate-100"
+                  }`}
+                >
+                  Back to my accounts
+                </button>
+              )}
 
               {/* Security note */}
               <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 ${
@@ -429,7 +458,7 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                     d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 <p className={`text-[10px] leading-snug ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                  Your {identityType.toUpperCase()} is sent directly to Monnify over an encrypted connection and is{" "}
+                  Your {identityType.toUpperCase()} is sent securely to the account provider and is{" "}
                   <strong className={isDark ? "text-slate-400" : "text-slate-600"}>never stored</strong>{" "}
                   by AbbaKano.
                 </p>
@@ -440,7 +469,8 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
               {error}
             </div>
           ) : virtualAccounts.length > 0 ? (
-            virtualAccounts.map((account) => {
+            <>
+            {virtualAccounts.map((account) => {
               const beneficiaryName = formatBeneficiaryAccountName(account.accountName, userName);
 
               return (
@@ -518,7 +548,38 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                   </div>
                 </div>
               );
-            })
+            })}
+            {showAdditionalAccountsPrompt && (
+              <div className={`rounded-xl border p-3 ${
+                isDark ? "border-[#222634] bg-[#181B25]" : "border-slate-200 bg-slate-50"
+              }`}>
+                <p className={`text-xs font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                  Want more bank accounts?
+                </p>
+                <p className={`mt-1 text-[11px] leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  Add Billstack PalmPay and Monnify accounts, including Moniepoint where available, using your BVN or NIN.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowIdentityForm(true)}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-500"
+                  >
+                    Yes, generate more
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdditionalAccountsPrompt(false)}
+                    className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+                      isDark ? "text-slate-400 hover:bg-[#222634]" : "text-slate-500 hover:bg-slate-100"
+                    }`}
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           ) : (
             /* Empty state when accounts are not yet provisioned */
             <div className={`rounded-2xl border p-5 text-center ${
@@ -536,6 +597,7 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                     .then((res) => {
                       setVirtualAccounts(res.accounts || []);
                       setRequiresIdentity(res.requiresIdentity === true);
+                      setAccountWarnings(res.accountWarnings || []);
                     })
                     .catch((err) => setError(err instanceof Error ? err.message : "Failed to load accounts."))
                     .finally(() => setLoading(false));

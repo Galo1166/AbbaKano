@@ -10,7 +10,6 @@ import {
   type VirtualAccount,
   type VirtualAccountIdentity,
 } from "@/lib/virtualAccounts";
-import { supabase } from "@/lib/supabase";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 
@@ -27,6 +26,7 @@ interface IdentityVerificationFormProps {
   onTypeChange: (type: VirtualAccountIdentity["type"]) => void;
   onValueChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onCancel?: () => void;
 }
 
 function IdentityVerificationForm({
@@ -38,6 +38,7 @@ function IdentityVerificationForm({
   onTypeChange,
   onValueChange,
   onSubmit,
+  onCancel,
 }: IdentityVerificationFormProps) {
   const [showValue, setShowValue] = useState(false);
 
@@ -89,10 +90,10 @@ function IdentityVerificationForm({
         </div>
         <div className="min-w-0 flex-1">
           <h3 className={`text-sm font-extrabold leading-tight ${isDark ? "text-white" : "text-slate-900"}`}>
-            Identity Verification Required
+            Verify your identity
           </h3>
           <p className={`mt-0.5 text-[11px] leading-snug ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-            One-time verification to generate your dedicated account
+            Use your BVN or NIN to add Billstack PalmPay and Monnify accounts, including Moniepoint where available.
           </p>
         </div>
         <span className={`shrink-0 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
@@ -276,10 +277,21 @@ function IdentityVerificationForm({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
                   d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
-              Generate Dedicated Account
+              Generate Bank Accounts
             </span>
           )}
         </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className={`w-full rounded-xl px-4 py-2.5 text-xs font-bold transition-colors ${
+              isDark ? "text-slate-400 hover:bg-[#222634]" : "text-slate-500 hover:bg-slate-100"
+            }`}
+          >
+            Back to my accounts
+          </button>
+        )}
 
         {/* Security disclaimer */}
         <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 ${
@@ -291,8 +303,8 @@ function IdentityVerificationForm({
               d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
           <p className={`text-[10px] leading-snug ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-            Your {identityType.toUpperCase()} is transmitted directly to Monnify over an encrypted
-            connection and is{" "}
+            Your {identityType.toUpperCase()} is sent over an encrypted connection to the account
+            provider and is{" "}
             <strong className={isDark ? "text-slate-400" : "text-slate-600"}>never stored</strong>{" "}
             by AbbaKano.
           </p>
@@ -315,9 +327,14 @@ export function FundWalletShell() {
   );
   const [accountsLoading, setAccountsLoading] = useState(initialCache === null);
   const [accountsError, setAccountsError] = useState("");
+  const [accountWarnings, setAccountWarnings] = useState<string[]>(
+    initialCache?.accountWarnings ?? [],
+  );
   const [requiresIdentity, setRequiresIdentity] = useState(
     initialCache?.requiresIdentity ?? false,
   );
+  const [showIdentityForm, setShowIdentityForm] = useState(false);
+  const [showAdditionalAccountsPrompt, setShowAdditionalAccountsPrompt] = useState(true);
   const [identityType, setIdentityType] = useState<VirtualAccountIdentity["type"]>("nin");
   const [identityValue, setIdentityValue] = useState("");
   const [accountsRetry, setAccountsRetry] = useState(0);
@@ -348,6 +365,9 @@ export function FundWalletShell() {
         if (!cancelled) {
           setVirtualAccounts(result.accounts);
           setRequiresIdentity(result.requiresIdentity);
+          setAccountWarnings(result.accountWarnings || []);
+          setShowIdentityForm(result.requiresIdentity);
+          setShowAdditionalAccountsPrompt(false);
         }
       } catch (error) {
         if (!cancelled) {
@@ -380,6 +400,7 @@ export function FundWalletShell() {
       });
       setVirtualAccounts(result.accounts);
       setRequiresIdentity(result.requiresIdentity);
+      setAccountWarnings(result.accountWarnings || []);
     } catch (error) {
       setAccountsError(safeErrorMessage(error, "Could not create your bank account."));
     } finally {
@@ -499,7 +520,7 @@ export function FundWalletShell() {
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
                 Loading your bank account details...
               </div>
-            ) : requiresIdentity ? (
+            ) : requiresIdentity || showIdentityForm ? (
               <IdentityVerificationForm
                 isDark={isDark}
                 identityType={identityType}
@@ -516,6 +537,11 @@ export function FundWalletShell() {
                   setAccountsError("");
                 }}
                 onSubmit={(event) => void submitIdentity(event)}
+                onCancel={virtualAccounts.length > 0 ? () => {
+                  setShowIdentityForm(false);
+                  setAccountsError("");
+                  setIdentityValue("");
+                } : undefined}
               />
             ) : accountsError ? (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3">
@@ -530,6 +556,11 @@ export function FundWalletShell() {
               </div>
             ) : virtualAccounts.length > 0 ? (
               <div className="space-y-3">
+                {accountWarnings.length > 0 && (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400" role="status">
+                    {accountWarnings.join(" ")}
+                  </div>
+                )}
                 {virtualAccounts.map((account) => (
                   <div
                     key={`${account.bankName}:${account.accountNumber}`}
@@ -606,6 +637,36 @@ export function FundWalletShell() {
                 </p>
                 {copyError && (
                   <p className="text-xs font-medium text-rose-500" role="alert">{copyError}</p>
+                )}
+                {showAdditionalAccountsPrompt && (
+                  <div className={`rounded-xl border p-3 ${
+                    isDark ? "border-[#222634] bg-[#0b0e14]" : "border-slate-200 bg-slate-50"
+                  }`}>
+                    <p className={`text-xs font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                      Want more bank accounts?
+                    </p>
+                    <p className={`mt-1 text-[11px] leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      Add Billstack PalmPay and Monnify accounts, including Moniepoint where available, using your BVN or NIN.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowIdentityForm(true)}
+                        className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-500"
+                      >
+                        Yes, generate more
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdditionalAccountsPrompt(false)}
+                        className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+                          isDark ? "text-slate-400 hover:bg-[#222634]" : "text-slate-500 hover:bg-slate-100"
+                        }`}
+                      >
+                        Not now
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (

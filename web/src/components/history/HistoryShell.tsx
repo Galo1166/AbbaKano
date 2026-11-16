@@ -101,7 +101,7 @@ function downloadElectricityReceipt(tx: Transaction) {
 
 type Status = "success" | "pending" | "failed";
 
-const filters = ["All", "Data Bundles", "Airtime", "Electricity", "Cable TV", "Wallet Deposits"];
+const filters = ["All", "Data Bundles", "Airtime", "Electricity", "Cable TV", "Education PINs", "Wallet Deposits"];
 
 function formatNaira(amount: number) {
   return new Intl.NumberFormat("en-NG", {
@@ -131,6 +131,7 @@ function transactionCategory(transaction: Transaction) {
   if (type === "airtime" || label.includes("airtime")) return "Airtime";
   if (type === "electricity" || label.includes("electric")) return "Electricity";
   if (type === "cable_tv" || label.includes("cable") || label.includes("dstv") || label.includes("gotv")) return "Cable TV";
+  if (type === "education_pin" || label.includes("education") || label.includes("exam pin")) return "Education PINs";
 
   return "Other";
 }
@@ -170,6 +171,7 @@ function getIconTheme(category: string, network?: string) {
   if (network === "9MOBILE") return { color: "#84BD00", bg: "rgba(132, 189, 0, 0.12)" };
   if (category === "Electricity") return { color: "#F59E0B", bg: "rgba(245, 158, 11, 0.12)" };
   if (category === "Cable TV") return { color: "#C084FC", bg: "rgba(192, 132, 252, 0.12)" };
+  if (category === "Education PINs") return { color: "#34D399", bg: "rgba(52, 211, 153, 0.12)" };
   return { color: "#60A5FA", bg: "rgba(96, 165, 250, 0.12)" };
 }
 

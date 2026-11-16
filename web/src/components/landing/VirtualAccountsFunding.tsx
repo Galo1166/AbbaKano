@@ -43,7 +43,7 @@ export function VirtualAccountsFunding() {
                 <div>
                   <h4 className="text-sm font-bold text-[var(--text)]">Zero Manual Proof of Payment</h4>
                   <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                    No uploading receipts or texting administrators. The Monnify multi-bank webhook automatically credits your balance.
+                    No uploading receipts or texting administrators. Secure provider webhooks automatically credit your balance.
                   </p>
                 </div>
               </div>

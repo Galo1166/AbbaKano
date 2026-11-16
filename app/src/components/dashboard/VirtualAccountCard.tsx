@@ -37,7 +37,7 @@ export const VirtualAccountCard: React.FC = () => {
         </View>
         <View style={styles.activeTag}>
           <View style={styles.liveIndicator} />
-          <Text style={styles.liveText}>Monnify Sync</Text>
+          <Text style={styles.liveText}>Auto-credit</Text>
         </View>
       </View>
 
@@ -117,7 +117,7 @@ export const VirtualAccountCard: React.FC = () => {
         <View style={styles.feeInfoRow}>
           <MaterialCommunityIcons name="lightning-bolt" size={13} color={Palette.tertiary} />
           <Text style={styles.feeInfoText} numberOfLines={1} ellipsizeMode="tail">
-            {activeAccount.feeInfo || 'Instant auto-credit in ~15–30 seconds via Monnify'}
+            {activeAccount.feeInfo || 'Instant auto-credit after your transfer clears'}
           </Text>
         </View>
       </View>
