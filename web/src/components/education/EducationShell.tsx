@@ -101,13 +101,15 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
     setErrorMsg(null);
   };
 
-  const totalCost = (currentProduct?.amount || 0) * quantity;
+  const totalCost = (currentProduct?.amount || 0) * (quantity || 1);
 
   const handleProceed = () => {
     if (!currentProduct) {
       setErrorMsg("Please select an exam package.");
       return;
     }
+    const finalQty = Math.max(1, quantity || 1);
+    if (quantity !== finalQty) setQuantity(finalQty);
     setErrorMsg(null);
     setPin("");
     setIsPinModalOpen(true);
@@ -296,29 +298,26 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                 </div>
               </div>
 
-              {/* Quantity Dropdown */}
+              {/* Quantity Input */}
               <div>
                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
                   Quantity
                 </label>
-                <div className="relative">
-                  <select
-                    value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
-                    className="w-full appearance-none px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
-                  >
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  value={quantity || ""}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, "");
+                    setQuantity(val === "" ? 0 : Math.max(1, parseInt(val, 10)));
+                  }}
+                  onBlur={() => {
+                    if (!quantity || quantity < 1) setQuantity(1);
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 transition"
+                />
               </div>
 
               {/* Price & Summary */}
