@@ -21,7 +21,83 @@ type Transaction = {
   accountNumber?: string;
   token?: string;
   units?: string;
+  customerName?: string;
+  billerName?: string;
 };
+
+function downloadElectricityReceipt(tx: Transaction) {
+  const meterNumber = tx.accountNumber || recipientPhone(tx) || "N/A";
+  const provider = tx.network || (tx.metadata?.disco as string) || (tx.metadata?.biller_name as string) || tx.billerName || "Prepaid Electricity";
+  const token = tx.token || "N/A";
+  const units = tx.units || "";
+  const customerName = tx.customerName || (tx.metadata?.customer_name as string) || "";
+  const amount = Number(tx.amount || 0);
+  const ref = String(tx.id || "");
+  const dateStr = displayDate(tx.date);
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Electricity Receipt - ${meterNumber}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 30px; color: #1E293B; background: #F8FAFC; }
+        .receipt { max-width: 440px; margin: 0 auto; background: #FFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+        .brand { text-align: center; border-bottom: 2px dashed #E2E8F0; padding-bottom: 16px; margin-bottom: 20px; }
+        .title { font-size: 20px; font-weight: 800; color: #2563EB; }
+        .sub { font-size: 13px; color: #64748B; margin-top: 4px; }
+        .badge { display: inline-block; background: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-top: 8px; }
+        .token-box { background: #0F172A; color: #FFF; border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center; }
+        .token-title { font-size: 10px; font-weight: 700; color: #94A3B8; letter-spacing: 1px; }
+        .token-code { font-family: monospace; font-size: 22px; font-weight: 900; color: #38BDF8; letter-spacing: 2px; margin: 8px 0; }
+        .token-units { font-size: 13px; font-weight: 600; color: #F8FAFC; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+        td { padding: 8px 0; border-bottom: 1px solid #F1F5F9; }
+        td:first-child { color: #64748B; }
+        td:last-child { text-align: right; font-weight: 600; color: #0F172A; }
+        .footer { text-align: center; border-top: 2px dashed #E2E8F0; padding-top: 16px; margin-top: 20px; font-size: 11px; color: #94A3B8; }
+      </style>
+    </head>
+    <body>
+      <div class="receipt">
+        <div class="brand">
+          <div class="title">ABBA KANO INVESTMENTS</div>
+          <div class="sub">Prepaid Electricity Token Receipt</div>
+          <div class="badge">PAYMENT SUCCESSFUL</div>
+        </div>
+        <div class="token-box">
+          <div class="token-title">PREPAID METER TOKEN</div>
+          <div class="token-code">${token}</div>
+          ${units ? `<div class="token-units">Purchased Energy: ${units}</div>` : ""}
+        </div>
+        <table>
+          <tr><td>DisCo Provider</td><td>${provider}</td></tr>
+          <tr><td>Meter Number</td><td>${meterNumber}</td></tr>
+          ${customerName ? `<tr><td>Customer Name</td><td>${customerName}</td></tr>` : ""}
+          <tr><td>Amount Paid</td><td>₦${amount.toLocaleString()}</td></tr>
+          ${ref ? `<tr><td>Reference ID</td><td>${ref}</td></tr>` : ""}
+          <tr><td>Payment Method</td><td>AbbaKano Wallet</td></tr>
+          <tr><td>Date & Time</td><td>${dateStr}</td></tr>
+        </table>
+        <div class="footer">
+          Enter the 20-digit token into your Customer Interface Unit (CIU) keypad.<br/>
+          Thank you for choosing AbbaKano Data Sub!
+        </div>
+      </div>
+      <script>
+        window.onload = function() { window.print(); };
+      </script>
+    </body>
+    </html>
+  `;
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
 
 type Status = "success" | "pending" | "failed";
 
@@ -183,7 +259,7 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
             .order("created_at", { ascending: false }),
           supabase
             .from("vtu_transactions")
-            .select("id, transaction_type, status, amount_kobo, phone_number, account_number, network, provider_reference, metadata, created_at")
+            .select("id, transaction_type, status, amount_kobo, phone_number, account_number, network, provider_reference, metadata, provider_response, created_at")
             .eq("user_id", user.id)
             .order("created_at", { ascending: false }),
         ]);
@@ -215,10 +291,74 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
             plan_label: string | null;
             token?: string;
             units?: string;
+            customerName?: string;
+            billerName?: string;
           }
         >();
 
         for (const transaction of purchases || []) {
+          const pr = (transaction.provider_response || {}) as Record<string, unknown>;
+          const prData = (pr.data || {}) as Record<string, unknown>;
+          const meta = (transaction.metadata || {}) as Record<string, unknown>;
+
+          const token = (
+            meta.token ||
+            meta.meter_token ||
+            meta.electricity_token ||
+            meta.pin ||
+            pr.token ||
+            prData.token ||
+            pr.token_code ||
+            prData.token_code ||
+            pr.pin ||
+            prData.pin ||
+            ""
+          ).toString().trim();
+
+          const rawUnits = (
+            meta.units ||
+            meta.token_units ||
+            meta.purchased_units ||
+            meta.kwh ||
+            pr.units ||
+            prData.units ||
+            pr.unit ||
+            prData.unit ||
+            pr.token_units ||
+            prData.token_units ||
+            pr.purchased_units ||
+            prData.purchased_units ||
+            pr.kwh ||
+            prData.kwh ||
+            ""
+          ).toString().trim();
+          const units = rawUnits ? (rawUnits.toLowerCase().includes("kwh") ? rawUnits : `${rawUnits} kWh`) : undefined;
+
+          const customerName = (
+            meta.customer_name ||
+            meta.customerName ||
+            pr.customer_name ||
+            prData.customer_name ||
+            pr.customerName ||
+            prData.customerName ||
+            pr.name ||
+            prData.name ||
+            ""
+          ).toString().trim();
+
+          const billerName = (
+            transaction.network ||
+            meta.disco ||
+            meta.discoName ||
+            meta.biller_name ||
+            meta.billerName ||
+            pr.disco ||
+            prData.disco ||
+            pr.operator ||
+            prData.operator ||
+            ""
+          ).toString().trim();
+
           transactionsById.set(Number(transaction.id), {
             transaction_type: transaction.transaction_type,
             status: transaction.status,
@@ -227,8 +367,10 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
             network: transaction.network,
             plan_code: (transaction.metadata?.plan_code as string) || null,
             plan_label: (transaction.metadata?.plan_label as string) || null,
-            token: transaction.metadata?.token as string | undefined,
-            units: transaction.metadata?.units as string | undefined,
+            token: token || undefined,
+            units,
+            customerName: customerName || undefined,
+            billerName: billerName || undefined,
           });
         }
 
@@ -274,6 +416,8 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
             const planLabel = typeof entry.metadata?.plan_label === "string" ? entry.metadata.plan_label : purchaseTransaction?.plan_label || null;
             const token = typeof entry.metadata?.token === "string" ? entry.metadata.token : purchaseTransaction?.token || undefined;
             const units = typeof entry.metadata?.units === "string" ? entry.metadata.units : purchaseTransaction?.units || undefined;
+            const customerName = typeof entry.metadata?.customer_name === "string" ? entry.metadata.customer_name : purchaseTransaction?.customerName || undefined;
+            const billerName = typeof entry.metadata?.disco === "string" ? entry.metadata.disco : purchaseTransaction?.billerName || undefined;
 
             return {
               id: entry.id,
@@ -289,6 +433,8 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
               accountNumber: purchaseTransaction?.account_number || undefined,
               token,
               units,
+              customerName,
+              billerName,
             };
           });
 
@@ -297,21 +443,28 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
         // reservation is awaiting reconciliation.
         const unledgeredPurchaseTransactions: Transaction[] = (purchases || [])
           .filter((transaction) => !transactionIds.has(Number(transaction.id)))
-          .map((transaction) => ({
-            id: transaction.provider_reference || `ABBA-${transaction.id}`,
-            type: transaction.transaction_type || "purchase",
-            label: typeof transaction.metadata?.plan_label === "string"
-              ? transaction.metadata.plan_label
-              : `${String(transaction.transaction_type || "Purchase").replaceAll("_", " ")} purchase`,
-            amount: Math.abs(Number(transaction.amount_kobo || 0)) / 100,
-            status: transaction.status,
-            date: transaction.created_at,
-            currency: "NGN",
-            metadata: transaction.metadata || {},
-            phoneNumber: transaction.phone_number || undefined,
-            accountNumber: transaction.account_number || undefined,
-            network: transaction.network || undefined,
-          }));
+          .map((transaction) => {
+            const parsed = transactionsById.get(Number(transaction.id));
+            return {
+              id: transaction.provider_reference || `ABBA-${transaction.id}`,
+              type: transaction.transaction_type || "purchase",
+              label: typeof transaction.metadata?.plan_label === "string"
+                ? transaction.metadata.plan_label
+                : `${String(transaction.transaction_type || "Purchase").replaceAll("_", " ")} purchase`,
+              amount: Math.abs(Number(transaction.amount_kobo || 0)) / 100,
+              status: transaction.status,
+              date: transaction.created_at,
+              currency: "NGN",
+              metadata: transaction.metadata || {},
+              phoneNumber: transaction.phone_number || undefined,
+              accountNumber: transaction.account_number || undefined,
+              network: transaction.network || undefined,
+              token: parsed?.token,
+              units: parsed?.units,
+              customerName: parsed?.customerName,
+              billerName: parsed?.billerName,
+            };
+          });
 
         const combined = [
           ...depositTransactions,
@@ -602,9 +755,34 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
                 </div>
               )}
               {selected.token && (
-                <div className="flex justify-between items-center rounded-xl bg-blue-500/10 p-2 text-blue-500">
-                  <span>Token</span>
-                  <span className="font-mono font-black">{selected.token}</span>
+                <div className="flex justify-between items-center rounded-xl bg-blue-500/10 p-2.5 text-blue-500">
+                  <div>
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Prepaid Meter Token</span>
+                    <span className="font-mono text-sm font-black tracking-wide">{selected.token}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selected.token) {
+                        void navigator.clipboard.writeText(selected.token.replace(/\s+/g, ""));
+                      }
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+              {selected.units && (
+                <div className="flex justify-between">
+                  <span className={isDark ? "text-slate-400" : "text-slate-500"}>Energy Units</span>
+                  <span className={`font-bold ${isDark ? "text-white" : "text-slate-900"}`}>{selected.units}</span>
+                </div>
+              )}
+              {selected.customerName && (
+                <div className="flex justify-between">
+                  <span className={isDark ? "text-slate-400" : "text-slate-500"}>Customer</span>
+                  <span className={`font-bold ${isDark ? "text-white" : "text-slate-900"}`}>{selected.customerName}</span>
                 </div>
               )}
               <div className="flex justify-between">
@@ -613,10 +791,23 @@ export function HistoryShell({ initialTransactions }: { initialTransactions?: Tr
               </div>
             </div>
 
+            {(selected.token || transactionCategory(selected) === "Electricity" || selected.type === "electricity") && (
+              <button
+                type="button"
+                onClick={() => downloadElectricityReceipt(selected)}
+                className="mt-3 w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download Receipt (PDF)
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setSelected(null)}
-              className="mt-4 w-full h-11 rounded-xl bg-blue-600 text-xs font-bold text-white hover:bg-blue-500 transition-colors cursor-pointer"
+              className="mt-2 w-full h-11 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Close
             </button>

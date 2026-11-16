@@ -26,6 +26,11 @@ interface PurchaseResult {
   pins: Array<{ pin: string; serial?: string }>;
 }
 
+function getExamLogo(slugOrName: string) {
+  if (/neco/i.test(slugOrName)) return "/images/education/neco-logo.jpg";
+  return "/images/education/waec-logo.png";
+}
+
 export function EducationShell({ onBack }: { onBack?: () => void }) {
   const { theme } = useThemeMode();
   const isDark = theme === "dark";
@@ -224,11 +229,33 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
                   Examination
                 </label>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {exams.map((e) => {
+                    const isSelected = selectedExamSlug === e.slug;
+                    return (
+                      <button
+                        key={e.slug}
+                        type="button"
+                        onClick={() => handleExamChange(e.slug)}
+                        className={`flex items-center gap-2.5 p-2 rounded-xl border transition cursor-pointer text-left ${
+                          isSelected
+                            ? "border-teal-500 bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold"
+                            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-white p-0.5 border border-slate-200 shrink-0 flex items-center justify-center overflow-hidden">
+                          <Image src={getExamLogo(e.slug)} alt={e.name} width={24} height={24} className="object-contain" />
+                        </div>
+                        <span className="text-xs truncate">{e.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="relative">
                   <select
                     value={selectedExamSlug}
                     onChange={(e) => handleExamChange(e.target.value)}
-                    className="w-full appearance-none px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
+                    className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
                   >
                     {exams.map((e) => (
                       <option key={e.slug} value={e.slug}>
@@ -372,9 +399,14 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className="font-bold text-base">{purchaseResult.examName}</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{purchaseResult.productName}</p>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white p-0.5 border border-slate-200 shrink-0 flex items-center justify-center overflow-hidden">
+                  <Image src={getExamLogo(purchaseResult.examName)} alt="Logo" width={26} height={26} className="object-contain" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">{purchaseResult.examName}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{purchaseResult.productName}</p>
+                </div>
               </div>
               <button
                 type="button"
