@@ -1,5 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createMonnifyReservedAccount } from "../_shared/monnify.ts";
+import {
+  type BillstackBank,
+  createBillstackVirtualAccount,
+  getBillstackConfig,
+} from "../_shared/billstack.ts";
+import { createMonnifyReservedAccount, getMonnifyConfig } from "../_shared/monnify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,22 +25,16 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (req.method !== "POST" && req.method !== "GET") {
+  if (req.method !== "POST") {
     return jsonResponse({ message: "Method not allowed" }, 405);
   }
 
   try {
-    let body: Record<string, unknown> = {};
-    if (req.method === "POST") {
-      try {
-        const parsed = await req.json();
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          body = parsed;
-        }
-      } catch {
-        // empty body is acceptable for fetching existing accounts
-      }
+    const requestBody: unknown = await req.json().catch(() => null);
+    if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) {
+      return jsonResponse({ message: "Invalid request body" }, 400);
     }
+    const body = requestBody as Record<string, unknown>;
     const bvn = typeof body.bvn === "string" ? body.bvn.trim() : "";
     const nin = typeof body.nin === "string" ? body.nin.trim() : "";
 
@@ -98,15 +97,6 @@ Deno.serve(async (req) => {
       throw fetchError;
     }
 
-    if (existingAccounts && existingAccounts.length > 0) {
-      return jsonResponse({ accounts: existingAccounts });
-    }
-
-    if (!bvn && !nin) {
-      return jsonResponse({ accounts: [], requiresIdentity: true });
-    }
-
-    // 2. If user doesn't have accounts yet, try to generate them now
     const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("full_name, phone")
@@ -117,17 +107,85 @@ Deno.serve(async (req) => {
     const email = user.email || "";
     const phone = profile?.phone || user.user_metadata?.phone || "";
 
-    const createdAccounts = await createMonnifyReservedAccount(supabaseAdmin, {
-      id: user.id,
-      fullName,
-      email,
-      phone,
-    }, {
-      bvn: bvn || undefined,
-      nin: nin || undefined,
-    });
+    const customer = { id: user.id, fullName, email, phone };
+    const identity = { bvn: bvn || undefined, nin: nin || undefined };
+    const accounts = existingAccounts || [];
+    const billstackConfig = await getBillstackConfig(supabaseAdmin);
+    const accountWarnings: string[] = [];
 
-    return jsonResponse({ accounts: createdAccounts });
+    if (billstackConfig) {
+      const savedBillstackBanks = new Set(
+        accounts
+          .filter((account) => account.provider === "billstack")
+          .map((account) => String(account.bank_code || "").toUpperCase()),
+      );
+      const billstackBanks: BillstackBank[] = [
+        ...(bvn || nin ? ["PALMPAY" as const] : []),
+        "9PSB",
+        "SAFEHAVEN",
+        "PROVIDUS",
+      ];
+
+      await Promise.all(
+        billstackBanks
+          .filter((bank) => !savedBillstackBanks.has(bank))
+          .map(async (bank) => {
+            try {
+              await createBillstackVirtualAccount(
+                supabaseAdmin,
+                billstackConfig,
+                customer,
+                bank,
+                identity,
+              );
+            } catch (error) {
+              console.error(`Billstack ${bank} account provisioning failed:`, error);
+              if (bank !== "PROVIDUS") {
+                accountWarnings.push(`Could not create your ${bank} account. Other accounts may still be available.`);
+              }
+            }
+          }),
+      );
+    }
+
+    const hasMonnifyAccounts = accounts.some((account) => account.provider === "monnify");
+    if ((bvn || nin) && !hasMonnifyAccounts) {
+      try {
+        const monnifyConfig = await getMonnifyConfig(supabaseAdmin);
+        if (monnifyConfig) {
+          const createdMonnifyAccounts = await createMonnifyReservedAccount(
+            supabaseAdmin,
+            customer,
+            identity,
+          );
+          if (createdMonnifyAccounts.length === 0) {
+            throw new Error("Monnify did not return any virtual accounts.");
+          }
+        }
+      } catch (error) {
+        console.error("Monnify account provisioning failed:", error);
+        accountWarnings.push("Could not create your Monnify account. Other accounts may still be available.");
+      }
+    }
+
+    const { data: allAccounts, error: allAccountsError } = await supabaseAdmin
+      .from("user_virtual_accounts")
+      .select("id, bank_name, bank_code, account_number, account_name, provider, created_at")
+      .eq("user_id", user.id)
+      .order("bank_name");
+    if (allAccountsError) throw allAccountsError;
+
+    if (!allAccounts?.length && !bvn && !nin) {
+      return jsonResponse({ accounts: [], requiresIdentity: true });
+    }
+    if (!allAccounts?.length) {
+      const message = accountWarnings.length
+        ? `We could not create any dedicated accounts. ${accountWarnings.join(" ")}`
+        : "No virtual account provider is configured. Configure Billstack or Monnify.";
+      throw new Error(message);
+    }
+
+    return jsonResponse({ accounts: allAccounts, accountWarnings });
   } catch (error) {
     console.error("virtual-accounts error:", error);
     return jsonResponse(

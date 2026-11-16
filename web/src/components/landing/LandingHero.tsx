@@ -259,15 +259,12 @@ export function LandingHero() {
                     EXAM e-PIN VOUCHERS
                   </span>
                   <span className="block text-[11px] font-semibold text-[var(--text-muted)]">
-                    Official WAEC • JAMB • NECO
+                    Official WAEC • NECO
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-7 h-7 rounded-lg bg-white p-0.5 border border-slate-200 overflow-hidden shadow-2xs flex items-center justify-center">
                     <Image src="/images/education/waec-logo.png" alt="WAEC" width={24} height={24} className="object-contain" />
-                  </div>
-                  <div className="w-7 h-7 rounded-lg bg-white p-0.5 border border-slate-200 overflow-hidden shadow-2xs flex items-center justify-center">
-                    <Image src="/images/education/jamb-logo.jpg" alt="JAMB" width={24} height={24} className="object-contain" />
                   </div>
                   <div className="w-7 h-7 rounded-lg bg-white p-0.5 border border-slate-200 overflow-hidden shadow-2xs flex items-center justify-center">
                     <Image src="/images/education/neco-logo.jpg" alt="NECO" width={24} height={24} className="object-contain" />

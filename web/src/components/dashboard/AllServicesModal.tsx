@@ -132,7 +132,7 @@ export function AllServicesModal({ isOpen, onClose, onSelectTab }: AllServicesMo
           <span className="text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
             Education Examination e-PINs
           </span>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => handleSelect("education")}
@@ -144,20 +144,6 @@ export function AllServicesModal({ isOpen, onClose, onSelectTab }: AllServicesMo
               <div>
                 <span className="block text-xs font-bold">WAEC</span>
                 <span className="block text-[10px] text-slate-500 dark:text-slate-400">Result Checker</span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSelect("education")}
-              className="flex flex-col items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-teal-500 text-center transition cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-lg bg-white p-1 border border-slate-200 flex items-center justify-center">
-                <Image src="/images/education/jamb-logo.jpg" alt="JAMB" width={36} height={36} className="object-contain" />
-              </div>
-              <div>
-                <span className="block text-xs font-bold">JAMB</span>
-                <span className="block text-[10px] text-slate-500 dark:text-slate-400">UTME / DE Pin</span>
               </div>
             </button>
 

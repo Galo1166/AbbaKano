@@ -181,19 +181,27 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/monnify-webhook/index.ts"
 
+[functions.billstack-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billstack-webhook/index.ts"
+
 [functions.virtual-accounts]
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/virtual-accounts/index.ts"
 
+[functions.billstack-backfill]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billstack-backfill/index.ts"
+
 [functions.education-services]
 enabled = true
 verify_jwt = false
-import_map = "./functions/education-services/deno.json"
 entrypoint = "./functions/education-services/index.ts"
 
 [functions.education-purchase]
 enabled = true
 verify_jwt = false
-import_map = "./functions/education-purchase/deno.json"
 entrypoint = "./functions/education-purchase/index.ts"

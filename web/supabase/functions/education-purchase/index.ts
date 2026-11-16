@@ -1,7 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { scrypt } from "npm:@noble/hashes@2.4.0/scrypt";
-import { verifyDataPlanToken } from "../_shared/data-plan-token.ts";
-import { verifyTransactionAuthorization } from "../_shared/transaction-authorization.ts";
+import {
+  callAlrahuzApi,
+  isAlrahuzPending,
+  isAlrahuzSuccess,
+} from "../_shared/alrahuzdata.ts";
+import { verifyEducationPlanToken } from "../_shared/education-plan-token.ts";
+import { verifyTransactionPinHash } from "../_shared/transaction-pin.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,79 +14,69 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
+type JsonObject = Record<string, unknown>;
+
+function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
-function hexToBytes(value: string): Uint8Array {
-  if (!/^(?:[0-9a-fA-F]{2})+$/.test(value)) {
-    throw new Error("Invalid transaction PIN salt.");
+function extractPins(payload: JsonObject | null): unknown {
+  if (!payload) return null;
+  const data = payload.data;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const dataObject = data as JsonObject;
+    const pins = dataObject.pins ?? dataObject.pin;
+    if (pins !== undefined) return pins;
   }
-  const bytes = new Uint8Array(value.length / 2);
-  for (let index = 0; index < value.length; index += 2) {
-    bytes[index / 2] = Number.parseInt(value.slice(index, index + 2), 16);
-  }
-  return bytes;
+  return payload.pins ?? payload.pin ?? null;
 }
 
-function bytesToHex(value: Uint8Array): string {
-  return Array.from(value)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+function hasPins(payload: JsonObject | null): boolean {
+  const pins = extractPins(payload);
+  return Array.isArray(pins)
+    ? pins.length > 0
+    : typeof pins === "string" && pins.trim().length > 0;
 }
 
-function safeHexEqual(actual: string, expected: string): boolean {
-  if (
-    !/^[0-9a-fA-F]+$/.test(actual) ||
-    !/^[0-9a-fA-F]+$/.test(expected) ||
-    actual.length !== expected.length
-  ) {
-    return false;
-  }
-  let difference = 0;
-  for (let index = 0; index < actual.length; index++) {
-    difference |= actual.charCodeAt(index) ^ expected.charCodeAt(index);
-  }
-  return difference === 0;
+function extractProviderReference(
+  payload: JsonObject | null,
+  fallback: string,
+): string {
+  if (!payload) return fallback;
+  const data = payload.data && typeof payload.data === "object"
+    ? payload.data as JsonObject
+    : {};
+  const value = payload.ident || data.ident || payload.id || data.id ||
+    payload.reference || data.reference;
+  return value === undefined || value === null ? fallback : String(value);
 }
 
-async function verifyPinHash(
-  pin: string,
-  salt: string,
-  expectedHash: string,
-): Promise<boolean> {
-  if (!/^[0-9a-fA-F]+$/.test(expectedHash)) return false;
-
-  if (expectedHash.length === 64) {
-    const passwordBytes = new TextEncoder().encode(pin);
-    const saltBytes = hexToBytes(salt);
-    const input = new Uint8Array(passwordBytes.length + saltBytes.length);
-    input.set(passwordBytes);
-    input.set(saltBytes, passwordBytes.length);
-    const digest = await crypto.subtle.digest("SHA-256", input);
-    return safeHexEqual(bytesToHex(new Uint8Array(digest)), expectedHash);
-  }
-
-  const legacyDigest = scrypt(
-    new TextEncoder().encode(pin),
-    hexToBytes(salt),
-    { N: 16384, r: 8, p: 1, dkLen: 64 },
-  );
-  return safeHexEqual(bytesToHex(legacyDigest), expectedHash);
+function providerAccepted(payload: JsonObject | null): boolean {
+  if (!payload) return false;
+  if (payload.status === true || payload.Status === true) return true;
+  const data = payload.data && typeof payload.data === "object"
+    ? payload.data as JsonObject
+    : {};
+  if (data.status === true || data.Status === true) return true;
+  return isAlrahuzSuccess(payload) || isAlrahuzSuccess(data);
 }
 
-function generateNumericCode(length: number): string {
-  const chars = "0123456789";
-  let result = "";
-  const randomBytes = new Uint8Array(length);
-  crypto.getRandomValues(randomBytes);
-  for (let i = 0; i < length; i++) {
-    result += chars[randomBytes[i] % chars.length];
-  }
-  return result;
+function providerExplicitlyRejected(payload: JsonObject | null): boolean {
+  if (!payload) return false;
+  if (payload.status === false || payload.Status === false) return true;
+  const data = payload.data && typeof payload.data === "object"
+    ? payload.data as JsonObject
+    : {};
+  const status = payload.status ?? payload.Status ?? data.status ?? data.Status;
+  return data.status === false ||
+    data.Status === false ||
+    (typeof status === "string" &&
+      ["failed", "error", "rejected", "unsuccessful"].includes(
+        status.toLowerCase(),
+      ));
 }
 
 Deno.serve(async (req) => {
@@ -94,219 +88,405 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return jsonResponse({ message: "Missing authorization." }, 401);
+    const authorization = req.headers.get("Authorization");
+    if (!authorization) {
+      return jsonResponse({ message: "Missing authorization." }, 401);
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const rawSecretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
-    if (!supabaseUrl || !anonKey || !rawSecretKeys) {
-      return jsonResponse({ message: "Education purchase is temporarily unavailable." }, 500);
+    const alrahuzToken = Deno.env.get("ALRAHUZDATA_API_TOKEN") ||
+      Deno.env.get("ALRAHUZ_API_TOKEN") || "";
+    if (!supabaseUrl || !anonKey || !rawSecretKeys || !alrahuzToken) {
+      console.error("Education purchase function configuration is incomplete.");
+      return jsonResponse(
+        { message: "Education PIN purchase is unavailable." },
+        500,
+      );
     }
 
-    const secretKeys = JSON.parse(rawSecretKeys);
-    const serviceKey = secretKeys.default;
+    const secretKeys: unknown = JSON.parse(rawSecretKeys);
+    const serviceKey =
+      secretKeys && typeof secretKeys === "object" && "default" in secretKeys
+        ? secretKeys.default
+        : null;
     if (typeof serviceKey !== "string" || !serviceKey) {
-      return jsonResponse({ message: "Education purchase is temporarily unavailable." }, 500);
+      return jsonResponse(
+        { message: "Education PIN purchase is unavailable." },
+        500,
+      );
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: { Authorization: authorization } },
     });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) return jsonResponse({ message: "Unauthorized." }, 401);
-
-    const body = await req.json();
-    const examBody = String(body?.examBody || "").trim().toUpperCase();
-    const planCode = String(body?.planCode || "").trim();
-    const quantity = Math.max(1, Math.min(5, Number(body?.quantity) || 1));
-    const candidatePhone = String(body?.candidatePhone || "").replace(/\D/g, "");
-    const candidateName = String(body?.candidateName || "").trim();
-    const profileCode = String(body?.profileCode || "").trim();
-    const idempotencyKey = String(body?.idempotencyKey || `EDU_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`).trim();
-    const pin = typeof body?.pin === "string" ? body.pin : "";
-    const transactionAuthorization =
-      typeof body?.transactionAuthorization === "string"
-        ? body.transactionAuthorization
-        : "";
-    const selectionToken =
-      typeof body?.selectionToken === "string" ? body.selectionToken : "";
-
-    if (!["WAEC", "NECO", "JAMB"].includes(examBody)) {
-      return jsonResponse({ message: "Choose a valid exam body (WAEC, NECO, or JAMB)." }, 400);
+    const { data: { user }, error: authError } = await userClient.auth
+      .getUser();
+    if (authError || !user) {
+      return jsonResponse({ message: "Unauthorized." }, 401);
     }
 
-    // Verify token
-    const selection = await verifyDataPlanToken(selectionToken, serviceKey, examBody);
-    if (!selection) {
+    const parsedBody: unknown = await req.json().catch(() => null);
+    if (
+      !parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)
+    ) {
+      return jsonResponse({ message: "Invalid request body." }, 400);
+    }
+    const body = parsedBody as JsonObject;
+    const selectionToken = typeof body.selectionToken === "string"
+      ? body.selectionToken
+      : "";
+    const idempotencyKey = typeof body.idempotencyKey === "string"
+      ? body.idempotencyKey.trim()
+      : "";
+    const pin = typeof body.pin === "string" ? body.pin : "";
+    const quantity = Number(body.quantity);
+    const profileId = typeof body.profileId === "string"
+      ? body.profileId.trim()
+      : "";
+    const variationCode = typeof body.variationCode === "string"
+      ? body.variationCode.trim()
+      : "";
+
+    if (!/^[A-Za-z0-9._:-]{16,100}$/.test(idempotencyKey)) {
       return jsonResponse(
-        { message: "This education plan selection has expired or is invalid. Please select again." },
+        { message: "A valid idempotency key is required." },
+        400,
+      );
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      return jsonResponse(
+        { message: "Enter your 4-digit transaction PIN." },
+        400,
+      );
+    }
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10) {
+      return jsonResponse(
+        { message: "Choose a quantity between 1 and 10." },
+        400,
+      );
+    }
+
+    const selection = await verifyEducationPlanToken(
+      selectionToken,
+      serviceKey,
+    );
+    if (!selection) {
+      return jsonResponse({
+        message:
+          "This education product is no longer available. Reload the catalog and try again.",
+      }, 400);
+    }
+    const isJamb = /jamb/i.test(
+      `${selection.billerSlug} ${selection.billerName}`,
+    );
+    if (isJamb && quantity !== 1) {
+      return jsonResponse({
+        message: "JAMB profile pins can only be purchased one at a time.",
+      }, 400);
+    }
+    if (
+      isJamb &&
+      (!/^\d{10}$/.test(profileId) ||
+        !/^[a-z0-9_-]{1,40}$/i.test(variationCode))
+    ) {
+      return jsonResponse({
+        message: "Enter a valid JAMB profile ID and choose a variation.",
+      }, 400);
+    }
+    if (!isJamb && (profileId || variationCode)) {
+      return jsonResponse({
+        message: "JAMB details are only valid for a JAMB purchase.",
+      }, 400);
+    }
+
+    const amount = selection.unitPrice * quantity;
+    const amountKobo = Math.round(amount * 100);
+    if (
+      !Number.isSafeInteger(amountKobo) || amountKobo <= 0 || amount > 100000
+    ) {
+      return jsonResponse(
+        { message: "The education PIN amount is invalid." },
         400,
       );
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
-
-    // Verify Authorization (PIN or Authorization Token)
-    let pinAuthorized = false;
-    if (transactionAuthorization) {
-      const authorized = await verifyTransactionAuthorization(
-        transactionAuthorization,
-        serviceKey,
-        user.id,
-      );
-      if (authorized && authorized.network === examBody) {
-        pinAuthorized = true;
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from("vtu_transactions")
+      .select(
+        "id, transaction_type, status, provider_reference, provider_response",
+      )
+      .eq("user_id", user.id)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      if (existing.transaction_type !== "education_pin") {
+        return jsonResponse({
+          message: "This idempotency key was used for another purchase.",
+        }, 409);
       }
+      if (existing.status === "success") {
+        return jsonResponse({
+          status: "success",
+          message: "Education PIN purchase already completed.",
+          reference: existing.provider_reference || `ABBA-${existing.id}`,
+          pins: extractPins(existing.provider_response),
+        });
+      }
+      if (existing.status === "failed") {
+        return jsonResponse({
+          status: "failed",
+          message: "This education PIN purchase has already failed.",
+          reference: existing.provider_reference || `ABBA-${existing.id}`,
+        }, 409);
+      }
+      return jsonResponse({
+        status: "pending",
+        message:
+          "This education PIN purchase is already being processed. Do not submit it again yet.",
+        reference: existing.provider_reference || `ABBA-${existing.id}`,
+      }, 202);
     }
 
-    if (!pinAuthorized) {
-      if (!/^\d{4}$/.test(pin)) {
-        return jsonResponse({ message: "Enter your 4-digit transaction PIN." }, 400);
-      }
-      const { data: profile, error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .select("transaction_pin_hash, transaction_pin_salt")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profileError || !profile?.transaction_pin_hash || !profile?.transaction_pin_salt) {
-        return jsonResponse({ message: "Transaction PIN not found. Please set your PIN in Security settings." }, 400);
-      }
-
-      const validPin = await verifyPinHash(
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("phone, transaction_pin_hash, transaction_pin_salt")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile?.transaction_pin_hash || !profile.transaction_pin_salt) {
+      return jsonResponse({
+        message: "Set a transaction PIN before buying an education PIN.",
+      }, 400);
+    }
+    if (
+      !(await verifyTransactionPinHash(
         pin,
         profile.transaction_pin_salt,
         profile.transaction_pin_hash,
+      ))
+    ) {
+      return jsonResponse({ message: "Incorrect transaction PIN." }, 401);
+    }
+
+    let jambCustomerName = "";
+    if (isJamb) {
+      const jambQuery = new URLSearchParams({
+        profile_id: profileId,
+        variation_code: variationCode,
+      });
+      const validation = await callAlrahuzApi<JsonObject>(
+        `/api/validatejamb/?${jambQuery.toString()}`,
+        { token: alrahuzToken, baseUrl: "https://alrahuzdata.com.ng" },
       );
-      if (!validPin) {
-        return jsonResponse({ message: "Incorrect transaction PIN." }, 400);
+      const validationStatus = validation.data?.status ??
+        validation.data?.Status;
+      if (
+        !validation.ok ||
+        validationStatus === false ||
+        (typeof validationStatus === "string" &&
+          ["failed", "error", "invalid"].includes(
+            validationStatus.toLowerCase(),
+          ))
+      ) {
+        return jsonResponse({
+          message: validation.error ||
+            String(
+              validation.data?.message || validation.data?.msg ||
+                "Could not verify the JAMB profile.",
+            ),
+        }, 400);
+      }
+      const validationData = validation.data?.data &&
+          typeof validation.data.data === "object"
+        ? validation.data.data as JsonObject
+        : validation.data;
+      jambCustomerName = String(
+        validationData?.customer_name ||
+          validationData?.customerName ||
+          validationData?.name ||
+          "",
+      ).trim();
+      if (!jambCustomerName) {
+        return jsonResponse({
+          message: "ALRAHUZDATA did not return a verified JAMB customer name.",
+        }, 502);
       }
     }
 
-    // Check idempotency in vtu_transactions
-    const { data: existingTx } = await supabaseAdmin
-      .from("vtu_transactions")
-      .select("id, status, metadata")
-      .eq("reference", idempotencyKey)
-      .maybeSingle();
-
-    if (existingTx && existingTx.status === "COMPLETED") {
+    const providerPlanCode = `${selection.billerSlug}:${selection.productId}`;
+    const { data: reservation, error: reservationError } = await supabaseAdmin
+      .rpc("create_education_reservation", {
+        p_user_id: user.id,
+        p_exam_name: selection.billerName,
+        p_phone_number: profile.phone || user.phone || "",
+        p_account_number: isJamb ? profileId : null,
+        p_plan_code: providerPlanCode,
+        p_plan_label: selection.productName,
+        p_quantity: quantity,
+        p_amount_kobo: amountKobo,
+        p_idempotency_key: idempotencyKey,
+      });
+    if (reservationError) {
+      console.error("Education PIN reservation failed:", reservationError);
+      const insufficient = reservationError.message.toLowerCase().includes(
+        "insufficient",
+      );
       return jsonResponse({
-        success: true,
-        message: "Education e-PIN retrieved successfully.",
-        voucher: existingTx.metadata?.voucher || {},
-      });
+        message: insufficient
+          ? "Insufficient wallet balance."
+          : "Could not reserve wallet balance.",
+      }, insufficient ? 402 : 500);
     }
 
-    // Total cost
-    const totalCost = selection.price * quantity;
-
-    // Check balance
-    const { data: balanceData, error: balanceError } = await supabaseAdmin
-      .from("user_balances")
-      .select("balance")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (balanceError || !balanceData || Number(balanceData.balance) < totalCost) {
-      return jsonResponse({ message: `Insufficient balance. ₦${totalCost.toLocaleString()} required.` }, 400);
+    const transactionId = Number(reservation?.transaction_id);
+    if (!transactionId) {
+      console.error("Invalid education PIN reservation result.");
+      return jsonResponse({
+        message: "Could not create education PIN purchase.",
+      }, 500);
+    }
+    if (reservation.status === "already_exists") {
+      const successful = reservation.transaction_status === "success";
+      return jsonResponse({
+        status: successful ? "success" : "pending",
+        message: successful
+          ? "Education PIN purchase already completed."
+          : "This education PIN purchase is already being processed.",
+        reference: reservation.provider_reference || `ABBA-${transactionId}`,
+        ...(successful
+          ? { pins: extractPins(reservation.provider_response) }
+          : {}),
+      }, successful ? 200 : 202);
     }
 
-    // Debit wallet
-    const newBalance = Number(balanceData.balance) - totalCost;
-    const { error: debitError } = await supabaseAdmin
-      .from("user_balances")
-      .update({ balance: newBalance, updated_at: new Date().toISOString() })
-      .eq("user_id", user.id);
-
-    if (debitError) {
-      return jsonResponse({ message: "Failed to debit wallet. Please try again." }, 500);
-    }
-
-    // Generate Vouchers based on examBody & quantity
-    const vouchers = [];
-    for (let i = 0; i < quantity; i++) {
-      let pinCode = "";
-      let serialNo = "";
-      let portal = "";
-      let instr = "";
-
-      if (examBody === "WAEC") {
-        pinCode = `${generateNumericCode(4)}-${generateNumericCode(4)}-${generateNumericCode(4)}`;
-        serialNo = `WRN${generateNumericCode(9)}`;
-        portal = "https://www.waecdirect.org";
-        instr = "Visit www.waecdirect.org, enter Exam No, Year, PIN and Serial to check result.";
-      } else if (examBody === "NECO") {
-        pinCode = `${generateNumericCode(4)} ${generateNumericCode(4)} ${generateNumericCode(4)}`;
-        serialNo = `NEC${generateNumericCode(8)}`;
-        portal = "https://result.neco.gov.ng";
-        instr = "Visit result.neco.gov.ng, enter Token, Exam Year and Registration Number.";
-      } else {
-        // JAMB
-        pinCode = `${generateNumericCode(10)}`;
-        serialNo = profileCode || `PR-${generateNumericCode(8)}`;
-        portal = "https://www.jamb.gov.ng";
-        instr = "Take this e-PIN to any accredited JAMB CBT registration centre.";
-      }
-
-      vouchers.push({
-        pin: pinCode,
-        serialNumber: serialNo,
-        portalUrl: portal,
-        instructions: instr,
-      });
-    }
-
-    const primaryVoucher = vouchers[0];
-
-    const voucherPayload = {
-      examBody,
-      planCode,
-      planLabel: selection.label,
+    const providerBody: JsonObject = {
+      exam_name: selection.billerName,
       quantity,
-      unitPrice: selection.price,
-      totalAmount: totalCost,
-      pin: primaryVoucher.pin,
-      serialNumber: primaryVoucher.serialNumber,
-      vouchers,
-      candidatePhone,
-      candidateName,
-      profileCode,
-      portalUrl: primaryVoucher.portalUrl,
-      instructions: primaryVoucher.instructions,
-      purchasedAt: new Date().toISOString(),
-      reference: idempotencyKey,
+      ...(isJamb
+        ? {
+          profile_id: profileId,
+          variation_code: variationCode,
+          customer_name: jambCustomerName,
+        }
+        : {}),
     };
-
-    // Record VTU transaction
-    await supabaseAdmin.from("vtu_transactions").insert({
-      user_id: user.id,
-      transaction_type: "EDUCATION",
-      amount: totalCost,
-      status: "COMPLETED",
-      reference: idempotencyKey,
-      provider_reference: idempotencyKey,
-      metadata: {
-        provider: selection.provider,
-        examBody,
-        planCode,
-        quantity,
-        voucher: voucherPayload,
-      },
+    const providerResult = await callAlrahuzApi<JsonObject>("/epin/", {
+      method: "POST",
+      token: alrahuzToken,
+      body: providerBody,
+      timeoutMs: 45000,
     });
+    const providerPayload = providerResult.data;
+    const providerReference = extractProviderReference(
+      providerPayload,
+      `ABBA-${transactionId}`,
+    );
+    const accepted = providerResult.ok &&
+      (providerAccepted(providerPayload) || hasPins(providerPayload));
+    const pending = providerResult.status >= 500 ||
+      (providerResult.ok && (
+        isAlrahuzPending(providerPayload) ||
+        (!accepted && !providerExplicitlyRejected(providerPayload))
+      ));
+
+    if (!accepted && !pending) {
+      const rejection = providerPayload || {
+        message: providerResult.error ||
+          "ALRAHUZDATA rejected the education PIN purchase.",
+      };
+      const { error: releaseError } = await supabaseAdmin.rpc(
+        "release_education_reservation",
+        {
+          p_transaction_id: transactionId,
+          p_provider_response: rejection,
+        },
+      );
+      if (releaseError) {
+        console.error(
+          "Could not release failed education PIN reservation:",
+          releaseError,
+        );
+        return jsonResponse({
+          message:
+            "Provider rejected the purchase, but wallet release needs support review.",
+          reference: `ABBA-${transactionId}`,
+        }, 500);
+      }
+      return jsonResponse({
+        message: providerResult.error ||
+          String(
+            providerPayload?.message || providerPayload?.msg ||
+              "ALRAHUZDATA rejected the education PIN purchase.",
+          ),
+      }, 400);
+    }
+
+    const { error: responseSaveError } = await supabaseAdmin
+      .from("vtu_transactions")
+      .update({
+        provider_reference: providerReference,
+        provider_response: providerPayload,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", transactionId)
+      .eq("status", "processing");
+    if (responseSaveError) {
+      console.error(
+        "Could not save accepted education PIN response:",
+        responseSaveError,
+      );
+      return jsonResponse({
+        status: "pending",
+        message:
+          "Your education PIN purchase is being checked. Do not submit it again yet.",
+        reference: providerReference,
+      }, 202);
+    }
+
+    if (pending) {
+      return jsonResponse({
+        status: "pending",
+        message:
+          "Your education PIN purchase is being checked. Do not submit it again yet.",
+        reference: providerReference,
+      }, 202);
+    }
+
+    const { data: settlement, error: settlementError } = await supabaseAdmin
+      .rpc(
+        "settle_education_purchase",
+        {
+          p_transaction_id: transactionId,
+          p_provider_reference: providerReference,
+          p_provider_response: providerPayload,
+        },
+      );
+    if (settlementError) {
+      console.error("Education PIN settlement failed:", settlementError);
+      return jsonResponse({
+        status: "pending",
+        message:
+          "The provider accepted your order; wallet settlement is still being finalized.",
+        reference: providerReference,
+      }, 202);
+    }
 
     return jsonResponse({
-      success: true,
-      message: `${examBody} e-PIN purchased successfully.`,
-      voucher: voucherPayload,
-      newBalance,
-    });
+      status: "success",
+      message: "Education PIN purchase completed successfully.",
+      reference: providerReference,
+      pins: extractPins(providerPayload),
+      balance_kobo: settlement?.balance_after_kobo,
+    }, 201);
   } catch (error) {
     console.error("education-purchase error:", error);
-    return jsonResponse(
-      { message: error instanceof Error ? error.message : "Education purchase failed." },
-      500,
-    );
+    return jsonResponse({
+      message:
+        "Could not complete the education PIN purchase. Please retry or contact support.",
+    }, 500);
   }
 });

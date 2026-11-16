@@ -3,464 +3,363 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useThemeMode } from "@/lib/theme";
-import { supabase, invokeSupabaseFunction } from "@/lib/supabase";
+import { invokeSupabaseFunction } from "@/lib/supabase";
 
-type ExamBody = "WAEC" | "JAMB" | "NECO";
-
-interface EducationPlan {
+interface EducationProduct {
   id: string;
-  examBody: ExamBody;
-  planCode: string;
   name: string;
-  label: string;
-  price: number;
-  token?: string;
-  portalUrl: string;
-  description: string;
-  instructions: string;
+  amount: number;
+  selectionToken: string;
 }
 
-const FALLBACK_PLANS: Record<ExamBody, EducationPlan[]> = {
-  WAEC: [
-    {
-      id: "waec-result-checker",
-      examBody: "WAEC",
-      planCode: "waec-result-checker",
-      name: "WAEC Result Checker e-PIN",
-      label: "WAEC Result Checker e-PIN",
-      price: 3800,
-      portalUrl: "https://www.waecdirect.org",
-      description: "Official PIN & Serial number to check WAEC May/June and GCE results.",
-      instructions: "Visit www.waecdirect.org, enter your 10-digit Exam No, select Year & Type, enter PIN and Serial number.",
-    },
-  ],
-  NECO: [
-    {
-      id: "neco-result-token",
-      examBody: "NECO",
-      planCode: "neco-result-token",
-      name: "NECO Result Token",
-      label: "NECO Result Token",
-      price: 1350,
-      portalUrl: "https://result.neco.gov.ng",
-      description: "Official Token to check NECO SSCE Internal, External, BECE & NCEE results.",
-      instructions: "Visit result.neco.gov.ng, select Exam Year and Exam Type, enter your Token and Registration Number.",
-    },
-  ],
-  JAMB: [
-    {
-      id: "jamb-utme",
-      examBody: "JAMB",
-      planCode: "jamb-utme",
-      name: "JAMB UTME Registration e-PIN",
-      label: "JAMB UTME Registration e-PIN",
-      price: 6200,
-      portalUrl: "https://www.jamb.gov.ng",
-      description: "Official JAMB UTME Registration profile e-PIN without Mock.",
-      instructions: "Provide your 10-digit Profile Code. Take this generated e-PIN to any accredited JAMB CBT centre.",
-    },
-    {
-      id: "jamb-mock",
-      examBody: "JAMB",
-      planCode: "jamb-mock",
-      name: "JAMB UTME with Mock e-PIN",
-      label: "JAMB UTME with Mock e-PIN",
-      price: 7700,
-      portalUrl: "https://www.jamb.gov.ng",
-      description: "Official JAMB UTME + Mock Examination Registration profile e-PIN.",
-      instructions: "Provide your 10-digit Profile Code. Take this generated e-PIN to any accredited JAMB CBT centre for UTME + Mock registration.",
-    },
-    {
-      id: "jamb-direct-entry",
-      examBody: "JAMB",
-      planCode: "jamb-direct-entry",
-      name: "JAMB Direct Entry (DE) e-PIN",
-      label: "JAMB Direct Entry (DE) e-PIN",
-      price: 6200,
-      portalUrl: "https://www.jamb.gov.ng",
-      description: "Official JAMB Direct Entry (DE) Registration profile e-PIN.",
-      instructions: "Provide your 10-digit Profile Code. Take this generated e-PIN to any accredited JAMB CBT centre to complete Direct Entry registration.",
-    },
-  ],
-};
+interface ExamGroup {
+  slug: string;
+  name: string;
+  products: EducationProduct[];
+}
 
-const EXAM_BODIES: { id: ExamBody; title: string; subtitle: string; logo: string }[] = [
-  { id: "WAEC", title: "WAEC", subtitle: "Result Checker", logo: "/images/education/waec-logo.png" },
-  { id: "JAMB", title: "JAMB", subtitle: "UTME & DE Pin", logo: "/images/education/jamb-logo.jpg" },
-  { id: "NECO", title: "NECO", subtitle: "Result Token", logo: "/images/education/neco-logo.jpg" },
-];
+interface PurchaseResult {
+  reference: string;
+  examName: string;
+  productName: string;
+  quantity: number;
+  pins: Array<{ pin: string; serial?: string }>;
+}
 
 export function EducationShell({ onBack }: { onBack?: () => void }) {
   const { theme } = useThemeMode();
   const isDark = theme === "dark";
 
-  const [selectedBody, setSelectedBody] = useState<ExamBody>("WAEC");
-  const [plans, setPlans] = useState<EducationPlan[]>(FALLBACK_PLANS.WAEC);
-  const [selectedPlan, setSelectedPlan] = useState<EducationPlan>(FALLBACK_PLANS.WAEC[0]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [exams, setExams] = useState<ExamGroup[]>([]);
+  const [selectedExamSlug, setSelectedExamSlug] = useState<string>("");
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [quantity, setQuantity] = useState<number>(1);
-  const [candidatePhone, setCandidatePhone] = useState<string>("");
-  const [candidateName, setCandidateName] = useState<string>("");
-  const [profileCode, setProfileCode] = useState<string>("");
-  const [loadingPlans, setLoadingPlans] = useState<boolean>(false);
+
   const [pin, setPin] = useState<string>("");
   const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
-  const [purchasing, setPurchasing] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [voucherResult, setVoucherResult] = useState<any | null>(null);
-  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [purchaseResult, setPurchaseResult] = useState<PurchaseResult | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  // Auto-fill phone from logged in user
-  useEffect(() => {
-    void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.phone) {
-        setCandidatePhone(user.phone.replace(/^234/, "0"));
-      }
-    })();
-  }, []);
-
-  // Fetch plans dynamically from edge function
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoadingPlans(true);
+    async function loadCatalog() {
+      setLoading(true);
+      setErrorMsg(null);
       try {
-        const res = await invokeSupabaseFunction<{ services?: EducationPlan[] }>(
+        const res = await invokeSupabaseFunction<{ exams?: ExamGroup[] }>(
           "education-services",
-          { examBody: selectedBody },
+          { action: "catalog" }
         );
-        if (!cancelled && res?.services && Array.isArray(res.services) && res.services.length > 0) {
-          setPlans(res.services);
-          setSelectedPlan(res.services[0]);
-        } else if (!cancelled) {
-          const def = FALLBACK_PLANS[selectedBody] || [];
-          setPlans(def);
-          if (def.length > 0) setSelectedPlan(def[0]);
+
+        if (cancelled) return;
+
+        const rawList = Array.isArray(res?.exams) ? res.exams : [];
+        // Strictly exclude JAMB and empty groups
+        const available = rawList.filter(
+          (e) => !/jamb/i.test(`${e.slug} ${e.name}`) && e.products && e.products.length > 0
+        );
+
+        setExams(available);
+        if (available.length > 0) {
+          setSelectedExamSlug(available[0].slug);
+          setSelectedProductId(available[0].products[0]?.id || "");
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          const def = FALLBACK_PLANS[selectedBody] || [];
-          setPlans(def);
-          if (def.length > 0) setSelectedPlan(def[0]);
+          setErrorMsg(err instanceof Error ? err.message : "Failed to load education services.");
         }
       } finally {
-        if (!cancelled) setLoadingPlans(false);
+        if (!cancelled) setLoading(false);
       }
     }
-    void load();
+    void loadCatalog();
     return () => {
       cancelled = true;
     };
-  }, [selectedBody]);
+  }, []);
 
-  const totalCost = (selectedPlan?.price || 0) * quantity;
+  const currentExam = exams.find((e) => e.slug === selectedExamSlug);
+  const currentProducts = currentExam?.products || [];
+  const currentProduct = currentProducts.find((p) => p.id === selectedProductId) || currentProducts[0];
 
-  const handleBodyChange = (body: ExamBody) => {
-    setSelectedBody(body);
+  const handleExamChange = (slug: string) => {
+    setSelectedExamSlug(slug);
+    const target = exams.find((e) => e.slug === slug);
+    if (target?.products && target.products.length > 0) {
+      setSelectedProductId(target.products[0].id);
+    } else {
+      setSelectedProductId("");
+    }
     setErrorMsg(null);
-    setQuantity(1);
-    const def = FALLBACK_PLANS[body] || [];
-    setPlans(def);
-    if (def.length > 0) setSelectedPlan(def[0]);
   };
 
-  const handleStartPurchase = () => {
+  const totalCost = (currentProduct?.amount || 0) * quantity;
+
+  const handleProceed = () => {
+    if (!currentProduct) {
+      setErrorMsg("Please select an exam package.");
+      return;
+    }
     setErrorMsg(null);
-    const cleanPhone = candidatePhone.replace(/\D/g, "");
-    if (cleanPhone.length < 10) {
-      setErrorMsg("Please enter a valid candidate recipient phone number.");
-      return;
-    }
-    if (selectedBody === "JAMB" && profileCode.trim().length < 8) {
-      setErrorMsg("Please enter the candidate 10-digit JAMB Profile Code.");
-      return;
-    }
+    setPin("");
     setIsPinModalOpen(true);
   };
 
-  const handleExecutePurchase = async (e: React.FormEvent) => {
+  const handleAuthorize = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!/^\d{4}$/.test(pin)) {
-      setErrorMsg("Please enter your 4-digit transaction PIN.");
+    if (pin.length !== 4) {
+      setErrorMsg("Please enter your 4-digit PIN.");
+      return;
+    }
+    if (!currentProduct?.selectionToken) {
+      setErrorMsg("Selected package token is unavailable. Please reload.");
       return;
     }
 
-    setPurchasing(true);
+    setSubmitting(true);
     setErrorMsg(null);
+
+    const idempotencyKey = `edu_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     try {
       const res = await invokeSupabaseFunction<{
-        success: boolean;
+        status?: string;
         message?: string;
-        voucher: any;
+        reference?: string;
+        pins?: unknown;
       }>("education-purchase", {
-        examBody: selectedBody,
-        planCode: selectedPlan.planCode,
+        selectionToken: currentProduct.selectionToken,
         quantity,
-        candidatePhone,
-        candidateName: candidateName.trim(),
-        profileCode: profileCode.trim(),
-        selectionToken: selectedPlan.token,
         pin,
+        idempotencyKey,
       });
 
-      if (res && res.success && res.voucher) {
+      if (res?.status === "success" || res?.reference) {
+        const rawPins = res.pins;
+        const normalizedPins: Array<{ pin: string; serial?: string }> = [];
+
+        if (Array.isArray(rawPins)) {
+          for (const item of rawPins) {
+            if (typeof item === "string") {
+              normalizedPins.push({ pin: item });
+            } else if (item && typeof item === "object") {
+              const obj = item as Record<string, unknown>;
+              normalizedPins.push({
+                pin: String(obj.pin || obj.token || ""),
+                serial: obj.serial || obj.serialNumber ? String(obj.serial || obj.serialNumber) : undefined,
+              });
+            }
+          }
+        } else if (typeof rawPins === "string" && rawPins.trim()) {
+          normalizedPins.push({ pin: rawPins.trim() });
+        } else if (rawPins && typeof rawPins === "object") {
+          const obj = rawPins as Record<string, unknown>;
+          normalizedPins.push({
+            pin: String(obj.pin || obj.token || ""),
+            serial: obj.serial || obj.serialNumber ? String(obj.serial || obj.serialNumber) : undefined,
+          });
+        }
+
         setIsPinModalOpen(false);
-        setVoucherResult(res.voucher);
+        setPurchaseResult({
+          reference: String(res.reference || idempotencyKey),
+          examName: currentExam?.name || "Exam",
+          productName: currentProduct.name,
+          quantity,
+          pins: normalizedPins,
+        });
       } else {
-        throw new Error(res?.message || "Education purchase failed.");
+        throw new Error(res?.message || "Purchase failed.");
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Education purchase failed. Check PIN and balance.");
+      setErrorMsg(err instanceof Error ? err.message : "Purchase failed. Please check balance and PIN.");
     } finally {
-      setPurchasing(false);
-      setPin("");
+      setSubmitting(false);
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text.replace(/\s+/g, "")).catch(() => {});
-    setCopyToast(`${label} copied to clipboard!`);
-    setTimeout(() => setCopyToast(null), 2500);
+  const copyPin = (text: string, index: number) => {
+    void navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   return (
-    <div className={`min-h-screen py-6 px-4 sm:px-6 transition-colors duration-200 ${
+    <div className={`min-h-screen py-8 px-4 sm:px-6 transition-colors duration-200 ${
       isDark ? "bg-[#0b0e14] text-white" : "bg-[#f8fafc] text-slate-900"
     }`}>
-      <div className="max-w-xl mx-auto space-y-6">
+      <div className="max-w-md mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            {onBack && (
-              <button
-                type="button"
-                onClick={onBack}
-                className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            )}
-            <div>
-              <h1 className="text-xl font-extrabold tracking-tight">Education Services</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Official WAEC, JAMB & NECO Examination e-PINs
-              </p>
-            </div>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl font-bold">Education</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Exam PINs & Tokens</p>
           </div>
         </div>
 
-        {/* Exam Body Selection */}
-        <div className="grid grid-cols-3 gap-3">
-          {EXAM_BODIES.map((item) => {
-            const isSelected = selectedBody === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleBodyChange(item.id)}
-                className={`p-3.5 rounded-2xl border flex flex-col items-center gap-2 transition cursor-pointer text-center ${
-                  isSelected
-                    ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs"
-                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] hover:border-slate-300"
-                }`}
-              >
-                <div className="w-12 h-12 rounded-xl bg-white p-1 border border-slate-200 flex items-center justify-center overflow-hidden">
-                  <Image src={item.logo} alt={item.title} width={44} height={44} className="object-contain" />
-                </div>
-                <div>
-                  <span className={`block text-sm font-bold ${isSelected ? "text-blue-600 dark:text-blue-400" : ""}`}>
-                    {item.title}
-                  </span>
-                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                    {item.subtitle}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Packages List */}
-        <div className="space-y-3">
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Available Packages
-          </label>
-          {loadingPlans ? (
-            <div className="p-6 text-center text-xs text-slate-500">
-              Loading verified {selectedBody} packages...
-            </div>
+        {/* Biller Card */}
+        <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] shadow-xs space-y-4">
+          {loading ? (
+            <div className="py-12 text-center text-xs text-slate-400">Loading services...</div>
+          ) : exams.length === 0 ? (
+            <div className="py-10 text-center text-xs text-slate-400">No education services available.</div>
           ) : (
-            <div className="space-y-2.5">
-              {plans.map((p) => {
-                const isSelected = selectedPlan?.planCode === p.planCode;
-                return (
-                  <div
-                    key={p.planCode}
-                    onClick={() => setSelectedPlan(p)}
-                    className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition ${
-                      isSelected
-                        ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/20"
-                        : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721]"
-                    }`}
+            <>
+              {/* Exam Selection Dropdown */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+                  Examination
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedExamSlug}
+                    onChange={(e) => handleExamChange(e.target.value)}
+                    className="w-full appearance-none px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
                   >
-                    <div>
-                      <h4 className="text-sm font-bold">{p.name}</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{p.description}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-base font-extrabold text-blue-600 dark:text-blue-400">
-                        ₦{p.price.toLocaleString()}
-                      </span>
-                    </div>
+                    {exams.map((e) => (
+                      <option key={e.slug} value={e.slug}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+
+              {/* Package Dropdown */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+                  Package
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedProductId}
+                    onChange={(e) => setSelectedProductId(e.target.value)}
+                    className="w-full appearance-none px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
+                  >
+                    {currentProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — ₦{p.amount.toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quantity Dropdown */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+                  Quantity
+                </label>
+                <div className="relative">
+                  <select
+                    value={quantity}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                    className="w-full appearance-none px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Price & Summary */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span className="text-xs text-slate-500 dark:text-slate-400">Total</span>
+                <span className="text-lg font-bold text-teal-600 dark:text-teal-400">
+                  ₦{totalCost.toLocaleString()}
+                </span>
+              </div>
+
+              {errorMsg && !isPinModalOpen && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
+                  {errorMsg}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleProceed}
+                disabled={!currentProduct}
+                className="w-full py-3.5 rounded-xl font-bold text-sm bg-teal-600 hover:bg-teal-700 text-white transition disabled:opacity-40 cursor-pointer shadow-xs"
+              >
+                Proceed
+              </button>
+            </>
           )}
-        </div>
-
-        {/* Quantity Selector */}
-        <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721]">
-          <div>
-            <h4 className="text-sm font-bold">Voucher Quantity</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Buy 1 to 5 vouchers</p>
-          </div>
-          <div className="flex items-center gap-3 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              disabled={quantity <= 1}
-              className="w-8 h-8 rounded flex items-center justify-center font-bold text-lg disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
-              -
-            </button>
-            <span className="font-extrabold text-sm w-4 text-center">{quantity}</span>
-            <button
-              type="button"
-              onClick={() => setQuantity((q) => Math.min(5, q + 1))}
-              disabled={quantity >= 5}
-              className="w-8 h-8 rounded flex items-center justify-center font-bold text-lg disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {/* Candidate Details Form */}
-        <div className="space-y-3.5 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721]">
-          <h4 className="text-sm font-bold">Candidate Details</h4>
-
-          {selectedBody === "JAMB" && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                JAMB Profile Code (10 Digits) *
-              </label>
-              <input
-                type="text"
-                maxLength={10}
-                placeholder="e.g. 5501928391"
-                value={profileCode}
-                onChange={(e) => setProfileCode(e.target.value.replace(/\D/g, ""))}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-medium outline-hidden focus:border-blue-600"
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-              Recipient Phone Number (For SMS & Records) *
-            </label>
-            <input
-              type="tel"
-              maxLength={11}
-              placeholder="e.g. 08012345678"
-              value={candidatePhone}
-              onChange={(e) => setCandidatePhone(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-medium outline-hidden focus:border-blue-600"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-              Candidate Full Name (Optional)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Ibrahim Abubakar Kano"
-              value={candidateName}
-              onChange={(e) => setCandidateName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-medium outline-hidden focus:border-blue-600"
-            />
-          </div>
-        </div>
-
-        {/* Error Notification */}
-        {errorMsg && (
-          <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-semibold">
-            {errorMsg}
-          </div>
-        )}
-
-        {/* Summary & Checkout CTA */}
-        <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] space-y-3">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-500 dark:text-slate-400">Total Payable</span>
-            <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">
-              ₦{totalCost.toLocaleString()}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleStartPurchase}
-            className="w-full py-3.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white shadow-md transition cursor-pointer"
-          >
-            Purchase {selectedBody} e-PIN • ₦{totalCost.toLocaleString()}
-          </button>
         </div>
       </div>
 
-      {/* Transaction PIN Modal */}
+      {/* PIN Confirmation Modal */}
       {isPinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] p-6 space-y-4 shadow-xl">
-            <h3 className="text-base font-bold text-center">Confirm Transaction PIN</h3>
-            <p className="text-xs text-center text-slate-500">
-              Enter your 4-digit security PIN to authorize ₦{totalCost.toLocaleString()} for {selectedBody} e-PIN.
-            </p>
+          <div className="w-full max-w-xs rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] p-6 space-y-4 shadow-xl">
+            <div className="text-center">
+              <h3 className="text-base font-bold">Transaction PIN</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                ₦{totalCost.toLocaleString()}
+              </p>
+            </div>
 
-            <form onSubmit={handleExecutePurchase} className="space-y-4">
+            <form onSubmit={handleAuthorize} className="space-y-4">
               <input
                 type="password"
                 maxLength={4}
                 autoFocus
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                placeholder="••••"
-                className="w-full text-center tracking-[1em] text-2xl py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-bold outline-hidden focus:border-blue-600"
+                className="w-full text-center tracking-[1em] text-2xl py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-bold outline-hidden focus:border-teal-500"
               />
 
               {errorMsg && (
-                <p className="text-xs text-center text-red-500 font-semibold">{errorMsg}</p>
+                <p className="text-xs text-center text-red-500">{errorMsg}</p>
               )}
 
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setIsPinModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={purchasing || pin.length !== 4}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-bold shadow-xs"
+                  disabled={submitting || pin.length !== 4}
+                  className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-xs font-bold shadow-xs cursor-pointer"
                 >
-                  {purchasing ? "Processing..." : "Authorize"}
+                  {submitting ? "..." : "Authorize"}
                 </button>
               </div>
             </form>
@@ -468,120 +367,70 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
         </div>
       )}
 
-      {/* Voucher Slip Modal */}
-      {voucherResult && (
+      {/* Voucher Modal */}
+      {purchaseResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-            {copyToast && (
-              <div className="bg-emerald-600 text-white text-xs font-bold py-1.5 px-3 rounded-lg text-center">
-                {copyToast}
-              </div>
-            )}
-
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white p-1 border border-slate-200 flex items-center justify-center">
-                  <Image
-                    src={voucherResult.examBody === "JAMB" ? "/images/education/jamb-logo.jpg" : voucherResult.examBody === "NECO" ? "/images/education/neco-logo.jpg" : "/images/education/waec-logo.png"}
-                    alt="Logo"
-                    width={36}
-                    height={36}
-                    className="object-contain"
-                  />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base">{voucherResult.examBody} Exam Voucher</h3>
-                  <span className="text-[11px] text-emerald-600 font-bold">ISSUED & VERIFIED</span>
-                </div>
+              <div>
+                <h3 className="font-bold text-base">{purchaseResult.examName}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{purchaseResult.productName}</p>
               </div>
               <button
                 type="button"
-                onClick={() => setVoucherResult(null)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700"
+                onClick={() => setPurchaseResult(null)}
+                className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* Vouchers Block */}
-            <div className="space-y-3">
-              {(voucherResult.vouchers || [{ pin: voucherResult.pin, serialNumber: voucherResult.serialNumber }]).map((v: any, idx: number) => (
-                <div key={idx} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 space-y-3">
+            <div className="space-y-2.5 max-h-60 overflow-y-auto">
+              {purchaseResult.pins.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between"
+                >
                   <div>
-                    <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-                      EXAM PIN / TOKEN
-                    </span>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="font-mono text-lg font-black tracking-wider text-blue-600 dark:text-blue-400">
-                        {v.pin}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(v.pin, "PIN")}
-                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-                      >
-                        Copy
-                      </button>
+                    <div className="font-mono text-base font-bold text-teal-600 dark:text-teal-400">
+                      {item.pin}
                     </div>
-                  </div>
-
-                  {v.serialNumber && (
-                    <div>
-                      <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-                        SERIAL NUMBER
-                      </span>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300">
-                          {v.serialNumber}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(v.serialNumber, "Serial Number")}
-                          className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        >
-                          Copy
-                        </button>
+                    {item.serial && (
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                        S/N: {item.serial}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyPin(item.pin, idx)}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 cursor-pointer"
+                  >
+                    {copiedIndex === idx ? "Copied" : "Copy"}
+                  </button>
                 </div>
               ))}
             </div>
 
-            {/* Candidate & Ref info */}
-            <div className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-3">
-              <div className="flex justify-between">
-                <span>Reference:</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white">{voucherResult.reference}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Candidate Phone:</span>
-                <span className="font-bold text-slate-900 dark:text-white">{voucherResult.candidatePhone}</span>
-              </div>
-              {voucherResult.candidateName && (
-                <div className="flex justify-between">
-                  <span>Candidate Name:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">{voucherResult.candidateName}</span>
-                </div>
-              )}
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span>Ref: {purchaseResult.reference}</span>
+              <span>Qty: {purchaseResult.quantity}</span>
             </div>
 
-            {/* Portal Action & Print */}
-            <div className="space-y-2 pt-2">
-              <a
-                href={voucherResult.portalUrl || "https://www.waecdirect.org"}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full block py-2.5 text-center rounded-xl border border-blue-600 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-50 dark:hover:bg-blue-950/30"
-              >
-                Open Official {voucherResult.examBody} Verification Portal ↗
-              </a>
+            <div className="flex gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
-                Print Voucher Slip
+                Print
+              </button>
+              <button
+                type="button"
+                onClick={() => setPurchaseResult(null)}
+                className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold cursor-pointer"
+              >
+                Done
               </button>
             </div>
           </div>
