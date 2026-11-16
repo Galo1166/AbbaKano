@@ -859,6 +859,37 @@ export async function updateSystemSettings(
   });
 }
 
+export interface BillstackBackfillJob {
+  id: string;
+  status: "preparing" | "running" | "completed" | "failed";
+  total_users: number;
+  processed_users: number;
+  completed_users: number;
+  skipped_users: number;
+  failed_users: number;
+  pending_users: number;
+  processing_users: number;
+  error_message: string | null;
+  recent_failures: Array<{ user_id: string; error_message: string | null }>;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export async function requestBillstackBackfill(
+  action: "start" | "latest" | "process",
+  options: { reason?: string; jobId?: string } = {},
+): Promise<BillstackBackfillJob | null> {
+  const response = await invokeSupabaseFunction<{
+    job: BillstackBackfillJob | null;
+  }>("billstack-backfill", {
+    action,
+    ...(options.reason ? { reason: options.reason } : {}),
+    ...(options.jobId ? { jobId: options.jobId } : {}),
+  });
+  return response.job;
+}
+
 // ─── Dashboard Overview ───────────────────────────────────────
 export async function fetchDashboardOverview(): Promise<DashboardOverview> {
   const [summaryResponse, todayResponse, transactionsResponse] = await Promise.all([

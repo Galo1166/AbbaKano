@@ -14,10 +14,15 @@ export type VirtualAccountIdentity = {
 export interface VirtualAccountResult {
   accounts: VirtualAccount[];
   requiresIdentity: boolean;
+  accountWarnings?: string[];
 }
 
 const VIRTUAL_ACCOUNT_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min — DVAs don't change
-const virtualAccountCache = new Map<string, { accounts: VirtualAccount[]; expiresAt: number }>();
+const virtualAccountCache = new Map<string, {
+  accounts: VirtualAccount[];
+  accountWarnings: string[];
+  expiresAt: number;
+}>();
 const virtualAccountRequests = new Map<string, Promise<VirtualAccountResult>>();
 
 /**
@@ -28,13 +33,21 @@ export function getCachedVirtualAccounts(userId?: string): VirtualAccountResult 
   if (userId) {
     const cached = virtualAccountCache.get(userId);
     if (cached && cached.expiresAt > Date.now()) {
-      return { accounts: cached.accounts, requiresIdentity: false };
+      return {
+        accounts: cached.accounts,
+        requiresIdentity: false,
+        accountWarnings: cached.accountWarnings,
+      };
     }
     return null;
   }
   for (const cached of virtualAccountCache.values()) {
     if (cached && cached.expiresAt > Date.now()) {
-      return { accounts: cached.accounts, requiresIdentity: false };
+      return {
+        accounts: cached.accounts,
+        requiresIdentity: false,
+        accountWarnings: cached.accountWarnings,
+      };
     }
   }
   return null;
@@ -138,15 +151,16 @@ export async function fetchVirtualAccounts(
 
   const body = identity ? { [identity.type]: identity.value } : {};
 
-  // 10s timeout to prevent indefinite hangs
+  // Allow time for independent provider account requests to finish.
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Request timed out. Please try again.")), 10000)
+    setTimeout(() => reject(new Error("Request timed out. Please try again.")), 60000)
   );
 
   const request = Promise.race([
     invokeSupabaseFunction<{
       accounts?: unknown;
       requiresIdentity?: boolean;
+      accountWarnings?: unknown;
     }>("virtual-accounts", body),
     timeoutPromise
   ])
@@ -157,6 +171,9 @@ export async function fetchVirtualAccounts(
           .map(normalizeVirtualAccount)
           .filter((account): account is VirtualAccount => account !== null);
       }
+      const accountWarnings = Array.isArray(response.accountWarnings)
+        ? response.accountWarnings.filter((warning): warning is string => typeof warning === "string")
+        : [];
 
       // If edge function returned 0 accounts, check database fallback
       if (accounts.length === 0 && !identity) {
@@ -166,9 +183,10 @@ export async function fetchVirtualAccounts(
       if (accounts.length > 0) {
         virtualAccountCache.set(userId, {
           accounts,
+          accountWarnings,
           expiresAt: Date.now() + VIRTUAL_ACCOUNT_CACHE_TTL_MS,
         });
-        return { accounts, requiresIdentity: false };
+        return { accounts, requiresIdentity: false, accountWarnings };
       }
 
       if (response.requiresIdentity === true) {
@@ -187,6 +205,7 @@ export async function fetchVirtualAccounts(
         if (fallbackAccounts.length > 0) {
           virtualAccountCache.set(userId, {
             accounts: fallbackAccounts,
+            accountWarnings: [],
             expiresAt: Date.now() + VIRTUAL_ACCOUNT_CACHE_TTL_MS,
           });
           return { accounts: fallbackAccounts, requiresIdentity: false };

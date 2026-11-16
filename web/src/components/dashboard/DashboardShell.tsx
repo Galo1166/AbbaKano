@@ -26,6 +26,7 @@ import { HistoryShell } from "@/components/history/HistoryShell";
 import { ProfileShell } from "@/components/profile/ProfileShell";
 import { CableTVShell } from "@/components/cable/CableTVShell";
 import { ElectricityShell } from "@/components/electricity/ElectricityShell";
+import { EducationPinShell } from "@/components/education/EducationPinShell";
 import { FundWalletShell } from "@/components/funding/FundWalletShell";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
@@ -73,6 +74,12 @@ const VTU_HUB_ITEMS = [
     title: "Cable TV",
     subtitle: "DSTV, GOTV & Star",
     tab: "tv",
+  },
+  {
+    key: "education",
+    title: "Education PINs",
+    subtitle: "Exam pins & vouchers",
+    tab: "education",
   },
 ];
 
@@ -387,6 +394,7 @@ export function DashboardShell() {
   if (activeTab === "airtime") return <AirtimeShell />;
   if (activeTab === "power" || activeTab === "electricity") return <ElectricityShell />;
   if (activeTab === "tv" || activeTab === "cable-tv") return <CableTVShell />;
+  if (activeTab === "education") return <EducationPinShell />;
   if (activeTab === "funding" || activeTab === "fund-wallet") return <FundWalletShell />;
   if (activeTab === "history") return <HistoryShell />;
   if (activeTab === "profile") return <ProfileShell initialUser={data?.user} initialBalance={data?.balance} />;
@@ -628,6 +636,11 @@ export function DashboardShell() {
                       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <rect x="3" y="7" width="18" height="13" rx="2" strokeWidth="2" />
                         <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 3l-4 4-4-4" />
+                      </svg>
+                    )}
+                    {item.key === "education" && (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 14 3 9l9-5 9 5-9 5Zm0 0v6m-6-8v5c3.5 3 8.5 3 12 0v-5M21 9v6" />
                       </svg>
                     )}
                   </div>

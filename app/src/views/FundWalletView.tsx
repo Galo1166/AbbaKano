@@ -5,6 +5,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import * as WebBrowser from 'expo-web-browser';
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -27,7 +28,14 @@ type PaystackResponse = {
 export const FundWalletView: React.FC<FundWalletViewProps> = ({
   onBackPress,
 }) => {
-  const { virtualAccounts, theme: Palette } = useApp();
+  const {
+    virtualAccounts,
+    virtualAccountsLoading,
+    virtualAccountsError,
+    virtualAccountsRequireIdentity,
+    refreshVirtualAccounts,
+    theme: Palette,
+  } = useApp();
   const styles = useMemo(() => getStyles(Palette), [Palette]);
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
   const [gatewayExpanded, setGatewayExpanded] = useState(false);
@@ -89,7 +97,7 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* === DEDICATED TRANSFER ACCOUNTS (MONNIFY 3-BANK ENGINE) === */}
+        {/* === DEDICATED TRANSFER ACCOUNTS === */}
         <View style={styles.accountsSectionHeader}>
           <View style={styles.accountsSectionLeft}>
             <MaterialIcons
@@ -103,13 +111,52 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
           </View>
           <View style={styles.autoSyncBadge}>
             <View style={styles.autoSyncDot} />
-            <Text style={styles.autoSyncText}>MONNIFY SYNC</Text>
+            <Text style={styles.autoSyncText}>AUTO-CREDIT</Text>
           </View>
         </View>
 
         <Text style={styles.accountsSubtitle}>
-          Choose any of your 3 dedicated bank accounts. Transfers reflect automatically in 15–30 seconds.
+          Choose any dedicated bank account listed below. Transfers are credited automatically.
         </Text>
+
+        {virtualAccountsLoading && virtualAccounts.length === 0 && (
+          <View style={styles.accountsStatus}>
+            <ActivityIndicator size="small" color={Palette.primary} />
+            <Text style={styles.accountsStatusText}>Loading your bank accounts...</Text>
+          </View>
+        )}
+
+        {!virtualAccountsLoading && virtualAccountsError && virtualAccounts.length === 0 && (
+          <View style={styles.accountsStatus}>
+            <Text style={styles.accountsErrorText}>{virtualAccountsError}</Text>
+            <Pressable
+              onPress={() => void refreshVirtualAccounts()}
+              style={styles.refreshAccountsButton}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading bank accounts"
+            >
+              <Text style={styles.refreshAccountsText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {!virtualAccountsLoading && !virtualAccountsError && virtualAccounts.length === 0 && (
+          <View style={styles.accountsStatus}>
+            <Text style={styles.accountsStatusText}>
+              {virtualAccountsRequireIdentity
+                ? 'Verify your identity to generate dedicated bank accounts.'
+                : 'No dedicated bank accounts are available yet. Please try again.'}
+            </Text>
+            <Pressable
+              onPress={() => void refreshVirtualAccounts()}
+              style={styles.refreshAccountsButton}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh bank accounts"
+            >
+              <Text style={styles.refreshAccountsText}>Refresh</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* 3 Virtual Accounts (Moniepoint, Sterling, Wema / Others) */}
         {virtualAccounts.map((account, idx) => {
@@ -117,8 +164,8 @@ export const FundWalletView: React.FC<FundWalletViewProps> = ({
           const isSterling = /sterling/i.test(account.bankName);
           const isWema = /wema/i.test(account.bankName);
           const brandColor = isMoniepoint ? '#0047cc' : isSterling ? '#d32f2f' : isWema ? '#93186c' : Palette.primary;
-          const badgeText = isMoniepoint ? 'Fastest • Recommended' : isSterling ? 'Monnify Dedicated' : 'Backup Desk';
-          const subLabel = isMoniepoint ? 'Automated Virtual Gateway • ~15s' : isSterling ? 'Monnify Dedicated Reserve Desk' : 'Automated Virtual Desk • < 30s';
+          const badgeText = isMoniepoint ? 'Fastest • Recommended' : 'Dedicated Account';
+          const subLabel = isMoniepoint ? 'Automated Virtual Gateway • ~15s' : 'Automated bank transfer account';
 
           return (
             <View
@@ -358,6 +405,38 @@ const getStyles = (Palette: PaletteType) =>
       lineHeight: 18,
       marginTop: -Spacing.two,
       marginBottom: Spacing.one,
+    },
+    accountsStatus: {
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.two,
+      padding: Spacing.four,
+      borderRadius: Rounded.lg,
+      backgroundColor: Palette.surface,
+      borderWidth: 1,
+      borderColor: Palette.border,
+    },
+    accountsStatusText: {
+      fontSize: 13,
+      color: Palette.onSurfaceVariant,
+      fontFamily: Typography.family,
+      textAlign: "center",
+    },
+    accountsErrorText: {
+      fontSize: 13,
+      color: Palette.error,
+      fontFamily: Typography.family,
+      textAlign: "center",
+    },
+    refreshAccountsButton: {
+      paddingHorizontal: Spacing.four,
+      paddingVertical: Spacing.two,
+    },
+    refreshAccountsText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: Palette.primary,
+      fontFamily: Typography.family,
     },
     autoSyncBadge: {
       flexDirection: "row",

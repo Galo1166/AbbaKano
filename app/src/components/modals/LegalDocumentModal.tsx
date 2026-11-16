@@ -210,7 +210,7 @@ const PrivacyPolicyContent = ({ T }: { T: any }) => (
       number="3"
       title="Third-Party Partners & Integrations"
       content={[
-        'Payment Aggregators: Monnify (TeamApt/Moniepoint) and Paystack for processing wallet fundings and issuing CBN-licensed dedicated accounts.',
+        'Payment Aggregators: Monnify (TeamApt/Moniepoint), Billstack, and Paystack for processing wallet fundings and issuing dedicated accounts.',
         'Telecommunications Carriers: Direct API connections with MTN Nigeria, Airtel Nigeria, Globacom Limited, and 9mobile for top-up provisioning.',
         'Utility Providers: Multichoice (DStv/GOtv), StarTimes, and Nigerian Electricity Distribution Companies (DisCos) for bill payment verification.',
         'We never sell, monetize, or lease your personal information to third-party advertising companies.',
