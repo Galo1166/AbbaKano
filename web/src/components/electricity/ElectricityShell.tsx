@@ -76,6 +76,72 @@ export function ElectricityShell() {
     }
   }
 
+  function downloadReceiptPdf() {
+    if (!receipt) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Electricity Receipt - ${receipt.meterNumber}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 30px; color: #1E293B; background: #F8FAFC; }
+          .receipt { max-width: 440px; margin: 0 auto; background: #FFF; border: 1px solid #E2E8F0; border-radius: 16px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+          .brand { text-align: center; border-bottom: 2px dashed #E2E8F0; padding-bottom: 16px; margin-bottom: 20px; }
+          .title { font-size: 20px; font-weight: 800; color: #2563EB; }
+          .sub { font-size: 13px; color: #64748B; margin-top: 4px; }
+          .badge { display: inline-block; background: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin-top: 8px; }
+          .token-box { background: #0F172A; color: #FFF; border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center; }
+          .token-title { font-size: 10px; font-weight: 700; color: #94A3B8; letter-spacing: 1px; }
+          .token-code { font-family: monospace; font-size: 22px; font-weight: 900; color: #38BDF8; letter-spacing: 2px; margin: 8px 0; }
+          .token-units { font-size: 13px; font-weight: 600; color: #F8FAFC; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+          td { padding: 8px 0; border-bottom: 1px solid #F1F5F9; }
+          td:first-child { color: #64748B; }
+          td:last-child { text-align: right; font-weight: 600; color: #0F172A; }
+          .footer { text-align: center; border-top: 2px dashed #E2E8F0; padding-top: 16px; margin-top: 20px; font-size: 11px; color: #94A3B8; }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="brand">
+            <div class="title">ABBA KANO INVESTMENTS</div>
+            <div class="sub">Prepaid Electricity Token Voucher</div>
+            <div class="badge">PAYMENT SUCCESSFUL</div>
+          </div>
+          <div class="token-box">
+            <div class="token-title">PREPAID METER TOKEN</div>
+            <div class="token-code">${receipt.token || "N/A"}</div>
+            ${receipt.units ? `<div class="token-units">Purchased Energy: ${receipt.units}</div>` : ""}
+          </div>
+          <table>
+            <tr><td>DisCo Provider</td><td>${receipt.provider}</td></tr>
+            <tr><td>Meter Number</td><td>${receipt.meterNumber}</td></tr>
+            ${receipt.customerName ? `<tr><td>Customer Name</td><td>${receipt.customerName}</td></tr>` : ""}
+            <tr><td>Amount Paid</td><td>₦${receipt.amount.toLocaleString()}</td></tr>
+            ${receipt.reference ? `<tr><td>Reference ID</td><td>${receipt.reference}</td></tr>` : ""}
+            <tr><td>Payment Method</td><td>AbbaKano Wallet</td></tr>
+            <tr><td>Date & Time</td><td>${new Date().toLocaleString()}</td></tr>
+          </table>
+          <div class="footer">
+            Enter the 20-digit token into your Customer Interface Unit (CIU) keypad.<br/>
+            Thank you for choosing AbbaKano Data Sub!
+          </div>
+        </div>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function loadBalance() {
@@ -709,16 +775,29 @@ export function ElectricityShell() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setReceipt(null);
-                goHome();
-              }}
-              className="mt-5 w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
-            >
-              Done
-            </button>
+            <div className="flex flex-col gap-2 mt-5">
+              <button
+                type="button"
+                onClick={downloadReceiptPdf}
+                className="w-full h-11 rounded-xl border border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Download Receipt (PDF)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setReceipt(null);
+                  goHome();
+                }}
+                className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition active:scale-95 cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -20,16 +20,22 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (req.method !== "POST") {
+  if (req.method !== "POST" && req.method !== "GET") {
     return jsonResponse({ message: "Method not allowed" }, 405);
   }
 
   try {
-    const requestBody: unknown = await req.json().catch(() => null);
-    if (!requestBody || typeof requestBody !== "object" || Array.isArray(requestBody)) {
-      return jsonResponse({ message: "Invalid request body" }, 400);
+    let body: Record<string, unknown> = {};
+    if (req.method === "POST") {
+      try {
+        const parsed = await req.json();
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          body = parsed;
+        }
+      } catch {
+        // empty body is acceptable for fetching existing accounts
+      }
     }
-    const body = requestBody as Record<string, unknown>;
     const bvn = typeof body.bvn === "string" ? body.bvn.trim() : "";
     const nin = typeof body.nin === "string" ? body.nin.trim() : "";
 

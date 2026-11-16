@@ -185,3 +185,15 @@ entrypoint = "./functions/monnify-webhook/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/virtual-accounts/index.ts"
+
+[functions.education-services]
+enabled = true
+verify_jwt = false
+import_map = "./functions/education-services/deno.json"
+entrypoint = "./functions/education-services/index.ts"
+
+[functions.education-purchase]
+enabled = true
+verify_jwt = false
+import_map = "./functions/education-purchase/deno.json"
+entrypoint = "./functions/education-purchase/index.ts"

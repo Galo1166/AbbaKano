@@ -3,3 +3,4 @@
   "deno.enablePaths": ["web/supabase/functions"],
   "deno.unstable": true
 }
+

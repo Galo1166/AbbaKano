@@ -78,7 +78,7 @@ export async function verifyDataPlanToken(
       selection.network !== requestedNetwork ||
       typeof selection.label !== "string" ||
       !selection.label.trim() ||
-      !/^\d+$/.test(selection.serviceId) ||
+      !/^[a-zA-Z0-9_-]+$/.test(selection.serviceId) ||
       !selection.planCode ||
       (selection.accountNumber !== undefined &&
         !/^\d{8,14}$/.test(selection.accountNumber)) ||

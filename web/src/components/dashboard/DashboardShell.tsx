@@ -26,6 +26,8 @@ import { HistoryShell } from "@/components/history/HistoryShell";
 import { ProfileShell } from "@/components/profile/ProfileShell";
 import { CableTVShell } from "@/components/cable/CableTVShell";
 import { ElectricityShell } from "@/components/electricity/ElectricityShell";
+import { EducationShell } from "@/components/education/EducationShell";
+import { AllServicesModal } from "@/components/dashboard/AllServicesModal";
 import { FundWalletShell } from "@/components/funding/FundWalletShell";
 import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
@@ -73,6 +75,18 @@ const VTU_HUB_ITEMS = [
     title: "Cable TV",
     subtitle: "DSTV, GOTV & Star",
     tab: "tv",
+  },
+  {
+    key: "education",
+    title: "Education",
+    subtitle: "WAEC, JAMB & NECO",
+    tab: "education",
+  },
+  {
+    key: "all_services",
+    title: "All Services",
+    subtitle: "Explore 8+ Services",
+    tab: "all_services",
   },
 ];
 
@@ -132,6 +146,7 @@ export function DashboardShell() {
   const { theme, toggleTheme } = useThemeMode();
   const [activeTab, setActiveTab] = useState("home");
   const [showFundModal, setShowFundModal] = useState(false);
+  const [showAllServicesModal, setShowAllServicesModal] = useState(false);
 
   useEffect(() => {
     void preloadAllDataPlans();
@@ -387,6 +402,7 @@ export function DashboardShell() {
   if (activeTab === "airtime") return <AirtimeShell />;
   if (activeTab === "power" || activeTab === "electricity") return <ElectricityShell />;
   if (activeTab === "tv" || activeTab === "cable-tv") return <CableTVShell />;
+  if (activeTab === "education") return <EducationShell onBack={() => setActiveTab("home")} />;
   if (activeTab === "funding" || activeTab === "fund-wallet") return <FundWalletShell />;
   if (activeTab === "history") return <HistoryShell />;
   if (activeTab === "profile") return <ProfileShell initialUser={data?.user} initialBalance={data?.balance} />;
@@ -597,7 +613,13 @@ export function DashboardShell() {
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => setActiveTab(item.tab)}
+                  onClick={() => {
+                    if (item.key === "all_services") {
+                      setShowAllServicesModal(true);
+                    } else {
+                      setActiveTab(item.tab);
+                    }
+                  }}
                   className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all active:scale-95 cursor-pointer min-h-[105px] ${
                     isDark
                       ? "bg-[#141721] border-[#222634] hover:border-slate-700"
@@ -628,6 +650,21 @@ export function DashboardShell() {
                       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <rect x="3" y="7" width="18" height="13" rx="2" strokeWidth="2" />
                         <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 3l-4 4-4-4" />
+                      </svg>
+                    )}
+                    {item.key === "education" && (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" />
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                        <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M12 14v7" />
+                      </svg>
+                    )}
+                    {item.key === "all_services" && (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <rect x="3" y="3" width="7" height="7" rx="1.5" strokeWidth="2" />
+                        <rect x="14" y="3" width="7" height="7" rx="1.5" strokeWidth="2" />
+                        <rect x="3" y="14" width="7" height="7" rx="1.5" strokeWidth="2" />
+                        <rect x="14" y="14" width="7" height="7" rx="1.5" strokeWidth="2" />
                       </svg>
                     )}
                   </div>
@@ -686,6 +723,14 @@ export function DashboardShell() {
       {/* === 5. BOTTOM NAVIGATION BAR === */}
       {/* Fund Wallet Popup Modal */}
       <FundWalletModal isOpen={showFundModal} onClose={() => setShowFundModal(false)} />
+      <AllServicesModal
+        isOpen={showAllServicesModal}
+        onClose={() => setShowAllServicesModal(false)}
+        onSelectTab={(tab) => {
+          if (tab === "education") setActiveTab("education");
+          else setActiveTab(tab);
+        }}
+      />
 
       <WebBottomNav
         active="home"
