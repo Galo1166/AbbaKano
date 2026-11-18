@@ -549,63 +549,79 @@ export function FundWalletModal({ isOpen, onClose }: FundWalletModalProps) {
                 </div>
               );
             })}
-            {showAdditionalAccountsPrompt && (
-              <div className={`rounded-xl border p-3 ${
-                isDark ? "border-[#222634] bg-[#181B25]" : "border-slate-200 bg-slate-50"
-              }`}>
-                <p className={`text-xs font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
-                  Want more bank accounts?
-                </p>
-                <p className={`mt-1 text-[11px] leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  Add Billstack PalmPay and Monnify accounts, including Moniepoint where available, using your BVN or NIN.
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowIdentityForm(true)}
-                    className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-500"
-                  >
-                    Yes, generate more
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAdditionalAccountsPrompt(false)}
-                    className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
-                      isDark ? "text-slate-400 hover:bg-[#222634]" : "text-slate-500 hover:bg-slate-100"
-                    }`}
-                  >
-                    Not now
-                  </button>
+            {/* Generate Additional Account with NIN Button */}
+            <div className={`rounded-xl border p-3.5 ${
+              isDark ? "border-[#222634] bg-[#181B25]" : "border-slate-200 bg-slate-50"
+            }`}>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className={`text-xs font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Need another account?
+                  </p>
+                  <p className={`text-[11px] mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Generate automated accounts with your NIN or BVN.
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowIdentityForm(true)}
+                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-500 cursor-pointer shadow-xs"
+                >
+                  + Generate with NIN
+                </button>
               </div>
-            )}
+            </div>
             </>
           ) : (
             /* Empty state when accounts are not yet provisioned */
             <div className={`rounded-2xl border p-5 text-center ${
               isDark ? "bg-[#181B25] border-[#222634]" : "bg-slate-50 border-slate-200"
             }`}>
-              <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-                Your dedicated bank account details are not available yet. Please try again shortly.
+              <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl ${
+                isDark ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-600"
+              }`}>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <h3 className={`text-sm font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                No Virtual Accounts Yet
+              </h3>
+              <p className={`mt-1 text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                Generate your personal dedicated virtual bank accounts using your NIN or BVN for instant wallet funding.
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoading(true);
-                  setError("");
-                  fetchVirtualAccounts()
-                    .then((res) => {
-                      setVirtualAccounts(res.accounts || []);
-                      setRequiresIdentity(res.requiresIdentity === true);
-                      setAccountWarnings(res.accountWarnings || []);
-                    })
-                    .catch((err) => setError(err instanceof Error ? err.message : "Failed to load accounts."))
-                    .finally(() => setLoading(false));
-                }}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-500 cursor-pointer"
-              >
-                Refresh Accounts
-              </button>
+              <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowIdentityForm(true)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-blue-500 cursor-pointer shadow-md"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Generate Account with NIN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoading(true);
+                    setError("");
+                    fetchVirtualAccounts()
+                      .then((res) => {
+                        setVirtualAccounts(res.accounts || []);
+                        setRequiresIdentity(res.requiresIdentity === true);
+                        setAccountWarnings(res.accountWarnings || []);
+                      })
+                      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load accounts."))
+                      .finally(() => setLoading(false));
+                  }}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                    isDark ? "border-[#222634] text-slate-400 hover:text-white" : "border-slate-300 text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Refresh Accounts
+                </button>
+              </div>
             </div>
           )}
         </div>

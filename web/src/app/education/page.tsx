@@ -1,5 +1,5 @@
-import { EducationPinShell } from "@/components/education/EducationPinShell";
+import { EducationShell } from "@/components/education/EducationShell";
 
 export default function EducationPage() {
-  return <EducationPinShell />;
+  return <EducationShell />;
 }

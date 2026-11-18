@@ -2,8 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useThemeMode } from "@/lib/theme";
 import { invokeSupabaseFunction } from "@/lib/supabase";
+import { WebDesktopSidebar } from "@/components/navigation/WebDesktopSidebar";
+import { WebBottomNav } from "@/components/navigation/WebBottomNav";
 
 interface EducationProduct {
   id: string;
@@ -32,6 +35,7 @@ function getExamLogo(slugOrName: string) {
 }
 
 export function EducationShell({ onBack }: { onBack?: () => void }) {
+  const router = useRouter();
   const { theme } = useThemeMode();
   const isDark = theme === "dark";
 
@@ -47,6 +51,8 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [purchaseResult, setPurchaseResult] = useState<PurchaseResult | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const handleBack = onBack || (() => router.push("/dashboard"));
 
   useEffect(() => {
     let cancelled = false;
@@ -195,41 +201,57 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
   };
 
   return (
-    <div className={`min-h-screen py-8 px-4 sm:px-6 transition-colors duration-200 ${
+    <main className={`min-h-screen pb-32 transition-colors duration-200 antialiased ${
       isDark ? "bg-[#0b0e14] text-white" : "bg-[#f8fafc] text-slate-900"
     }`}>
-      <div className="max-w-md mx-auto space-y-6">
+      <WebDesktopSidebar active="home" />
+
+      <div className="mx-auto w-full max-w-md px-4 pt-3 space-y-4">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-          <div>
-            <h1 className="text-xl font-bold">Education</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Exam PINs & Tokens</p>
+        <header className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label="Back"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition active:scale-95 cursor-pointer ${
+              isDark
+                ? "bg-[#141721] border-[#222634] text-slate-300 hover:text-white"
+                : "bg-white border-slate-200 text-slate-700 shadow-2xs hover:text-slate-900"
+            }`}
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="m15 19-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <h1 className={`truncate text-xl font-extrabold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+              Education
+            </h1>
+            <p className={`truncate text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              Exam PINs &amp; Tokens
+            </p>
           </div>
-        </div>
+        </header>
 
         {/* Biller Card */}
-        <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] shadow-xs space-y-4">
+        <div className={`p-5 rounded-2xl border shadow-xs space-y-4 ${
+          isDark ? "bg-[#141721] border-[#222634] text-white" : "bg-white border-slate-200 text-slate-900"
+        }`}>
           {loading ? (
-            <div className="py-12 text-center text-xs text-slate-400">Loading services...</div>
+            <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+              Loading services...
+            </div>
           ) : exams.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-400">No education services available.</div>
+            <div className="py-10 text-center text-xs text-slate-400">
+              No education services available.
+            </div>
           ) : (
             <>
-              {/* Exam Selection Dropdown */}
+              {/* Exam Selection Cards */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
-                  Examination
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                  Select Examination
                 </label>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   {exams.map((e) => {
@@ -239,14 +261,18 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                         key={e.slug}
                         type="button"
                         onClick={() => handleExamChange(e.slug)}
-                        className={`flex items-center gap-2.5 p-2 rounded-xl border transition cursor-pointer text-left ${
+                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition cursor-pointer text-left ${
                           isSelected
-                            ? "border-teal-500 bg-teal-500/10 text-teal-600 dark:text-teal-400 font-bold"
-                            : "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 hover:border-slate-300"
+                            ? isDark
+                              ? "border-teal-500 bg-teal-500/15 text-teal-400 font-bold"
+                              : "border-teal-600 bg-teal-50 text-teal-700 font-bold shadow-xs"
+                            : isDark
+                              ? "border-[#222634] bg-[#181B25] text-slate-300 hover:border-slate-700"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 shadow-2xs"
                         }`}
                       >
-                        <div className="w-7 h-7 rounded-lg bg-white p-0.5 border border-slate-200 shrink-0 flex items-center justify-center overflow-hidden">
-                          <Image src={getExamLogo(e.slug)} alt={e.name} width={24} height={24} className="object-contain" />
+                        <div className="w-8 h-8 rounded-lg bg-white p-0.5 border border-slate-200 shrink-0 flex items-center justify-center overflow-hidden">
+                          <Image src={getExamLogo(e.slug)} alt={e.name} width={26} height={26} className="object-contain" />
                         </div>
                         <span className="text-xs truncate">{e.name}</span>
                       </button>
@@ -257,10 +283,18 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                   <select
                     value={selectedExamSlug}
                     onChange={(e) => handleExamChange(e.target.value)}
-                    className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
+                    className={`w-full appearance-none px-3.5 py-3 rounded-xl border text-sm font-semibold outline-none transition focus:border-teal-500 cursor-pointer ${
+                      isDark
+                        ? "bg-[#181B25] border-[#2b3040] text-white"
+                        : "bg-white border-slate-200 text-slate-900 shadow-2xs"
+                    }`}
                   >
                     {exams.map((e) => (
-                      <option key={e.slug} value={e.slug}>
+                      <option
+                        key={e.slug}
+                        value={e.slug}
+                        className={isDark ? "bg-[#181B25] text-white" : "bg-white text-slate-900"}
+                      >
                         {e.name}
                       </option>
                     ))}
@@ -275,17 +309,25 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
 
               {/* Package Dropdown */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                   Package
                 </label>
                 <div className="relative">
                   <select
                     value={selectedProductId}
                     onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="w-full appearance-none px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 cursor-pointer"
+                    className={`w-full appearance-none px-3.5 py-3 rounded-xl border text-sm font-semibold outline-none transition focus:border-teal-500 cursor-pointer ${
+                      isDark
+                        ? "bg-[#181B25] border-[#2b3040] text-white"
+                        : "bg-white border-slate-200 text-slate-900 shadow-2xs"
+                    }`}
                   >
                     {currentProducts.map((p) => (
-                      <option key={p.id} value={p.id}>
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        className={isDark ? "bg-[#181B25] text-white" : "bg-white text-slate-900"}
+                      >
                         {p.name} — ₦{p.amount.toLocaleString()}
                       </option>
                     ))}
@@ -300,8 +342,8 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
 
               {/* Quantity Input */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
-                  Quantity
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                  Quantity (1–100)
                 </label>
                 <input
                   type="number"
@@ -316,20 +358,30 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                   onBlur={() => {
                     if (!quantity || quantity < 1) setQuantity(1);
                   }}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-semibold outline-hidden focus:border-teal-500 transition"
+                  className={`w-full px-3.5 py-3 rounded-xl border text-sm font-semibold outline-none transition focus:border-teal-500 ${
+                    isDark
+                      ? "bg-[#181B25] border-[#2b3040] text-white placeholder-slate-500"
+                      : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 shadow-2xs"
+                  }`}
                 />
               </div>
 
               {/* Price & Summary */}
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span className="text-xs text-slate-500 dark:text-slate-400">Total</span>
-                <span className="text-lg font-bold text-teal-600 dark:text-teal-400">
+              <div className={`pt-3 border-t flex items-center justify-between ${
+                isDark ? "border-[#222634]" : "border-slate-100"
+              }`}>
+                <span className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                  Total Amount
+                </span>
+                <span className={`text-xl font-black ${isDark ? "text-teal-400" : "text-teal-600"}`}>
                   ₦{totalCost.toLocaleString()}
                 </span>
               </div>
 
               {errorMsg && !isPinModalOpen && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
+                <div className={`p-3 rounded-xl text-xs border ${
+                  isDark ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-red-50 border-red-200 text-red-600"
+                }`}>
                   {errorMsg}
                 </div>
               )}
@@ -338,9 +390,9 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                 type="button"
                 onClick={handleProceed}
                 disabled={!currentProduct}
-                className="w-full py-3.5 rounded-xl font-bold text-sm bg-teal-600 hover:bg-teal-700 text-white transition disabled:opacity-40 cursor-pointer shadow-xs"
+                className="w-full py-3.5 rounded-xl font-bold text-sm bg-teal-600 hover:bg-teal-700 text-white transition disabled:opacity-40 cursor-pointer shadow-md active:scale-[0.99]"
               >
-                Proceed
+                Proceed to Payment
               </button>
             </>
           )}
@@ -349,11 +401,15 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
 
       {/* PIN Confirmation Modal */}
       {isPinModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-xs rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] p-6 space-y-4 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs">
+          <div className={`w-full max-w-xs rounded-2xl border p-6 space-y-4 shadow-2xl ${
+            isDark ? "bg-[#141721] border-[#222634] text-white" : "bg-white border-slate-200 text-slate-900"
+          }`}>
             <div className="text-center">
-              <h3 className="text-base font-bold">Transaction PIN</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              <h3 className={`text-base font-extrabold ${isDark ? "text-white" : "text-slate-900"}`}>
+                Transaction PIN
+              </h3>
+              <p className={`text-xs mt-1 font-bold ${isDark ? "text-teal-400" : "text-teal-600"}`}>
                 ₦{totalCost.toLocaleString()}
               </p>
             </div>
@@ -365,18 +421,27 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                 autoFocus
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                className="w-full text-center tracking-[1em] text-2xl py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 font-bold outline-hidden focus:border-teal-500"
+                placeholder="••••"
+                className={`w-full text-center tracking-[1em] text-2xl py-3 rounded-xl border font-bold outline-none focus:border-teal-500 transition ${
+                  isDark
+                    ? "bg-[#181B25] border-[#2b3040] text-white placeholder-slate-600"
+                    : "bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 shadow-2xs"
+                }`}
               />
 
               {errorMsg && (
-                <p className="text-xs text-center text-red-500">{errorMsg}</p>
+                <p className="text-xs text-center font-semibold text-red-500">{errorMsg}</p>
               )}
 
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setIsPinModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                    isDark
+                      ? "border-[#2b3040] text-slate-300 hover:bg-[#1f2433]"
+                      : "border-slate-300 text-slate-700 hover:bg-slate-100"
+                  }`}
                 >
                   Cancel
                 </button>
@@ -385,7 +450,7 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                   disabled={submitting || pin.length !== 4}
                   className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-xs font-bold shadow-xs cursor-pointer"
                 >
-                  {submitting ? "..." : "Authorize"}
+                  {submitting ? "Processing..." : "Authorize"}
                 </button>
               </div>
             </form>
@@ -395,39 +460,55 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
 
       {/* Voucher Modal */}
       {purchaseResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141721] p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+          <div className={`w-full max-w-sm rounded-2xl border p-6 space-y-4 shadow-2xl ${
+            isDark ? "bg-[#141721] border-[#222634] text-white" : "bg-white border-slate-200 text-slate-900"
+          }`}>
+            <div className={`flex items-center justify-between pb-3 border-b ${
+              isDark ? "border-[#222634]" : "border-slate-200"
+            }`}>
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-white p-0.5 border border-slate-200 shrink-0 flex items-center justify-center overflow-hidden">
                   <Image src={getExamLogo(purchaseResult.examName)} alt="Logo" width={26} height={26} className="object-contain" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">{purchaseResult.examName}</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{purchaseResult.productName}</p>
+                  <h3 className={`font-bold text-base ${isDark ? "text-white" : "text-slate-900"}`}>
+                    {purchaseResult.examName}
+                  </h3>
+                  <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    {purchaseResult.productName}
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setPurchaseResult(null)}
-                className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs cursor-pointer"
+                className={`p-1.5 rounded-lg border text-xs cursor-pointer transition ${
+                  isDark ? "border-[#2b3040] text-slate-400 hover:text-white" : "border-slate-200 text-slate-500 hover:text-slate-900"
+                }`}
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-2.5 max-h-60 overflow-y-auto">
+            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
               {purchaseResult.pins.map((item, idx) => (
                 <div
                   key={idx}
-                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between"
+                  className={`p-3 rounded-xl border flex items-center justify-between ${
+                    isDark ? "bg-[#181B25] border-[#2b3040]" : "bg-slate-50 border-slate-200"
+                  }`}
                 >
                   <div>
-                    <div className="font-mono text-base font-bold text-teal-600 dark:text-teal-400">
+                    <div className={`font-mono text-base font-bold ${
+                      isDark ? "text-teal-400" : "text-teal-700"
+                    }`}>
                       {item.pin}
                     </div>
                     {item.serial && (
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                      <div className={`text-[11px] font-mono mt-0.5 ${
+                        isDark ? "text-slate-400" : "text-slate-600"
+                      }`}>
                         S/N: {item.serial}
                       </div>
                     )}
@@ -435,7 +516,7 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
                   <button
                     type="button"
                     onClick={() => copyPin(item.pin, idx)}
-                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 cursor-pointer"
+                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 cursor-pointer shadow-2xs"
                   >
                     {copiedIndex === idx ? "Copied" : "Copy"}
                   </button>
@@ -443,7 +524,9 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
               ))}
             </div>
 
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className={`text-[11px] flex justify-between pt-2 border-t ${
+              isDark ? "border-[#222634] text-slate-400" : "border-slate-100 text-slate-600"
+            }`}>
               <span>Ref: {purchaseResult.reference}</span>
               <span>Qty: {purchaseResult.quantity}</span>
             </div>
@@ -452,14 +535,18 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                  isDark
+                    ? "border-[#2b3040] text-slate-300 hover:bg-[#1f2433]"
+                    : "border-slate-300 text-slate-700 hover:bg-slate-100"
+                }`}
               >
                 Print
               </button>
               <button
                 type="button"
                 onClick={() => setPurchaseResult(null)}
-                className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold cursor-pointer shadow-xs"
               >
                 Done
               </button>
@@ -467,6 +554,8 @@ export function EducationShell({ onBack }: { onBack?: () => void }) {
           </div>
         </div>
       )}
-    </div>
+
+      <WebBottomNav active="home" />
+    </main>
   );
 }

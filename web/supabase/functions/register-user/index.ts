@@ -170,19 +170,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!email) {
-      return json(
-        {
-          message:
-            "Email address is required.",
-        },
-        400
-      );
-    }
-
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    ) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return json(
         {
           message:
@@ -280,23 +268,27 @@ Deno.serve(async (req) => {
       await hashPin(pin);
 
     // Create Supabase Auth user.
+    const userCreatePayload: Record<string, unknown> = {
+      phone: phone.international,
+      phone_confirm: true,
+      password,
+      user_metadata: {
+        full_name: fullName,
+        phone: phone.local,
+        referral_code:
+          referralCode || null,
+      },
+    };
+    if (email) {
+      userCreatePayload.email = email;
+      userCreatePayload.email_confirm = true;
+    }
+
     const {
       data: authData,
       error: authError,
     } =
-      await supabaseAdmin.auth.admin.createUser({
-        email,
-        phone: phone.international,
-        phone_confirm: true,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: fullName,
-          phone: phone.local,
-          referral_code:
-            referralCode || null,
-        },
-      });
+      await supabaseAdmin.auth.admin.createUser(userCreatePayload as any);
 
     if (authError || !authData.user) {
       console.error(

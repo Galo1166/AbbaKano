@@ -50,7 +50,7 @@ export function RegisterForm() {
 
   function validate() {
     if (!values.fullName.trim() || !values.phone.trim()) return "Full name and phone number are required.";
-    if (!values.email.trim() || !values.email.includes("@")) return "Enter a valid email address.";
+    if (values.email.trim() && !values.email.includes("@")) return "Enter a valid email address.";
     if (values.password.length < 8) return "Password must be at least 8 characters.";
     if (values.password !== values.confirmPassword) return "Passwords do not match.";
     if (!/^\d{4}$/.test(values.pin)) return "Transaction PIN must be exactly 4 digits.";
@@ -68,10 +68,13 @@ export function RegisterForm() {
     setLoading(true);
 
     try {
+      const cleanPhone = values.phone.replace(/\D/g, "");
+      const emailForBackend = values.email.trim() || (cleanPhone ? `${cleanPhone}@abbakano.com` : undefined);
+
       await invokeSupabaseFunction("register-user", {
         fullName: values.fullName.trim(),
         phone: values.phone.trim(),
-        email: values.email.trim(),
+        email: emailForBackend,
         password: values.password,
         pin: values.pin,
         referralCode: values.referralCode.trim() || referralCodeFromUrl,
@@ -171,14 +174,19 @@ export function RegisterForm() {
 
       {/* Email Address */}
       <div>
-        <label className="block text-xs font-bold text-[var(--text)] mb-1">
-          Email Address
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs font-bold text-[var(--text)]">
+            Email Address
+          </label>
+          <span className="text-[11px] font-medium text-[var(--text-muted)]">
+            Optional
+          </span>
+        </div>
         <input
           type="email"
           value={values.email}
           onChange={(event) => updateValue("email", event.target.value)}
-          placeholder="you@example.com"
+          placeholder="you@example.com (optional)"
           autoComplete="email"
           className="w-full h-12 rounded-xl border border-[var(--border-high)] bg-[var(--surface-high)] px-3.5 text-base sm:text-sm font-medium text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all"
         />

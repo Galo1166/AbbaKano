@@ -54,7 +54,21 @@ export function LoginForm() {
       const credentials = value.includes("@")
         ? { email: value.toLowerCase(), password }
         : { phone: normalizePhone(value), password };
-      const { data, error } = await supabase.auth.signInWithPassword(credentials);
+      let { data, error } = await supabase.auth.signInWithPassword(credentials);
+
+      if (error && !value.includes("@")) {
+        const cleanPhone = value.replace(/\D/g, "");
+        if (cleanPhone) {
+          const fallbackRes = await supabase.auth.signInWithPassword({
+            email: `${cleanPhone}@abbakano.com`,
+            password,
+          });
+          if (fallbackRes.data?.user && fallbackRes.data?.session) {
+            data = fallbackRes.data;
+            error = null;
+          }
+        }
+      }
 
       if (error) throw error;
       if (!data.user || !data.session) throw new Error("Could not create a login session.");
