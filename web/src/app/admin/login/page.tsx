@@ -18,8 +18,10 @@ export default function LoginPage() {
   useEffect(() => {
     let cancelled = false;
     void fetchAdminSession()
-      .then(() => {
-        if (!cancelled) router.replace("/admin/overview");
+      .then((session) => {
+        if (!cancelled) {
+          router.replace(session.admin.role === "support_admin" ? "/admin/deposits" : "/admin/overview");
+        }
       })
       .catch(() => {
         if (!cancelled) setIsLoading(false);
@@ -52,8 +54,9 @@ export default function LoginPage() {
       });
       if (error) throw error;
 
+      let session;
       try {
-        await fetchAdminSession();
+        session = await fetchAdminSession();
         await recordAdminSessionEvent("login");
       } catch (authorizationError) {
         const { error: signOutError } = await supabase.auth.signOut();
@@ -64,7 +67,8 @@ export default function LoginPage() {
         throw authorizationError;
       }
 
-      router.replace("/admin/overview");
+      if (!session) throw new Error("Could not verify the administrator session.");
+      router.replace(session.admin.role === "support_admin" ? "/admin/deposits" : "/admin/overview");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to sign in. Please try again.");
       setIsLoading(false);
@@ -107,13 +111,13 @@ export default function LoginPage() {
             </div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-semibold mb-2">
               <span className="material-symbols-outlined text-[14px]">shield_person</span>
-              <span>Super Administrator Portal</span>
+              <span>Administrator Portal</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
               Sign In to Console
             </h1>
             <p className="text-xs text-slate-400 mt-1 max-w-xs">
-              Restricted master access for AbbaKano executive administration and telecom dispatch operations.
+              Restricted access for AbbaKano administration and support operations.
             </p>
           </div>
 
@@ -130,7 +134,7 @@ export default function LoginPage() {
             {/* Superadmin Email */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5" htmlFor="admin-email">
-                Super Administrator Email
+                Administrator Email
               </label>
               <div className="relative flex items-center">
                 <span className="material-symbols-outlined absolute left-3.5 text-slate-500 text-[18px]">
@@ -156,7 +160,7 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-slate-300" htmlFor="admin-password">
-                  Master Password
+                  Password
                 </label>
                 <span className="text-[11px] text-slate-400">
                   Min. 8 characters

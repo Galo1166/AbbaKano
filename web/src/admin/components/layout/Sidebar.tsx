@@ -2,31 +2,47 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@admin/lib/utils";
 import { useSidebar } from "@admin/context/SidebarContext";
 import { logoutAdmin } from "@admin/services/api";
+import { supabase } from "@/lib/supabase";
+import { getAdminPermissions, getAdminRole, type AdminRole } from "@admin/lib/adminRoles";
 
 const operationsNav = [
-  { label: "Overview", href: "/admin/overview", icon: "grid_view" },
-  { label: "Users", href: "/admin/users", icon: "group" },
-  { label: "Deposits", href: "/admin/deposits", icon: "payments" },
-  { label: "Transactions", href: "/admin/transactions", icon: "receipt_long" },
-  { label: "VTU Services", href: "/admin/vtu-services", icon: "cell_tower" },
-  { label: "Provider Balances", href: "/admin/provider-balances", icon: "account_balance_wallet" },
+  { label: "Overview", href: "/admin/overview", icon: "grid_view", permission: "*" },
+  { label: "Users", href: "/admin/users", icon: "group", permission: "*" },
+  { label: "Deposits", href: "/admin/deposits", icon: "payments", permission: "deposits" },
+  { label: "Transactions", href: "/admin/transactions", icon: "receipt_long", permission: "transactions" },
+  { label: "VTU Services", href: "/admin/vtu-services", icon: "cell_tower", permission: "vtu_services" },
+  { label: "Provider Balances", href: "/admin/provider-balances", icon: "account_balance_wallet", permission: "*" },
 ];
 
 const administrationNav = [
-  { label: "Support Cases", href: "/admin/support", icon: "headset_mic" },
-  { label: "Notifications", href: "/admin/notifications", icon: "campaign", badge: "3" },
-  { label: "Audit Logs", href: "/admin/audit-logs", icon: "history" },
-  { label: "Settings", href: "/admin/settings", icon: "tune" },
+  { label: "Support Cases", href: "/admin/support", icon: "headset_mic", permission: "support" },
+  { label: "Notifications", href: "/admin/notifications", icon: "campaign", badge: "3", permission: "*" },
+  { label: "Audit Logs", href: "/admin/audit-logs", icon: "history", permission: "*" },
+  { label: "Settings", href: "/admin/settings", icon: "tune", permission: "*" },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { isOpen, close } = useSidebar();
+  const [role, setRole] = useState<AdminRole | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!cancelled) setRole(getAdminRole(user?.app_metadata.admin_role));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const permissions = role ? getAdminPermissions(role) : [];
 
   const handleLogout = async () => {
     try {
@@ -157,7 +173,9 @@ export default function Sidebar() {
                 Operations
               </p>
               <div className="space-y-0.5">
-                {operationsNav.map((item) => (
+                {operationsNav
+                  .filter((item) => permissions.includes("*") || permissions.includes(item.permission))
+                  .map((item) => (
                   <NavLink key={item.href} {...item} />
                 ))}
               </div>
@@ -169,7 +187,9 @@ export default function Sidebar() {
                 Management
               </p>
               <div className="space-y-0.5">
-                {administrationNav.map((item) => (
+                {administrationNav
+                  .filter((item) => permissions.includes("*") || permissions.includes(item.permission))
+                  .map((item) => (
                   <NavLink key={item.href} {...item} />
                 ))}
               </div>
@@ -188,7 +208,7 @@ export default function Sidebar() {
                 Abba Kano
               </span>
               <span className="text-[10px] text-slate-500 font-medium truncate">
-                Super Admin
+                {role === "support_admin" ? "Support Admin" : "Super Admin"}
               </span>
             </div>
             <button

@@ -7,6 +7,7 @@ import TopNav from "@admin/components/layout/TopNav";
 import { SidebarProvider } from "@admin/context/SidebarContext";
 import { fetchAdminSession, recordAdminPageView } from "@admin/services/api";
 import { supabase } from "@/lib/supabase";
+import { canAccessAdminPath, getAdminRole } from "@admin/lib/adminRoles";
 
 export default function AdminAuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -36,9 +37,16 @@ export default function AdminAuthGate({ children }: { children: React.ReactNode 
     let isCancelled = false;
 
     fetchAdminSession()
-      .then(() => {
+      .then((session) => {
         if (!isCancelled) {
-          setSessionStatus("authorized");
+          if (!canAccessAdminPath(session.admin.role as "super_admin" | "support_admin", pathname)) {
+            setSessionStatus("checking");
+            router.replace(
+              session.admin.role === "support_admin" ? "/admin/deposits" : "/admin/overview",
+            );
+          } else {
+            setSessionStatus("authorized");
+          }
         }
       })
       .catch(() => {
@@ -56,14 +64,18 @@ export default function AdminAuthGate({ children }: { children: React.ReactNode 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (!session || session.user.app_metadata.admin_role !== "super_admin") {
+        const role = session ? getAdminRole(session.user.app_metadata.admin_role) : null;
+        if (!role) {
           setSessionStatus("unauthorized");
           router.replace("/admin/login");
+        } else if (!canAccessAdminPath(role, pathname)) {
+          setSessionStatus("checking");
+          router.replace(role === "support_admin" ? "/admin/deposits" : "/admin/overview");
         }
       },
     );
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [pathname, router]);
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
