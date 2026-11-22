@@ -10,6 +10,8 @@ import PageHeader from "@admin/components/layout/PageHeader";
 import type { Transaction } from "@admin/types/telecom";
 import type { AdminVtuPlan, CablePriceOverride, ProviderLivePlan, PriceOverride } from "@admin/services/api";
 import Toggle from "@admin/components/ui/Toggle";
+import { supabase } from "@/lib/supabase";
+import { getAdminRole } from "@admin/lib/adminRoles";
 
 const CARRIERS = ["ALL", "MTN", "AIRTEL", "GLO", "9MOBILE"] as const;
 const resolveCarrierImage = (carrier: string) => {
@@ -56,6 +58,7 @@ const emptyPlanForm: PlanForm = {
 };
 
 export default function VtuServicesPage() {
+  const [isSupportAdmin, setIsSupportAdmin] = useState(false);
   const [dispatches, setDispatches] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [carrier, setCarrier] = useState<string>("ALL");
@@ -85,6 +88,18 @@ export default function VtuServicesPage() {
   const [savingPlanCode, setSavingPlanCode] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [auditReason, setAuditReason] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!cancelled) {
+        setIsSupportAdmin(getAdminRole(user?.app_metadata.admin_role) === "support_admin");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Cable Price Overrides State
   const [cableOverrides, setCableOverrides] = useState<CablePriceOverride[]>([]);
@@ -590,6 +605,12 @@ export default function VtuServicesPage() {
           </div>
         }
       />
+
+      {isSupportAdmin && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-800">
+          Read-only support access: VTU catalogs and transactions are visible, but plan and price changes are restricted to super admins.
+        </div>
+      )}
 
       <label className="block space-y-1.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-950">
         Reason for the next plan or price change <span className="text-rose-700">*</span>

@@ -20,6 +20,7 @@ import type {
 import { apiRequest } from "@/lib/api";
 import { invokeSupabaseFunction } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
+import { getAdminPermissions, getAdminRole } from "@admin/lib/adminRoles";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
@@ -118,7 +119,8 @@ export async function fetchAdminSession(): Promise<AdminSession> {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error) throw error;
   if (!user) throw new Error("Sign in to continue.");
-  if (user.app_metadata.admin_role !== "super_admin") {
+  const role = getAdminRole(user.app_metadata.admin_role);
+  if (!role) {
     throw new Error("This account is not authorized for the Admin Portal.");
   }
 
@@ -126,12 +128,16 @@ export async function fetchAdminSession(): Promise<AdminSession> {
     admin: {
       id: user.id,
       username: user.email || user.id,
-      full_name: String(user.user_metadata.full_name || user.user_metadata.name || "Super Administrator"),
+      full_name: String(
+        user.user_metadata.full_name ||
+        user.user_metadata.name ||
+        (role === "super_admin" ? "Super Administrator" : "Support Administrator"),
+      ),
       email: user.email || null,
-      role: "super_admin",
+      role,
       status: "active",
     },
-    permissions: ["*"],
+    permissions: getAdminPermissions(role),
   };
 }
 
