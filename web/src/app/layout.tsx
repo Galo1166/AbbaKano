@@ -31,6 +31,31 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
+                const url = new URL(window.location.href);
+                const hashParams = new URLSearchParams(url.hash.slice(1));
+                const isRecovery =
+                  url.searchParams.get('type') === 'recovery' ||
+                  hashParams.get('type') === 'recovery' ||
+                  (url.pathname === '/' &&
+                    (url.searchParams.has('code') || url.searchParams.has('error_code')));
+                if (!isRecovery) return;
+
+                const target = new URL(url.href);
+                if (target.pathname === '/') target.pathname = '/reset-password';
+                if (!target.searchParams.has('type')) {
+                  target.searchParams.set('type', 'recovery');
+                }
+                if (target.pathname !== url.pathname || target.search !== url.search) {
+                  window.location.replace(target.pathname + target.search + target.hash);
+                }
+              })();
+            `,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
                 try {
                   const saved = localStorage.getItem('abbakano-theme');
                   const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;

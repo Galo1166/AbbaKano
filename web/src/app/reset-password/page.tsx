@@ -28,17 +28,56 @@ export default function ResetPasswordPage() {
 
     async function verifyRecoverySession() {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        const url = new URL(window.location.href);
+        const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+        const tokenHash = url.searchParams.get("token_hash");
+        const tokenType = url.searchParams.get("type");
+
+        if (url.searchParams.has("error")) {
+          throw new Error(
+            url.searchParams.get("error_description") ||
+              "This password reset link is invalid or has expired.",
+          );
+        }
+
+        if (tokenHash) {
+          if (tokenType !== "recovery") {
+            throw new Error("This link is not a valid password recovery link.");
+          }
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: "recovery",
+          });
+          if (error) throw error;
+          if (!active) return;
+          if (!data.session) {
+            throw new Error("Could not establish a password recovery session.");
+          }
+          window.history.replaceState(window.history.state, "", "/reset-password");
+          setRecoveryState("ready");
+          return;
+        }
+
+        let { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         if (!active) return;
 
-        const url = new URL(window.location.href);
         const recoveryLink =
-          url.hash.includes("type=recovery") ||
+          hashParams.get("type") === "recovery" ||
+          hashParams.has("access_token") ||
           url.searchParams.get("type") === "recovery" ||
           (url.searchParams.has("code") && Boolean(data.session));
 
+        if (recoveryLink && !data.session && !receivedRecoveryEvent) {
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+          ({ data, error } = await supabase.auth.getSession());
+          if (error) throw error;
+        }
+
         if (receivedRecoveryEvent || (data.session && recoveryLink)) {
+          if (url.searchParams.has("code") || url.hash) {
+            window.history.replaceState(window.history.state, "", "/reset-password");
+          }
           setRecoveryState("ready");
         } else {
           setRecoveryState("invalid");
